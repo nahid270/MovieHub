@@ -334,7 +334,7 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "a_strong_secret_key_for_flas
 
 # --- ENV CONFIG (Vercel থেকে সেট করতে হবে) ---
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://bdgamesbazar71:bdgamesbazar71@cluster0.zio3m.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
