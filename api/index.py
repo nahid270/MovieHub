@@ -38,18 +38,19 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 IMG_POSTER = "https://image.tmdb.org/t/p/w500"
 IMG_BANNER = "https://image.tmdb.org/t/p/w1280"
 
-# --- DATABASE (MongoDB) with Error Handling ---
+# --- DATABASE (MongoDB) with Error Handling and Explicit DB Name ---
 client, db, movies_collection, ads_collection, DB_CONNECTION_ERROR = None, None, None, None, None
 if MONGO_URI:
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         print("MongoDB connection successful.")
-        db = client.get_database() # URI থেকে ডেটাবেস নাম নিজে নিয়ে নেবে
+        # সরাসরি ডেটাবেসের নাম নির্দিষ্ট করে দেওয়া হয়েছে
+        db = client["movie_db"]
         movies_collection = db.movies
         ads_collection = db.ads
     except Exception as e:
-        DB_CONNECTION_ERROR = f"Database connection failed. Please ensure your MONGO_URI includes a database name (e.g., ...mongodb.net/my_db?...) and your IP is whitelisted. Error: {e}"
+        DB_CONNECTION_ERROR = f"Database connection failed. Check URI/IP whitelist. Error: {e}"
         print(f"ERROR: Could not connect to MongoDB. Reason: {e}")
 else:
     DB_CONNECTION_ERROR = "MONGO_URI environment variable is not set."
@@ -70,10 +71,12 @@ def tmdb_get(path, params=None):
     params = params or {}; params["api_key"] = TMDB_API_KEY
     try: r = requests.get(f"{TMDB_BASE_URL}{path}", params=params, timeout=10); r.raise_for_status(); return r.json()
     except requests.exceptions.RequestException: return {"results": []}
+
 def search_tmdb_movies(q): return tmdb_get("/search/movie", params={"query": q, "include_adult": "false"}).get("results", []) if q else []
 def get_tmdb_movie_details(tmdb_id): return tmdb_get(f"/movie/{tmdb_id}")
 def map_movie_from_tmdb(m):
     return {"tmdb_id": m.get("id"),"title": m.get("title") or "Untitled","year": (m.get("release_date") or "")[:4] or "N/A","poster": f"{IMG_POSTER}{m.get('poster_path')}" if m.get('poster_path') else "https://via.placeholder.com/500x750?text=No+Image","backdrop": f"{IMG_BANNER}{m.get('backdrop_path')}" if m.get('backdrop_path') else None,"overview": m.get("overview") or ""}
+
 @app.context_processor
 def inject_globals(): return dict(year=time.strftime("%Y"))
 def render_admin_page(content_template, **kwargs): return render_template_string(ADMIN_BASE_TEMPLATE, content=render_template_string(content_template, **kwargs), **kwargs)
@@ -115,7 +118,7 @@ def manage_movies():
 @admin_bp.route('/movies/add/<int:tmdb_id>', methods=['POST'])
 @login_required
 def add_movie(tmdb_id):
-    if movies_collection:
+    if movies_collection is not None:
         if movies_collection.find_one({"tmdb_id": tmdb_id}):
             flash('Movie already exists in the database.', 'warning')
         else:
@@ -144,7 +147,7 @@ def delete_all_movies():
 @admin_bp.route('/ads', methods=['GET', 'POST'])
 @login_required
 def manage_ads():
-    if request.method == 'POST' and ads_collection:
+    if request.method == 'POST' and ads_collection is not None:
         ads_collection.insert_one({ "name": request.form.get('name'), "position": request.form.get('position'), "html_code": request.form.get('html_code'), "is_active": 'is_active' in request.form })
         flash('Ad created.', 'success')
     elif request.method == 'POST':
