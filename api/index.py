@@ -153,7 +153,6 @@ ADMIN_BASE_TEMPLATE = """
 </head>
 <body class="bg-gray-900 text-gray-200 antialiased">
     <div class="flex min-h-screen">
-        <!-- Sidebar -->
         <aside class="w-64 bg-gray-950 p-6 border-r border-white/10 flex flex-col">
             <h1 class="text-2xl font-bold mb-8">🎬 Admin Panel</h1>
             <nav class="flex flex-col gap-2">
@@ -166,8 +165,6 @@ ADMIN_BASE_TEMPLATE = """
                 <a href="{{ url_for('admin.logout') }}" class="block w-full text-center px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600/80 text-sm">Logout</a>
             </div>
         </aside>
-
-        <!-- Main Content -->
         <main class="flex-1 p-8">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -183,11 +180,7 @@ ADMIN_BASE_TEMPLATE = """
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            
-            <!-- CONTENT_PLACEHOLDER -->
             {{ content | safe }}
-            <!-- /CONTENT_PLACEHOLDER -->
-
         </main>
     </div>
 </body>
@@ -247,9 +240,7 @@ ADMIN_MOVIES_CONTENT = """
     </div>
     <div class="overflow-x-auto">
         <table class="w-full text-left">
-            <thead>
-                <tr class="border-b border-white/10"><th class="p-3">Poster</th><th class="p-3">Title</th><th class="p-3">Year</th><th class="p-3 text-right">Actions</th></tr>
-            </thead>
+            <thead><tr class="border-b border-white/10"><th class="p-3">Poster</th><th class="p-3">Title</th><th class="p-3">Year</th><th class="p-3 text-right">Actions</th></tr></thead>
             <tbody>
                 {% for movie in site_movies %}
                 <tr class="border-b border-white/5">
@@ -278,24 +269,10 @@ ADMIN_ADS_CONTENT = """
         <h2 class="text-xl font-bold mb-4">Add / Edit Ad</h2>
         <form method="POST" class="space-y-4">
             <input type="hidden" name="ad_id" value="">
-            <div>
-                <label class="block text-sm font-medium text-gray-400">Ad Name (for your reference)</label>
-                <input type="text" name="name" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-400">Position</label>
-                <select name="position" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                    <option value="header">Header</option><option value="footer">Footer</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-400">HTML/JS Code</label>
-                <textarea name="html_code" rows="5" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2"></textarea>
-            </div>
-            <div class="flex items-center">
-                <input type="checkbox" name="is_active" id="is_active" checked class="h-4 w-4 rounded bg-white/10 border-gray-600 text-blue-600 focus:ring-blue-600">
-                <label for="is_active" class="ml-2 block text-sm text-gray-300">Active</label>
-            </div>
+            <div><label class="block text-sm font-medium text-gray-400">Ad Name</label><input type="text" name="name" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2"></div>
+            <div><label class="block text-sm font-medium text-gray-400">Position</label><select name="position" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2"><option value="header">Header</option><option value="footer">Footer</option></select></div>
+            <div><label class="block text-sm font-medium text-gray-400">HTML/JS Code</label><textarea name="html_code" rows="5" required class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2"></textarea></div>
+            <div class="flex items-center"><input type="checkbox" name="is_active" id="is_active" checked class="h-4 w-4 rounded bg-white/10 border-gray-600 text-blue-600 focus:ring-blue-600"><label for="is_active" class="ml-2 block text-sm text-gray-300">Active</label></div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg">Save Ad</button>
         </form>
     </div>
@@ -309,9 +286,7 @@ ADMIN_ADS_CONTENT = """
                         <h3 class="font-bold">{{ ad.name }} <span class="text-xs ml-2 px-2 py-0.5 rounded-full {{ 'bg-green-500/30 text-green-300' if ad.is_active else 'bg-red-500/30 text-red-300' }}">{{ 'Active' if ad.is_active else 'Inactive' }}</span></h3>
                         <p class="text-sm text-gray-400">Position: <span class="font-mono">{{ ad.position }}</span></p>
                     </div>
-                    <form action="{{ url_for('admin.delete_ad', ad_id=ad._id) }}" method="POST" onsubmit="return confirm('Delete this ad?');">
-                        <button type="submit" class="text-red-400 hover:text-red-300 text-xs font-bold">Delete</button>
-                    </form>
+                    <form action="{{ url_for('admin.delete_ad', ad_id=ad._id) }}" method="POST" onsubmit="return confirm('Delete this ad?');"><button type="submit" class="text-red-400 hover:text-red-300 text-xs font-bold">Delete</button></form>
                 </div>
                 <div class="mt-2 text-xs bg-black/30 p-2 rounded-md font-mono max-w-md overflow-x-auto">{{ ad.html_code|e }}</div>
             </div>
@@ -323,18 +298,16 @@ ADMIN_ADS_CONTENT = """
 </div>
 """
 
-
 # =======================================================================
 # ========= FLASK APPLICATION LOGIC (মূল পাইথন কোড) =========
 # =======================================================================
 
-# --- অ্যাপ ইনিশিয়ালাইজেশন ---
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "a_strong_secret_key_for_flask_sessions")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev_secret_key")
 
-# --- ENV CONFIG (Vercel থেকে সেট করতে হবে) ---
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+# --- ENV CONFIG (Vercel থেকে এই ভেরিয়েবলগুলো সেট করতে হবে) ---
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+MONGO_URI = os.getenv("MONGO_URI")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
@@ -343,16 +316,29 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 IMG_POSTER = "https://image.tmdb.org/t/p/w500"
 IMG_BANNER = "https://image.tmdb.org/t/p/w1280"
 
-# --- DATABASE (MongoDB) ---
-client = MongoClient(MONGO_URI) if MONGO_URI else None
-db = client.get_database() if client else None
-if db:
-    users_collection = db.users
-    movies_collection = db.movies
-    ads_collection = db.ads
-    movies_collection.create_index("tmdb_id", unique=True)
+# --- DATABASE (MongoDB) with Error Handling ---
+client = None
+db = None
+users_collection = None
+movies_collection = None
+ads_collection = None
+DB_CONNECTION_ERROR = None
+
+if MONGO_URI:
+    try:
+        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping') # কানেকশন চেক করার জন্য পিং পাঠানো হচ্ছে
+        print("MongoDB connection successful.")
+        db = client.get_database()
+        users_collection = db.users
+        movies_collection = db.movies
+        ads_collection = db.ads
+        movies_collection.create_index("tmdb_id", unique=True)
+    except Exception as e:
+        print(f"ERROR: Could not connect to MongoDB. Reason: {e}")
+        DB_CONNECTION_ERROR = f"Database connection failed. Please check credentials and network access. Error: {e}"
 else:
-    users_collection = movies_collection = ads_collection = None
+    DB_CONNECTION_ERROR = "MONGO_URI environment variable is not set. Please configure it in Vercel."
 
 # --- LOGIN MANAGER ---
 login_manager = LoginManager()
@@ -397,16 +383,9 @@ def map_movie_from_tmdb(m):
     poster = m.get("poster_path")
     backdrop = m.get("backdrop_path")
     date = m.get("release_date") or ""
-    return {
-        "tmdb_id": m.get("id"),
-        "title": m.get("title") or "Untitled",
-        "year": date[:4] if date else "N/A",
-        "poster": f"{IMG_POSTER}{poster}" if poster else "https://via.placeholder.com/500x750?text=No+Image",
-        "backdrop": f"{IMG_BANNER}{backdrop}" if backdrop else None,
-        "overview": m.get("overview") or "",
-    }
+    return { "tmdb_id": m.get("id"), "title": m.get("title") or "Untitled", "year": date[:4] if date else "N/A", "poster": f"{IMG_POSTER}{poster}" if poster else "https://via.placeholder.com/500x750?text=No+Image", "backdrop": f"{IMG_BANNER}{backdrop}" if backdrop else None, "overview": m.get("overview") or ""}
 
-# --- CONTEXT PROCESSOR (গ্লোবাল ভেরিয়েবল সব পেজে পাঠানোর জন্য) ---
+# --- CONTEXT PROCESSOR ---
 @app.context_processor
 def inject_globals():
     ads = {}
@@ -417,11 +396,10 @@ def inject_globals():
 
 # --- ADMIN HELPER ---
 def render_admin_page(content_template, **kwargs):
-    """অ্যাডমিন পেজের কন্টেন্ট রেন্ডার করে এবং বেস লেআউটে বসিয়ে দেয়"""
     content_html = render_template_string(content_template, **kwargs)
     return render_template_string(ADMIN_BASE_TEMPLATE, content=content_html, **kwargs)
 
-# ========= ADMIN BLUEPRINT =========
+# --- ADMIN BLUEPRINT ---
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
@@ -470,8 +448,7 @@ def add_movie(tmdb_id):
         if movie_details:
             movies_collection.insert_one(map_movie_from_tmdb(movie_details))
             flash(f"Movie has been added.", 'success')
-        else:
-            flash('Could not fetch movie details.', 'error')
+        else: flash('Could not fetch movie details.', 'error')
     return redirect(url_for('admin.manage_movies'))
 
 @admin_bp.route('/movies/delete/<movie_id>', methods=['POST'])
@@ -508,7 +485,7 @@ def delete_ad(ad_id):
 
 app.register_blueprint(admin_bp)
 
-# ========= PUBLIC ROUTES =========
+# --- PUBLIC ROUTES ---
 def pick_banners(movie_list, need=2):
     banners = [m for m in movie_list if m.get("backdrop")][:need]
     while len(banners) < min(need, 2):
@@ -517,30 +494,31 @@ def pick_banners(movie_list, need=2):
 
 @app.route("/")
 def home():
-    if not all([TMDB_API_KEY, MONGO_URI]):
-        return render_template_string(PAGE_TEMPLATE, title="Configuration Error", error_message="TMDB API Key or MongoDB URI is not configured.")
-    movies = list(movies_collection.find().sort('_id', DESCENDING).limit(18)) if movies_collection else []
+    if DB_CONNECTION_ERROR: return render_template_string(PAGE_TEMPLATE, title="Config Error", error_message=DB_CONNECTION_ERROR)
+    if not TMDB_API_KEY: return render_template_string(PAGE_TEMPLATE, title="Config Error", error_message="TMDB_API_KEY is not configured.")
+    
+    movies = list(movies_collection.find().sort('_id', DESCENDING).limit(18))
     banners = pick_banners(movies)
     return render_template_string(PAGE_TEMPLATE, title="Movie Zone • Home", banners=banners, movies=movies)
 
 @app.route("/search")
 def search():
+    if DB_CONNECTION_ERROR: return redirect(url_for("home"))
     q = (request.args.get("q") or "").strip()
     if not q: return redirect(url_for("home"))
     results = [map_movie_from_tmdb(m) for m in search_tmdb_movies(q)]
     banners = pick_banners(results)
     return render_template_string(PAGE_TEMPLATE, title=f"Search • {q}", banners=banners, movies=results, query=q)
 
-# ========= INITIAL ADMIN USER SETUP =========
+# --- INITIAL ADMIN USER SETUP (শুধু লোকাল মেশিনে চালানোর জন্য) ---
 def setup_initial_user():
-    if db and not users_collection.find_one({"username": ADMIN_USERNAME}):
+    if db and users_collection and not users_collection.find_one({"username": ADMIN_USERNAME}):
         hashed_password = generate_password_hash(ADMIN_PASSWORD)
         users_collection.insert_one({ "username": ADMIN_USERNAME, "password": hashed_password })
         print(f"Admin user '{ADMIN_USERNAME}' created.")
 
-setup_initial_user()
-
 if __name__ == "__main__":
     if not MONGO_URI: print("WARNING: MONGO_URI is not set.")
+    setup_initial_user() # লোকাল মেশিনে অ্যাডমিন ইউজার তৈরি করবে
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
