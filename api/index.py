@@ -333,8 +333,8 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "a_strong_secret_key_for_flask_sessions")
 
 # --- ENV CONFIG (Vercel থেকে সেট করতে হবে) ---
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
-MONGO_URI = os.getenv("MONGO_URI", "")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://bdgamesbazar71:bdgamesbazar71@cluster0.zio3m.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
