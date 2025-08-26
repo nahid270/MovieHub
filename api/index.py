@@ -128,17 +128,23 @@ def add_movie(tmdb_id):
 @login_required
 def edit_movie(movie_id):
     if movies_collection is None: return redirect(url_for('admin.manage_movies'))
-    movie = movies_collection.find_one({"_id": ObjectId(movie_id)})
-    if not movie: flash('Movie not found.', 'error'); return redirect(url_for('admin.manage_movies'))
-    
-    if request.method == 'POST':
-        watch_link = request.form.get('watch_link', '').strip()
-        download_link = request.form.get('download_link', '').strip()
-        movies_collection.update_one({"_id": ObjectId(movie_id)}, {"$set": {"watch_link": watch_link, "download_link": download_link}})
-        flash('Movie links updated successfully.', 'success')
-        return redirect(url_for('admin.manage_movies'))
+    try:
+        movie = movies_collection.find_one({"_id": ObjectId(movie_id)})
+        if not movie:
+            flash('Movie not found.', 'error')
+            return redirect(url_for('admin.manage_movies'))
         
-    return render_admin_page(ADMIN_EDIT_MOVIE_TEMPLATE, title="Edit Movie", movie=movie)
+        if request.method == 'POST':
+            watch_link = request.form.get('watch_link', '').strip()
+            download_link = request.form.get('download_link', '').strip()
+            movies_collection.update_one({"_id": ObjectId(movie_id)}, {"$set": {"watch_link": watch_link, "download_link": download_link}})
+            flash('Movie links updated successfully.', 'success')
+            return redirect(url_for('admin.manage_movies'))
+            
+        return render_admin_page(ADMIN_EDIT_MOVIE_TEMPLATE, title="Edit Movie", movie=movie)
+    except Exception as e:
+        flash(f"An error occurred: {e}", "error")
+        return redirect(url_for('admin.manage_movies'))
 
 @admin_bp.route('/movies/delete/<movie_id>', methods=['POST'])
 @login_required
@@ -155,8 +161,22 @@ def delete_all_movies():
 app.register_blueprint(admin_bp)
 
 def pick_banners(movie_list, need=1):
-    banners = [m for m in movie_list if m.get("backdrop")][:need]
-    if not banners: banners.append({ "src": "https://via.placeholder.com/1280x720/040714/f9f9f9?text=Welcome+to+MovieZone", "title": "Welcome to Movie Zone", "overview": "Add movies from the admin panel."})
+    banners = []
+    # প্রথমে backdrop সহ মুভি খোঁজা হচ্ছে
+    for m in movie_list:
+        if m.get("backdrop"):
+            banners.append({"src": m["backdrop"], "title": m["title"], "overview": m["overview"]})
+        if len(banners) >= need:
+            break
+    
+    # যদি backdrop সহ কোনো মুভি না পাওয়া যায়, তাহলে সর্বশেষ মুভির পোস্টার ব্যবহার করা হবে
+    if not banners and movie_list:
+        most_recent_movie = movie_list[0]
+        banners.append({"src": most_recent_movie["poster"], "title": most_recent_movie["title"], "overview": most_recent_movie["overview"]})
+        
+    # যদি কোনো মুভিই না থাকে, তাহলে placeholder দেখানো হবে
+    if not banners:
+        banners.append({ "src": "https://via.placeholder.com/1280x720/040714/f9f9f9?text=Welcome+to+MovieZone", "title": "Welcome to Movie Zone", "overview": "Add movies from the admin panel."})
     return banners
 
 @app.route("/")
@@ -172,17 +192,25 @@ def home():
 @app.route("/movie/<movie_id>")
 def movie_detail(movie_id):
     if DB_CONNECTION_ERROR: return redirect(url_for("home"))
-    movie = movies_collection.find_one({"_id": ObjectId(movie_id)}) if movies_collection is not None else None
-    if not movie: return "Movie not found", 404
-    return render_template_string(MOVIE_DETAIL_TEMPLATE, movie=movie)
+    try:
+        movie = movies_collection.find_one({"_id": ObjectId(movie_id)}) if movies_collection is not None else None
+        if not movie: return "Movie not found", 404
+        return render_template_string(MOVIE_DETAIL_TEMPLATE, movie=movie)
+    except Exception as e:
+        return f"Invalid Movie ID or database error: {e}", 400
 
 @app.route("/search")
 def search():
     if DB_CONNECTION_ERROR: return redirect(url_for("home"))
     q = (request.args.get("q") or "").strip()
     if not q: return redirect(url_for("home"))
-    results = [map_movie_from_tmdb(m) for m in search_tmdb_movies(q)]
-    return render_template_string(PAGE_TEMPLATE, title=f"Search • {q}", movies=results, query=q)
+    
+    # সার্চের ফলাফল এখন আপনার ডেটাবেস থেকে আসবে
+    search_results = []
+    if movies_collection is not None:
+        search_results = list(movies_collection.find({"title": {"$regex": q, "$options": "i"}}).limit(20))
+
+    return render_template_string(PAGE_TEMPLATE, title=f"Search • {q}", movies=search_results, query=q)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
