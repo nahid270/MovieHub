@@ -25,7 +25,6 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "a_very_secret_key_for_local_use")
 
 # --- ADMIN CREDENTIALS (সরাসরি কোডে লেখা) ---
-# নিচের ইউজারনেম ও পাসওয়ার্ড পরিবর্তন করে আপনার নিজেরটা দিন
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "password123"
 
@@ -45,7 +44,6 @@ if MONGO_URI:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         print("MongoDB connection successful.")
-        # সরাসরি ডেটাবেসের নাম নির্দিষ্ট করে দেওয়া হয়েছে
         db = client["movie_db"]
         movies_collection = db.movies
         ads_collection = db.ads
