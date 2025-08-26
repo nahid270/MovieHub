@@ -1,0 +1,6 @@
+Flask
+requests
+pymongo
+flask-login
+werkzeug
+gunicorn
