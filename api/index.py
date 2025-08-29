@@ -481,7 +481,6 @@ detail_html = """
     --card-bg: #1a1a1a;
     --text-light: #ffffff;
     --text-dark: #a0a0a0;
-    --nav-height: 70px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); }
@@ -489,33 +488,46 @@ detail_html = """
   .container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
 
   /* Detail Hero */
-  .detail-hero { position: relative; padding: 120px 0 60px; min-height: 80vh; display: flex; align-items: center; }
+  .detail-hero { position: relative; padding: 120px 0 60px; min-height: 70vh; display: flex; align-items: center; }
   .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(15px) brightness(0.3); transform: scale(1.1); }
   .detail-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, var(--bg-color) 0%, rgba(12,12,12,0.7) 40%, transparent 100%); }
   .detail-content { position: relative; z-index: 2; display: flex; gap: 40px; }
   .detail-poster { width: 300px; height: 450px; flex-shrink: 0; border-radius: 12px; object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
   .detail-info { max-width: 700px; }
   .detail-title { font-size: 3rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
-  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; font-size: 0.9rem; }
   .meta-item { display: flex; align-items: center; gap: 8px; }
   .meta-item.rating { color: #f5c518; font-weight: 600; }
   .detail-overview { font-size: 1rem; line-height: 1.7; color: var(--text-dark); margin-bottom: 30px; }
-  
-  /* Buttons and Links */
-  .section-title { font-size: 1.8rem; font-weight: 600; margin: 40px 0 20px; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; display: inline-block; }
-  .action-buttons { display: flex; flex-wrap: wrap; gap: 15px; }
   .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 25px; border-radius: 50px; font-weight: 600; transition: all 0.2s ease; text-align: center; }
   .btn-primary { background-color: var(--primary-color); }
   .btn-primary:hover { transform: scale(1.05); }
-  .btn-secondary { background-color: rgba(255,255,255,0.1); border: 1px solid var(--text-dark); }
-  .btn-secondary:hover { background-color: rgba(255,255,255,0.2); }
-  .links-container { margin-top: 30px; }
+
+  /* Tabs System */
+  .tabs-container { margin: 40px 0; }
+  .tabs-nav { display: flex; border-bottom: 1px solid #333; }
+  .tab-link { padding: 15px 30px; cursor: pointer; font-weight: 500; color: var(--text-dark); position: relative; }
+  .tab-link.active { color: var(--text-light); }
+  .tab-link.active::after { content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background-color: var(--primary-color); }
+  .tabs-content { padding: 30px 0; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  
+  /* Download & Episode Links */
   .link-group { margin-bottom: 30px; }
   .link-group h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 15px; }
   .link-buttons { display: flex; flex-wrap: wrap; gap: 15px; }
-  
+  .episode-list { display: flex; flex-direction: column; gap: 10px; }
+  .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
+  .episode-name { font-weight: 500; }
+
+  /* Screenshots */
+  .screenshots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+  .screenshot img { width: 100%; border-radius: 8px; }
+
   /* Related Section */
   .related-section { padding-bottom: 50px; }
+  .section-title { font-size: 1.8rem; font-weight: 600; margin: 40px 0 20px; }
   .movie-carousel .swiper-slide { width: auto; }
   .movie-card { display: block; }
   .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease; }
@@ -524,10 +536,6 @@ detail_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
 
-  /* Trailer */
-  .trailer-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; border-radius: 8px; }
-  .trailer-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -535,7 +543,7 @@ detail_html = """
     .detail-poster { width: 60%; max-width: 250px; height: auto; }
     .detail-title { font-size: 2rem; }
     .detail-meta { justify-content: center; }
-    .action-buttons { justify-content: center; }
+    .tab-link { padding: 12px 15px; font-size: 0.9rem; }
     .movie-poster { width: 160px; }
   }
 </style>
@@ -551,30 +559,42 @@ detail_html = """
             <h1 class="detail-title">{{ movie.title }}</h1>
             <div class="detail-meta">
                 {% if movie.vote_average %}<div class="meta-item rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</div>{% endif %}
-                {% if movie.release_date %}<div class="meta-item">{{ movie.release_date.split('-')[0] }}</div>{% endif %}
-                {% if movie.genres %}<div class="meta-item">{{ movie.genres | join(' / ') }}</div>{% endif %}
+                {% if movie.release_date %}<div class="meta-item"><i class="fas fa-calendar-alt"></i> {{ movie.release_date.split('-')[0] }}</div>{% endif %}
+                {% if movie.genres %}<div class="meta-item"><i class="fas fa-tag"></i> {{ movie.genres | join(' / ') }}</div>{% endif %}
             </div>
             <p class="detail-overview">{{ movie.overview }}</p>
-            <div class="action-buttons">
-                {% if movie.type == 'movie' and movie.watch_link %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="action-btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
-                {% if trailer_embed_key %}<a href="#trailer" class="action-btn btn-secondary"><i class="fas fa-film"></i> Watch Trailer</a>{% endif %}
-            </div>
         </div>
     </div>
 </div>
 
 <div class="container">
-    {% if not movie.is_coming_soon %}
-    <section id="download-links">
-        <h2 class="section-title">Download & Watch</h2>
-        <div class="links-container">
+    <div class="tabs-container">
+        <nav class="tabs-nav">
+            <div class="tab-link active" data-tab="downloads">
+                <i class="fas fa-download"></i> Download Links
+            </div>
+            {% if movie.screenshots %}
+            <div class="tab-link" data-tab="screenshots">
+                <i class="fas fa-images"></i> Screenshots
+            </div>
+            {% endif %}
+            {% if movie.type == 'series' %}
+                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+                <div class="tab-link" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
+                {% endfor %}
+            {% endif %}
+        </nav>
+
+        <div class="tabs-content">
+            <!-- Download Links Pane -->
+            <div class="tab-pane active" id="downloads">
             {% if movie.type == 'movie' %}
                 {% if movie.streaming_links %}
                 <div class="link-group">
                     <h3><i class="fas fa-stream"></i> Stream Online</h3>
                     <div class="link-buttons">
                     {% for link_item in movie.streaming_links %}
-                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-secondary">Stream in {{ link_item.name }}</a>
+                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-primary">Stream in {{ link_item.name }}</a>
                     {% endfor %}
                     </div>
                 </div>
@@ -584,7 +604,7 @@ detail_html = """
                     <h3><i class="fas fa-download"></i> Direct Download</h3>
                     <div class="link-buttons">
                     {% for link_item in movie.links %}
-                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-secondary">Download {{ link_item.quality }}</a>
+                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-primary">Download {{ link_item.quality }}</a>
                     {% endfor %}
                     </div>
                 </div>
@@ -599,9 +619,8 @@ detail_html = """
                     </div>
                 </div>
                 {% endif %}
-            {% elif movie.type == 'series' %}
-                {% if movie.season_packs %}
-                 <div class="link-group">
+            {% elif movie.type == 'series' and movie.season_packs %}
+                <div class="link-group">
                     <h3><i class="fas fa-box-open"></i> Complete Season Packs</h3>
                     <div class="link-buttons">
                     {% for pack in movie.season_packs | sort(attribute='quality') | sort(attribute='season') %}
@@ -609,30 +628,43 @@ detail_html = """
                     {% endfor %}
                     </div>
                 </div>
-                {% endif %}
-                {% if movie.episodes %}
-                 <div class="link-group">
-                    <h3><i class="fas fa-tv"></i> Individual Episodes</h3>
-                    <div class="link-buttons">
-                    {% for ep in movie.episodes | sort(attribute='episode_number') | sort(attribute='season') %}
-                        <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ ep.season }}_{{ ep.episode_number }}" class="action-btn btn-secondary" style="background-color: #2AABEE;">S{{ ep.season }} E{{ ep.episode_number }}</a>
+            {% else %}
+                <p>No direct download links available for this series. Check the season tabs for individual episodes.</p>
+            {% endif %}
+            </div>
+
+            <!-- Screenshots Pane -->
+            {% if movie.screenshots %}
+            <div class="tab-pane" id="screenshots">
+                <div class="screenshots-grid">
+                {% for ss in movie.screenshots %}
+                    <a href="{{ ss }}" target="_blank" class="screenshot">
+                        <img src="{{ ss }}" alt="Screenshot">
+                    </a>
+                {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Season Panes -->
+            {% if movie.type == 'series' %}
+                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+                <div class="tab-pane" id="season-{{ season_num }}">
+                    <div class="episode-list">
+                    {% for ep in movie.episodes | selectattr('season', 'equalto', season_num) | sort(attribute='episode_number') %}
+                        <div class="episode-item">
+                            <span class="episode-name">
+                                <i class="fas fa-play-circle"></i> Episode {{ ep.episode_number }}
+                            </span>
+                            <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ ep.season }}_{{ ep.episode_number }}" class="action-btn btn-primary" style="background-color: #2AABEE;">Get Episode</a>
+                        </div>
                     {% endfor %}
                     </div>
                 </div>
-                {% endif %}
+                {% endfor %}
             {% endif %}
         </div>
-    </section>
-    {% endif %}
-
-    {% if trailer_embed_key %}
-    <section id="trailer">
-        <h2 class="section-title">Official Trailer</h2>
-        <div class="trailer-container">
-            <iframe src="https://www.youtube.com/embed/{{ trailer_embed_key }}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </div>
-    </section>
-    {% endif %}
+    </div>
 
     {% if related_movies %}
     <section class="related-section">
@@ -661,6 +693,7 @@ detail_html = """
 
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
+    // Related Movies Carousel
     new Swiper('.movie-carousel', {
         slidesPerView: 'auto',
         spaceBetween: 20,
@@ -669,9 +702,26 @@ detail_html = """
             prevEl: '.swiper-button-prev',
         },
     });
+
+    // Tabs Logic
+    const tabLinks = document.querySelectorAll('.tab-link');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+
+    tabLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            const tabId = link.getAttribute('data-tab');
+
+            tabLinks.forEach(item => item.classList.remove('active'));
+            tabPanes.forEach(pane => pane.classList.remove('active'));
+
+            link.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
 </script>
 </body>
 </html>
+
 """
             
 genres_html = """
