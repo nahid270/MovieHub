@@ -879,12 +879,10 @@ admin_html = """
         </fieldset>
         
         <fieldset><legend>Categories</legend>
-            <div class="form-group checkbox-group">
-                {% for cat in categories %}
-                <label><input type="checkbox" name="categories" value="{{ cat }}"> {{ cat }}</label>
-                {% endfor %}
-                <label><input type="checkbox" name="is_coming_soon" value="true"> Is Coming Soon?</label>
-            </div>
+            <div class="form-group">
+    <label for="screenshots">Screenshots (URLs, one per line):</label>
+    <textarea name="screenshots" id="screenshots" rows="4" placeholder="https://image.url/1.jpg&#10;https://image.url/2.jpg"></textarea>
+</div>
         </fieldset>
         
         <div id="movie_fields">
