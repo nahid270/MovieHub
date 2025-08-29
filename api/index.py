@@ -1,6 +1,6 @@
 # index.py
 """
-Single-file Professional Movie Website (Flask)
+Single-file Professional Movie Website (Flask) - Vercel Optimized
 - One file: index.py
 - Supports: MongoDB (optional) or in-memory fallback
 - Features: Home, Search, Movie Details, Player links, Auth, Watchlist, Admin (add + TMDB import)
@@ -17,6 +17,7 @@ import uuid
 import hashlib
 from datetime import datetime
 from typing import Optional
+import logging
 
 # Flask
 try:
@@ -24,7 +25,7 @@ try:
 except Exception:
     raise SystemExit("Flask is required. Install with: pip install Flask")
 
-# optional
+# optional requests
 try:
     import requests
 except Exception:
@@ -33,9 +34,14 @@ except Exception:
 # optional pymongo
 try:
     from pymongo import MongoClient
+    from pymongo.errors import ConnectionFailure
     PYMONGO_AVAILABLE = True
 except Exception:
     PYMONGO_AVAILABLE = False
+    ConnectionFailure = None
+
+# Setup basic logging
+logging.basicConfig(level=logging.INFO)
 
 # App config
 app = Flask(__name__)
@@ -54,7 +60,6 @@ class MemoryCollection:
     def insert_one(self, doc):
         _id = doc.get("_id") or str(uuid.uuid4())
         doc["_id"] = _id
-        # store deep-serializable copy
         self.data[_id] = json.loads(json.dumps(doc))
         return type("IR", (), {"inserted_id": _id})
 
@@ -96,7 +101,6 @@ class MemoryCollection:
                 del self.data[_id]
                 return
 
-# nested setter helper
 def _set_nested(d, path, value):
     parts = path.split(".")
     cur = d
@@ -104,7 +108,6 @@ def _set_nested(d, path, value):
         cur = cur.setdefault(p, {})
     cur[parts[-1]] = value
 
-# simple matcher for memory queries
 def _match(doc, query):
     if not query:
         return True
@@ -129,47 +132,42 @@ users_col = None
 
 def initialize_database():
     global USE_MONGO, movies_col, users_col
-    # default fallback
     movies_col = MemoryCollection()
     users_col = MemoryCollection()
     USE_MONGO = False
 
     if MONGO_URI and PYMONGO_AVAILABLE:
+        logging.info("[DB] MONGO_URI is set. Attempting to connect...")
         try:
-            client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-            # try simple server selection to validate connection
-            client.server_info()
-            # determine DB name from URI last path segment if present, else use 'movie_site'
-            db_name = None
-            # try to parse DB from URI (works for typical mongodb+srv://.../dbname)
-            if "/" in MONGO_URI:
-                parts = MONGO_URI.rsplit("/", 1)
-                if len(parts) > 1 and parts[1]:
-                    db_name = parts[1].split("?")[0]
-            if not db_name:
-                db_name = "movie_site"
+            # Increased timeout for Vercel cold starts
+            client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
+            client.admin.command('ping') # Recommended way to check connection
+            db_name = client.get_database().name
+            
             db = client[db_name]
             movies = db["movies"]
             users = db["users"]
-            # ensure indexes (safe if already exists)
             try:
                 movies.create_index([("slug", 1)], unique=True)
                 movies.create_index([("views", -1)])
-            except Exception:
-                pass
+            except Exception as idx_e:
+                logging.warning(f"[DB] Could not create indexes: {idx_e}")
+            
             movies_col = movies
             users_col = users
             USE_MONGO = True
-            print("[INFO] Connected to MongoDB, DB:", db_name)
+            logging.info(f"[DB] Successfully connected to MongoDB. DB: {db_name}")
+        except ConnectionFailure as e:
+            logging.error(f"[DB] MongoDB connection failed: Server not available. Error: {e}")
+            logging.warning("[DB] Falling back to in-memory database.")
         except Exception as e:
-            print("[WARN] MongoDB connect failed, using memory DB. Error:", e)
-    else:
-        if not MONGO_URI:
-            print("[INFO] MONGO_URI not set. Using in-memory DB.")
-        else:
-            print("[INFO] pymongo not available. Using in-memory DB.")
+            logging.error(f"[DB] An unexpected error occurred during MongoDB connection. Error: {e}")
+            logging.warning("[DB] Falling back to in-memory database.")
+    elif not MONGO_URI:
+        logging.info("[DB] MONGO_URI not set. Using in-memory database.")
+    else: # MONGO_URI is set but PYMONGO is not available
+        logging.info("[DB] pymongo library not available. Using in-memory database.")
 
-# Initialize on import (Vercel import will run this)
 initialize_database()
 
 # --------------------------
@@ -184,9 +182,9 @@ def seed_admin():
                 "role": "admin",
                 "created_at": datetime.utcnow().isoformat()
             })
-    except Exception:
-        # in case pymongo returns cursor exceptions etc., ignore and continue
-        pass
+            logging.info(f"Admin user '{ADMIN_USERNAME}' created/verified.")
+    except Exception as e:
+        logging.warning(f"Could not seed admin user. Error: {e}")
 
 seed_admin()
 
@@ -213,6 +211,7 @@ def require_login(role: Optional[str] = None):
 
 def upsert_movie(doc: dict) -> str:
     doc.setdefault("title", "Untitled")
+    # ... (rest of the function is fine, no changes needed)
     doc.setdefault("year", None)
     doc.setdefault("language", "Unknown")
     doc.setdefault("genres", [])
@@ -227,7 +226,6 @@ def upsert_movie(doc: dict) -> str:
 
     existing = movies_col.find_one({"slug": slug})
     if existing:
-        # update
         movies_col.update_one({"_id": existing["_id"]}, {"$set": doc})
         return existing["_id"]
     res = movies_col.insert_one(doc)
@@ -272,6 +270,7 @@ BASE_TEMPLATE = """<!doctype html>
 </body>
 </html>"""
 
+# ... (All other templates remain unchanged) ...
 HOME_TEMPLATE = """{% extends base %}
 {% block content %}
   <h1 class="text-2xl font-semibold mb-4">Trending</h1>
@@ -392,6 +391,7 @@ WATCHLIST_TEMPLATE = """{% extends base %}
   {% endif %}
 {% endblock %}"""
 
+
 # --------------------------
 # Routes
 # --------------------------
@@ -404,15 +404,29 @@ def inject_globals():
             self.role = raw.get("role", "user")
     return {"base": BASE_TEMPLATE, "user": UserWrap(u) if u else None, "now": datetime.utcnow(), "base_url": BASE_URL}
 
+# NEW: Health check route for debugging
+@app.route("/health")
+def health_check():
+    return "OK", 200
+
+# NEW: Explicitly handle favicon requests to reduce log noise
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204 # No Content
+
 @app.route("/")
 def home():
+    items = []
     try:
+        # Added more specific exception handling for debugging
         items = list(movies_col.find({}, sort=[("views", -1)], limit=20))
-    except Exception:
-        # fallback in case pymongo object doesn't accept same signature
-        items = list(movies_col.find())
+    except Exception as e:
+        logging.error(f"Error fetching movies for home page: {e}")
+        # In case of error, you might want to render the template with an empty list
+        # or show an error message. We'll proceed with an empty list for now.
     return render_template_string(HOME_TEMPLATE, movies=items, meta_title="Home • MovieZone")
 
+# ... (rest of the routes are fine, no changes needed) ...
 @app.route("/search")
 def search():
     q = request.args.get("q", "").strip()
@@ -578,8 +592,9 @@ def admin_tmdb():
         }
         upsert_movie(doc)
     except Exception as e:
-        print("TMDB import failed:", e)
+        logging.error(f"TMDB import failed: {e}")
     return redirect(url_for("admin"))
+
 
 # simple error handlers
 @app.errorhandler(404)
@@ -600,10 +615,11 @@ def forbidden(e):
 # --------------------------
 if not USE_MONGO:
     try:
-        has_any = bool(list(movies_col.find()))
+        has_any = bool(next(movies_col.find(limit=1), None))
     except Exception:
         has_any = False
     if not has_any:
+        logging.info("In-memory database is empty. Seeding sample data.")
         sample = [
             {"title": "Inception", "year": 2010, "language": "EN", "genres": ["Sci-Fi","Thriller"], "description": "A thief who steals corporate secrets through dream-sharing technology…", "poster_url": "https://image.tmdb.org/t/p/w500/qmDpIHrmpJINaRKAfWQfftjCdyi.jpg", "trailer_url": "https://www.youtube.com/watch?v=YoHD9XEInc0", "stream_links":[{"label":"720p","url":"https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"}], "rating":8.8},
             {"title": "Interstellar", "year": 2014, "language": "EN", "genres": ["Sci-Fi","Adventure"], "description": "A team travels through a wormhole...", "poster_url": "https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg", "trailer_url": "https://www.youtube.com/watch?v=zSWdZVtXT7E", "rating":8.6},
@@ -615,7 +631,7 @@ if not USE_MONGO:
 # Entrypoint for local dev
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
-    print(f"Starting locally at http://127.0.0.1:{port}  (admin: {ADMIN_USERNAME})")
+    logging.info(f"Starting locally at http://127.0.0.1:{port}  (admin: {ADMIN_USERNAME})")
     app.run(host="0.0.0.0", port=port, debug=True)
 
 # `app` is exported for Vercel / other serverless imports
