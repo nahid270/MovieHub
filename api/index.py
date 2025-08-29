@@ -1,8 +1,6 @@
 import os
 import sys
-import re
 import requests
-import json
 from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -17,15 +15,9 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "MovieZonehub")
 
 # --- Validate Environment Variables ---
-required_vars = {
-    "MONGO_URI": MONGO_URI, "TMDB_API_KEY": TMDB_API_KEY,
-    "ADMIN_USERNAME": ADMIN_USERNAME, "ADMIN_PASSWORD": ADMIN_PASSWORD,
-}
-is_vercel_build = os.environ.get('VERCEL') == '1'
-if not is_vercel_build:
-    missing_vars = [name for name, value in required_vars.items() if not value]
-    if missing_vars:
-        print(f"FATAL: Missing required environment variables: {', '.join(missing_vars)}")
+if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
+    print("FATAL: One or more required environment variables are missing.")
+    if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
 # --- App Initialization ---
@@ -55,8 +47,8 @@ try:
     movies = db["movies"]
     print("SUCCESS: Successfully connected to MongoDB!")
 except Exception as e:
-    print(f"FATAL: Error connecting to MongoDB: {e}. Exiting.")
-    if not is_vercel_build:
+    print(f"FATAL: Error connecting to MongoDB: {e}.")
+    if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
 @app.context_processor
@@ -180,12 +172,12 @@ index_html = """
         <div class="swiper-pagination"></div>
     </div>
     <div class="container">
-    {% macro render_carousel_section(title, movies_list, endpoint, cat_name) %}
+    {% macro render_carousel_section(title, movies_list, cat_name) %}
         {% if movies_list %}
         <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for(endpoint, cat_name=cat_name) }}" class="view-all-link">View All</a>
+                <a href="{{ url_for('movies_by_category', cat_name=cat_name) }}" class="view-all-link">View All</a>
             </div>
             <div class="swiper movie-carousel">
                 <div class="swiper-wrapper">
@@ -196,9 +188,9 @@ index_html = """
         </section>
         {% endif %}
     {% endmacro %}
-    {{ render_carousel_section('Trending Now', trending_movies, 'movies_by_category', 'Trending') }}
-    {{ render_carousel_section('Latest Movies', latest_movies, 'movies_by_category', 'Latest Movie') }}
-    {{ render_carousel_section('Web Series', latest_series, 'movies_by_category', 'Latest Series') }}
+    {{ render_carousel_section('Trending Now', trending_movies, 'Trending') }}
+    {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movie') }}
+    {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
     </div>
   {% endif %}
 </main>
@@ -221,7 +213,6 @@ detail_html = """
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <style>
   :root {--primary-color: #E50914;--bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
@@ -488,7 +479,7 @@ admin_html = """
         openModal();
 
         try {
-            const response = await fetch('/admin/api/search_tmdb?query=' + encodeURIComponent(query));
+            const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query));
             const results = await response.json();
             if (!response.ok) throw new Error(results.error || 'Unknown error');
 
@@ -521,7 +512,7 @@ admin_html = """
         searchBtn.disabled = true; searchBtn.innerHTML = 'Fetching...';
         
         try {
-            const response = await fetch(`/admin/api/fetch_tmdb?id=${tmdbId}&type=${mediaType}`);
+            const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to fetch details');
 
@@ -620,10 +611,10 @@ edit_html = """
 # === [END] HTML TEMPLATES ============================================================
 # =======================================================================================
 
-# --- TMDB API Functions ---
-def get_tmdb_details_from_api(tmdb_id, content_type_str):
+# --- TMDB API Helper Function ---
+def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
-    search_type = "tv" if content_type_str == "series" else "movie"
+    search_type = "tv" if media_type == "tv" else "movie"
     try:
         detail_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
         res = requests.get(detail_url, timeout=10)
@@ -661,7 +652,7 @@ def home():
         "latest_movies": list(movies.find({"type": "movie"}).sort('_id', -1).limit(12)),
         "latest_series": list(movies.find({"type": "series"}).sort('_id', -1).limit(12)),
         "recently_added": list(movies.find({"backdrop": {"$ne": None}}).sort('_id', -1).limit(8)),
-        "is_full_page_list": False, "query": ""
+        "is_full_page_list": False
     }
     return render_template_string(index_html, **context)
 
@@ -691,38 +682,46 @@ def admin():
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         
+        # Collect data from form
         movie_data = {
             "title": request.form.get("title").strip(),
             "type": content_type,
-            "poster": request.form.get("poster").strip(),
-            "backdrop": request.form.get("backdrop").strip(),
+            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+            "backdrop": request.form.get("backdrop").strip() or None,
             "overview": request.form.get("overview").strip(),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "episodes": [], "links": []
+            "episodes": [], 
+            "links": []
         }
         
+        # If tmdb_id is present, it means data was fetched, let's get the full details again for accuracy
         tmdb_id = request.form.get("tmdb_id")
         if tmdb_id:
-            tmdb_details = get_tmdb_details_from_api(tmdb_id, content_type)
+            media_type = "tv" if content_type == "series" else "movie"
+            tmdb_details = get_tmdb_details(tmdb_id, media_type)
             if tmdb_details:
-                # Fill only empty fields from form with TMDB data
-                movie_data['title'] = movie_data['title'] or tmdb_details.get('title')
-                movie_data['overview'] = movie_data['overview'] or tmdb_details.get('overview')
-                movie_data['poster'] = movie_data['poster'] or tmdb_details.get('poster')
-                movie_data['backdrop'] = movie_data['backdrop'] or tmdb_details.get('backdrop')
-                if not movie_data['genres']: movie_data['genres'] = tmdb_details.get('genres', [])
-                movie_data['release_date'] = tmdb_details.get('release_date')
-                movie_data['vote_average'] = tmdb_details.get('vote_average')
+                # Merge details, prioritizing fetched data for fields that are auto-filled
+                movie_data.update({
+                    'release_date': tmdb_details.get('release_date'),
+                    'vote_average': tmdb_details.get('vote_average')
+                })
 
-        if not movie_data['poster']: movie_data['poster'] = PLACEHOLDER_POSTER
-        if not movie_data['backdrop']: movie_data['backdrop'] = None
-
+        # Process links based on content type
         if content_type == "movie":
             movie_data["links"] = [{"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()]
         else: # Series
-            for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')):
-                if s and e and w:
-                    movie_data['episodes'].append({"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()})
+            seasons = request.form.getlist('episode_season[]')
+            numbers = request.form.getlist('episode_number[]')
+            titles = request.form.getlist('episode_title[]')
+            links = request.form.getlist('episode_watch_link[]')
+            for i in range(len(seasons)):
+                if seasons[i] and numbers[i] and links[i]:
+                    movie_data['episodes'].append({
+                        "season": int(seasons[i]), 
+                        "episode_number": int(numbers[i]), 
+                        "title": titles[i].strip(), 
+                        "watch_link": links[i].strip()
+                    })
 
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
@@ -733,7 +732,10 @@ def admin():
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    obj_id = ObjectId(movie_id)
+    try:
+        obj_id = ObjectId(movie_id)
+    except:
+        return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
     if not movie_obj: return "Movie not found", 404
 
@@ -761,13 +763,16 @@ def edit_movie(movie_id):
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
-    movies.delete_one({"_id": ObjectId(movie_id)})
+    try:
+        movies.delete_one({"_id": ObjectId(movie_id)})
+    except:
+        return "Invalid ID", 400
     return redirect(url_for('admin'))
 
 # --- API Routes for Admin Panel ---
-@app.route('/admin/api/search_tmdb')
+@app.route('/admin/api/search')
 @requires_auth
-def search_tmdb_api():
+def api_search_tmdb():
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
@@ -778,6 +783,7 @@ def search_tmdb_api():
         
         results = []
         for item in data.get('results', []):
+            # Filter out items without a poster
             if item.get('media_type') in ['movie', 'tv'] and item.get('poster_path'):
                 results.append({
                     "id": item.get('id'),
@@ -790,16 +796,15 @@ def search_tmdb_api():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/admin/api/fetch_tmdb')
+@app.route('/admin/api/details')
 @requires_auth
-def fetch_tmdb_data_api():
+def api_get_details():
     tmdb_id = request.args.get('id')
     media_type = request.args.get('type') # 'movie' or 'tv'
     if not tmdb_id or not media_type:
         return jsonify({"error": "ID and type parameters are required"}), 400
     
-    content_type = "series" if media_type == 'tv' else "movie"
-    details = get_tmdb_details_from_api(tmdb_id, content_type)
+    details = get_tmdb_details(tmdb_id, media_type)
     
     if details:
         return jsonify(details)
@@ -807,4 +812,4 @@ def fetch_tmdb_data_api():
         return jsonify({"error": "Details not found on TMDb"}), 404
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=3000)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
