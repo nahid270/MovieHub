@@ -12,7 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from urllib.parse import urlparse, unquote
 
 
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://tocewe6727:tocewe6727@cluster0.q4o59lo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "7880675542:AAHY83itDOUhASDXgaZRodMg5IhGI_dtfEA")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", -1003012555805))
