@@ -126,7 +126,24 @@ index_html = """
   .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
-  .ad-container { margin: 40px 0; display: flex; justify-content: center; align-items: center; }
+  
+  /* === [FIX] AD CONTAINER STYLING START === */
+  .ad-container {
+    margin: 20px auto;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* Prevents large ads from breaking layout */
+    min-height: 50px;
+    text-align: center;
+  }
+  .ad-container > * {
+    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
+  }
+  /* === [FIX] AD CONTAINER STYLING END === */
+
   .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
   .mobile-nav-menu.active {transform: translateX(0);}
   .mobile-nav-menu .close-btn {position: absolute;top: 20px;right: 20px;font-size: 2.5rem;color: white;background: none;border: none;cursor: pointer;}
@@ -366,7 +383,24 @@ detail_html = """
   .episode-list { display: flex; flex-direction: column; gap: 10px; }
   .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
   .episode-name { font-weight: 500; }
-  .ad-container { margin: 20px 0; text-align: center; }
+
+  /* === [FIX] AD CONTAINER STYLING START === */
+  .ad-container {
+    margin: 20px auto;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* Prevents large ads from breaking layout */
+    min-height: 50px;
+    text-align: center;
+  }
+  .ad-container > * {
+    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
+  }
+  /* === [FIX] AD CONTAINER STYLING END === */
+
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -479,7 +513,23 @@ wait_page_html = """
         .timer { font-size: 2.5rem; font-weight: 700; color: var(--text-light); margin-bottom: 30px; }
         .get-link-btn { display: inline-block; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: #555; transition: background-color 0.2s; }
         .get-link-btn.ready { background-color: var(--primary-color); }
-        .ad-container { margin: 30px 0; min-height: 50px; display: flex; justify-content: center; align-items: center; }
+        
+        /* === [FIX] AD CONTAINER STYLING START === */
+        .ad-container {
+            margin: 30px auto 0;
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Prevents large ads from breaking layout */
+            min-height: 50px;
+            text-align: center;
+        }
+        .ad-container > * {
+            max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
+        }
+        /* === [FIX] AD CONTAINER STYLING END === */
     </style>
 </head>
 <body>
