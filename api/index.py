@@ -169,8 +169,8 @@ index_html = """
         <a href="{{ url_for('home') }}" class="logo">{{ website_name }}</a>
         <nav class="nav-links">
             <a href="{{ url_for('home') }}" class="active">Home</a>
-            <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Movies</a>
-            <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Series</a>
+            <a href="{{ url_for('all_movies') }}">Movies</a>
+            <a href="{{ url_for('all_series') }}">Series</a>
         </nav>
         <form method="GET" action="/" class="search-form">
             <input type="search" name="q" class="search-input" placeholder="Search..." value="{{ query|default('') }}">
@@ -183,10 +183,10 @@ index_html = """
     <button class="close-btn">&times;</button>
     <div class="mobile-links">
         <a href="{{ url_for('home') }}">Home</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Latest Movies</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Latest Series</a>
+        <a href="{{ url_for('all_movies') }}">All Movies</a>
+        <a href="{{ url_for('all_series') }}">All Series</a>
         <hr>
-        {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', cat_name=cat) }}">{{ cat }}</a>{% endfor %}
+        {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', cat_name=quote(cat)) }}">{{ cat }}</a>{% endfor %}
     </div>
 </div>
 <main>
@@ -229,7 +229,7 @@ index_html = """
         <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for('movies_by_category', cat_name=cat_name) }}" class="view-all-link">View All</a>
+                <a href="{{ url_for('movies_by_category', cat_name=quote(cat_name)) }}" class="view-all-link">View All</a>
             </div>
             <div class="swiper movie-carousel">
                 <div class="swiper-wrapper">
@@ -255,9 +255,9 @@ index_html = """
 </footer>
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
-  <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}" class="nav-item"><i class="fas fa-film"></i><span>Movies</span></a>
+  <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-film"></i><span>Movies</span></a>
   <button id="live-search-btn" class="nav-item"><i class="fas fa-search"></i><span>Search</span></button>
-  <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}" class="nav-item"><i class="fas fa-tv"></i><span>Series</span></a>
+  <a href="{{ url_for('all_series') }}" class="nav-item"><i class="fas fa-tv"></i><span>Series</span></a>
   <a href="https://t.me/Movie_Request_Group_23" target="_blank" class="nav-item"><i class="fab fa-telegram-plane"></i><span>Join Us</span></a>
 </nav>
 <div id="search-overlay" class="search-overlay">
@@ -769,9 +769,13 @@ def home():
     for category in PREDEFINED_CATEGORIES:
         categorized_content[category] = list(movies.find({"categories": category}).sort('_id', -1).limit(12))
 
+    # For homepage carousels, we still need latest movies and series separately
+    latest_movies_for_carousel = list(movies.find({"type": "movie"}).sort('_id', -1).limit(12))
+    latest_series_for_carousel = list(movies.find({"type": "series"}).sort('_id', -1).limit(12))
+
     context = {
-        "latest_movies": list(movies.find({"type": "movie"}).sort('_id', -1).limit(12)),
-        "latest_series": list(movies.find({"type": "series"}).sort('_id', -1).limit(12)),
+        "latest_movies": latest_movies_for_carousel,
+        "latest_series": latest_series_for_carousel,
         "recently_added": list(movies.find({"backdrop": {"$ne": None}}).sort('_id', -1).limit(8)),
         "categorized_content": categorized_content,
         "is_full_page_list": False
@@ -786,16 +790,50 @@ def movie_detail(movie_id):
         return render_template_string(detail_html, movie=movie)
     except Exception: return "Content not found", 404
 
+# === [NEW] Route for all movies ===
+@app.route('/movies')
+def all_movies():
+    """Fetches and displays all content marked as 'movie'."""
+    all_movie_content = list(movies.find({"type": "movie"}).sort('_id', -1))
+    return render_template_string(
+        index_html, 
+        movies=all_movie_content, 
+        query="All Movies", 
+        is_full_page_list=True
+    )
+
+# === [NEW] Route for all series ===
+@app.route('/series')
+def all_series():
+    """Fetches and displays all content marked as 'series'."""
+    all_series_content = list(movies.find({"type": "series"}).sort('_id', -1))
+    return render_template_string(
+        index_html, 
+        movies=all_series_content, 
+        query="All Series", 
+        is_full_page_list=True
+    )
+
+# === [MODIFIED] Route for specific categories like Bengali, Hindi etc. ===
 @app.route('/category/<cat_name>')
 def movies_by_category(cat_name):
-    query = {}
-    title = cat_name.replace("_", " ").title()
-    if cat_name == "Latest Movie": query = {"type": "movie"}
-    elif cat_name == "Latest Series": query = {"type": "series"}
-    else: query = {"categories": title}
+    """Fetches and displays content by a specific category."""
+    title = unquote(cat_name).replace("_", " ").title()
     
+    # Special handling for "Latest Movie" and "Latest Series" for carousel "View All" links
+    if title == "Latest Movie":
+        return redirect(url_for('all_movies'))
+    if title == "Latest Series":
+        return redirect(url_for('all_series'))
+        
+    query = {"categories": title}
     content_list = list(movies.find(query).sort('_id', -1))
-    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
+    return render_template_string(
+        index_html, 
+        movies=content_list, 
+        query=title, 
+        is_full_page_list=True
+    )
 
 @app.route('/wait')
 def wait_page():
