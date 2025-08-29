@@ -63,7 +63,7 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Updated with Categories, Watch/Download, Backdrop Fix) ====
+# === [START] HTML TEMPLATES (Final Corrected Version) ==================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -94,10 +94,9 @@ index_html = """
   .search-input:focus { outline: none; }
   .search-btn { background: var(--primary-color); border: none; color: var(--text-light); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display:grid; place-items:center; }
   .menu-toggle { display: none; font-size: 1.5rem; cursor: pointer; }
-  /* --- HERO SLIDER STYLE FIX --- */
   .hero-slider { height: 70vh; width: 100%; margin-top: var(--nav-height); }
   .hero-slide { position: relative; display: flex; align-items: center; }
-  .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; /* This ensures the image is centered and covers the area without distortion */ }
+  .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
   .hero-slide::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, var(--bg-color) 0%, rgba(12,12,12,0.8) 30%, rgba(12,12,12,0.2) 60%, transparent 100%), linear-gradient(to top, var(--bg-color) 0%, transparent 20%); }
   .hero-content { position: relative; z-index: 2; padding: 0 40px; max-width: 50%; }
   .hero-title { font-size: 3.5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.1; }
@@ -201,14 +200,11 @@ index_html = """
     {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
     {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movie') }}
     {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
-    
-    {# NEW DYNAMIC CATEGORIES #}
     {% for cat_name, movies_list in categorized_content.items() %}
-        {% if cat_name != 'Trending' %} {# Trending is already shown above #}
+        {% if cat_name != 'Trending' %}
              {{ render_carousel_section(cat_name, movies_list, cat_name) }}
         {% endif %}
     {% endfor %}
-
     </div>
   {% endif %}
 </main>
@@ -260,9 +256,9 @@ detail_html = """
   .tabs-content { padding: 30px 0; }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
-  .link-group { margin-bottom: 30px; text-align: center; } /* --- CENTER ALIGN BUTTON CONTAINER --- */
+  .link-group { margin-bottom: 30px; text-align: center; }
   .link-group h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; }
-  .link-buttons { display: inline-flex; flex-wrap: wrap; gap: 15px; justify-content: center;} /* --- CENTER BUTTONS --- */
+  .link-buttons { display: inline-flex; flex-wrap: wrap; gap: 15px; justify-content: center;}
   .quality-group { margin-bottom: 20px; }
   .quality-group h4 { margin-bottom: 10px; color: var(--text-dark); }
   .episode-list { display: flex; flex-direction: column; gap: 10px; }
@@ -312,7 +308,6 @@ detail_html = """
         <div class="tabs-content">
             <div class="tab-pane active" id="downloads">
                 {% if ad_settings.ad_code_1 %}<div class="ad-container">{{ ad_settings.ad_code_1 | safe }}</div>{% endif %}
-            
                 {% if movie.type == 'movie' %}
                     {% if movie.links %}
                     <div class="link-group">
@@ -374,7 +369,7 @@ admin_html = """
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); margin: 0; padding: 20px; }
         .admin-container { max-width: 1000px; margin: 20px auto; }
         .admin-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--netflix-red); padding-bottom: 10px; margin-bottom: 30px; }
-        h1 { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--netflix-red); margin: 0; }
+        .admin-header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--netflix-red); margin: 0; }
         h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.2rem; margin-top: 40px; margin-bottom: 20px; border-left: 4px solid var(--netflix-red); padding-left: 15px; }
         form { background: var(--dark-gray); padding: 25px; border-radius: 8px; }
         fieldset { border: 1px solid var(--light-gray); border-radius: 5px; padding: 20px; margin-bottom: 20px; }
@@ -382,19 +377,31 @@ admin_html = """
         .form-group { margin-bottom: 15px; } label { display: block; margin-bottom: 8px; font-weight: bold; }
         input, textarea, select { width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray); font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box; }
         textarea { resize: vertical; min-height: 100px;}
-        .btn { display: inline-block; text-decoration: none; color: white; font-weight: 700; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; }
-        .btn:disabled { background-color: #555; }
+        .btn { display: inline-block; text-decoration: none; color: white; font-weight: 700; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; transition: background-color 0.2s; }
+        .btn:disabled { background-color: #555; cursor: not-allowed; }
         .btn-primary { background: var(--netflix-red); } .btn-primary:hover:not(:disabled) { background-color: #B20710; }
-        .btn-secondary { background: #555; } .btn-danger { background: #dc3545; } .btn-edit { background: #007bff; }
+        .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
+        .btn-edit { background: #007bff; }
+        .table-container { display: block; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; } th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
         .action-buttons { display: flex; gap: 10px; }
         .dynamic-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; position: relative; }
+        .dynamic-item .btn-danger { position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; }
         hr { border: 0; height: 1px; background-color: var(--light-gray); margin: 50px 0; }
         .tmdb-fetcher { display: flex; gap: 10px; }
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; padding: 10px 0; } .checkbox-group label { display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;}
         .checkbox-group input { width: auto; }
         .link-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .modal-overlay { /* ... existing styles ... */ } .modal-content { /* ... existing styles ... */ }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; display: none; justify-content: center; align-items: center; padding: 20px; }
+        .modal-content { background: var(--dark-gray); padding: 30px; border-radius: 8px; width: 100%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0; }
+        .modal-body { overflow-y: auto; }
+        .modal-close { background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; }
+        #search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
+        .result-item { cursor: pointer; text-align: center; }
+        .result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; border: 2px solid transparent; transition: all 0.2s; }
+        .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
+        .result-item p { font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -431,15 +438,55 @@ admin_html = """
     </form>
     <hr>
     <h2><i class="fas fa-tasks"></i> Manage Content</h2>
-    <table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-    {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% endfor %}
-    </tbody></table>
+    <div class="table-container"><table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
+    {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="3" style="text-align:center;">No content found.</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+<div class="modal-overlay" id="search-modal">
+    <div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"><p>Type a name and click search to see results.</p></div></div>
 </div>
 <script>
-    // JS code from previous version is unchanged and correct.
+    const modal = document.getElementById('search-modal');
+    const searchResultsContainer = document.getElementById('search-results');
+    const searchBtn = document.getElementById('tmdb_search_btn');
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    async function searchTmdb() { /* ... unchanged ... */ } async function selectResult(tmdbId, mediaType) { /* ... unchanged ... */ }
+    function openModal() { modal.style.display = 'flex'; }
+    function closeModal() { modal.style.display = 'none'; }
+    async function searchTmdb() {
+        const query = document.getElementById('tmdb_search_query').value.trim();
+        if (!query) return alert('Please enter a movie or series name.');
+        searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...';
+        searchResultsContainer.innerHTML = '<p>Loading results...</p>';
+        openModal();
+        try {
+            const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query));
+            const results = await response.json();
+            if (!response.ok) throw new Error(results.error || 'Unknown error');
+            if (results.length === 0) { searchResultsContainer.innerHTML = '<p>No results found.</p>'; return; }
+            searchResultsContainer.innerHTML = '';
+            results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; searchResultsContainer.appendChild(resultDiv); });
+        } catch (error) { searchResultsContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`; } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
+    }
+    async function selectResult(tmdbId, mediaType) {
+        closeModal();
+        searchBtn.disabled = true; searchBtn.innerHTML = 'Fetching...';
+        try {
+            const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to fetch details');
+            document.getElementById('tmdb_id').value = data.tmdb_id || '';
+            document.getElementById('title').value = data.title || '';
+            document.getElementById('overview').value = data.overview || '';
+            document.getElementById('poster').value = data.poster || '';
+            document.getElementById('backdrop').value = data.backdrop || '';
+            document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
+            document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie';
+            document.querySelectorAll('input[name="categories"]').forEach(checkbox => checkbox.checked = false);
+            toggleFields();
+            alert(`'${data.title}' details have been filled. Please select categories, add links and click 'Add Content'.`);
+        } catch (error) { alert('Error fetching details: ' + error.message); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
+    }
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
@@ -456,16 +503,17 @@ edit_html = """
         :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); padding: 20px; }
         .admin-container { max-width: 800px; margin: 20px auto; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: #999; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #999; text-decoration: none; }
         h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; }
         form { background: var(--dark-gray); padding: 25px; border-radius: 8px; }
-        fieldset { border: 1px solid var(--light-gray); padding: 20px; margin-bottom: 20px; }
-        .form-group { margin-bottom: 15px; } label { display: block; margin-bottom: 8px; }
-        input, textarea, select { width: 100%; padding: 12px; border-radius: 4px; background: var(--light-gray); color: var(--text-light); box-sizing: border-box; }
-        .btn { display: inline-block; color: white; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; }
+        fieldset { border: 1px solid var(--light-gray); padding: 20px; margin-bottom: 20px; border-radius: 5px;}
+        legend { font-weight: bold; color: var(--netflix-red); padding: 0 10px; font-size: 1.2rem; }
+        .form-group { margin-bottom: 15px; } label { display: block; margin-bottom: 8px; font-weight: bold;}
+        input, textarea, select { width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray); font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box; }
+        .btn { display: inline-block; color: white; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; }
         .btn-primary { background: var(--netflix-red); } .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
         .dynamic-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; position: relative; }
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; }
         .checkbox-group input { width: auto; }
         .link-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     </style>
@@ -482,17 +530,17 @@ edit_html = """
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
-        <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in predefined_categories %}<label><input type="checkbox" name="categories" value="{{ cat }}" {% if cat in movie.categories %}checked{% endif %}> {{ cat }}</label>{% endfor %}</div></div>
+        <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in predefined_categories %}<label><input type="checkbox" name="categories" value="{{ cat }}" {% if movie.categories and cat in movie.categories %}checked{% endif %}> {{ cat }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
     </fieldset>
     <div id="movie_fields">
         <fieldset><legend>Movie Links</legend>
-            {% set links_480p = movie.links|selectattr('quality', 'equalto', '480p')|first %}
-            {% set links_720p = movie.links|selectattr('quality', 'equalto', '720p')|first %}
-            {% set links_1080p = movie.links|selectattr('quality', 'equalto', '1080p')|first %}
-            <div class="link-pair"><label>480p Watch Link:<input type="url" name="watch_link_480p" value="{{ links_480p.watch_url or '' }}"></label><label>480p Download Link:<input type="url" name="download_link_480p" value="{{ links_480p.download_url or '' }}"></label></div>
-            <div class="link-pair"><label>720p Watch Link:<input type="url" name="watch_link_720p" value="{{ links_720p.watch_url or '' }}"></label><label>720p Download Link:<input type="url" name="download_link_720p" value="{{ links_720p.download_url or '' }}"></label></div>
-            <div class="link-pair"><label>1080p Watch Link:<input type="url" name="watch_link_1080p" value="{{ links_1080p.watch_url or '' }}"></label><label>1080p Download Link:<input type="url" name="download_link_1080p" value="{{ links_1080p.download_url or '' }}"></label></div>
+            {% set links_480p = movie.links|selectattr('quality', 'equalto', '480p')|first if movie.links else None %}
+            {% set links_720p = movie.links|selectattr('quality', 'equalto', '720p')|first if movie.links else None %}
+            {% set links_1080p = movie.links|selectattr('quality', 'equalto', '1080p')|first if movie.links else None %}
+            <div class="link-pair"><label>480p Watch Link:<input type="url" name="watch_link_480p" value="{{ links_480p.watch_url if links_480p else '' }}"></label><label>480p Download Link:<input type="url" name="download_link_480p" value="{{ links_480p.download_url if links_480p else '' }}"></label></div>
+            <div class="link-pair"><label>720p Watch Link:<input type="url" name="watch_link_720p" value="{{ links_720p.watch_url if links_720p else '' }}"></label><label>720p Download Link:<input type="url" name="download_link_720p" value="{{ links_720p.download_url if links_720p else '' }}"></label></div>
+            <div class="link-pair"><label>1080p Watch Link:<input type="url" name="watch_link_1080p" value="{{ links_1080p.watch_url if links_1080p else '' }}"></label><label>1080p Download Link:<input type="url" name="download_link_1080p" value="{{ links_1080p.download_url if links_1080p else '' }}"></label></div>
         </fieldset>
     </div>
     <div id="episode_fields" style="display: none;">
@@ -506,7 +554,7 @@ edit_html = """
 </div>
 <script>
     function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { /* ... unchanged ... */ }
+    function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title (Optional):</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
@@ -515,9 +563,8 @@ edit_html = """
 # === [END] HTML TEMPLATES ============================================================
 # =======================================================================================
 
-# --- TMDB API Helper Function (Unchanged) ---
+# --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
-    # ... This function remains unchanged ...
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "tv" else "movie"
     try:
@@ -532,7 +579,7 @@ def get_tmdb_details(tmdb_id, media_type):
         return None
 
 # =======================================================================================
-# === [START] FLASK ROUTES (Updated Logic) ==============================================
+# === [START] FLASK ROUTES ==============================================================
 # =======================================================================================
 @app.route('/')
 def home():
@@ -541,7 +588,6 @@ def home():
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
-    # Fetch content for new categories
     categorized_content = {}
     for category in PREDEFINED_CATEGORIES:
         categorized_content[category] = list(movies.find({"categories": category}).sort('_id', -1).limit(12))
@@ -593,11 +639,10 @@ def admin():
                 "overview": request.form.get("overview").strip(),
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-                "categories": request.form.getlist("categories"), # Get list of selected categories
+                "categories": request.form.getlist("categories"),
                 "episodes": [], "links": []
             }
             
-            # --- TMDB Details Fetching (unchanged) ---
             tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
                 media_type = "tv" if content_type == "series" else "movie"
@@ -668,11 +713,10 @@ def delete_movie(movie_id):
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
 
-# --- API Routes for Admin Panel (Unchanged) ---
+# --- API Routes for Admin Panel ---
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
-    # ... This function remains unchanged ...
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
@@ -690,7 +734,6 @@ def api_search_tmdb():
 @app.route('/admin/api/details')
 @requires_auth
 def api_get_details():
-    # ... This function remains unchanged ...
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type parameters are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
