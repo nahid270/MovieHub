@@ -60,11 +60,11 @@ def inject_globals():
         website_name=WEBSITE_NAME,
         ad_settings=ad_settings or {},
         predefined_categories=PREDEFINED_CATEGORIES,
-        quote=quote # Make quote function available in templates
+        quote=quote 
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Final Corrected Version) ==================================
+# === [START] HTML TEMPLATES ============================================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -75,7 +75,7 @@ index_html = """
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-{{ ad_settings.ad_header | safe }} {# HEADER AD SLOT #}
+{{ ad_settings.ad_header | safe }}
 <style>
   :root {--primary-color: #E50914;--bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;--nav-height: 70px;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -131,7 +131,7 @@ index_html = """
 </style>
 </head>
 <body>
-{{ ad_settings.ad_body_top | safe }} {# BODY TOP AD SLOT #}
+{{ ad_settings.ad_body_top | safe }}
 <header class="main-header">
     <div class="container header-content">
         <a href="{{ url_for('home') }}" class="logo">{{ website_name }}</a>
@@ -203,9 +203,7 @@ index_html = """
     {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
     {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movie') }}
     {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
-    
-    {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %} {# HOMEPAGE LIST AD SLOT #}
-
+    {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
     {% for cat_name, movies_list in categorized_content.items() %}
         {% if cat_name != 'Trending' %}
              {{ render_carousel_section(cat_name, movies_list, cat_name) }}
@@ -224,7 +222,7 @@ index_html = """
     new Swiper('.hero-slider', { loop: true, autoplay: { delay: 5000 }, pagination: { el: '.swiper-pagination', clickable: true }, });
     new Swiper('.movie-carousel', { slidesPerView: 'auto', spaceBetween: 20, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev', }, breakpoints: { 320: { spaceBetween: 15 }, 768: { spaceBetween: 20 }, } });
 </script>
-{{ ad_settings.ad_footer | safe }} {# FOOTER AD SLOT #}
+{{ ad_settings.ad_footer | safe }}
 </body></html>
 """
 detail_html = """
@@ -409,7 +407,7 @@ wait_page_html = """
                     linkButton.classList.add('ready');
                     linkButton.textContent = 'Click Here to Proceed';
                     linkButton.href = targetUrl;
-                    window.location.href = targetUrl; // Auto redirect
+                    window.location.href = targetUrl;
                 } else {
                     countdownElement.textContent = timeLeft;
                 }
@@ -700,7 +698,6 @@ def movies_by_category(cat_name):
     content_list = list(movies.find(query).sort('_id', -1))
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
 
-# --- NEW ROUTE FOR THE WAIT PAGE ---
 @app.route('/wait')
 def wait_page():
     target_url = request.args.get('target')
@@ -708,7 +705,6 @@ def wait_page():
         return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=target_url)
 
-# --- Admin Routes ---
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
