@@ -1,31 +1,6 @@
 # ====================================================================================
-# FINAL & READY: Single-File Professional Movie Website (Python + Flask)
-# ====================================================================================
-#
-# বৈশিষ্ট্য (Features):
-# --------------------
-# - একটি মাত্র ফাইল (`index.py`) দিয়ে সম্পূর্ণ ওয়েবসাইট।
-# - হোমপেজ, সার্চ, মুভি ডিটেইলস, লগইন/রেজিস্ট্রেশন, ওয়াচলিস্ট।
-# - শক্তিশালী অ্যাডমিন প্যানেল (মুভি যোগ করা, TMDB থেকে ইম্পোর্ট করা)।
-# - ডেটাবেস: MongoDB সাপোর্ট (যদি MONGO_URI দেওয়া থাকে), இல்லையெனில் ইন-মেমোরি ডেটাবেস।
-# - রেসপন্সিভ ডিজাইন: TailwindCSS দ্বারা চালিত, মোবাইল ও পিসিতে সুন্দরভাবে কাজ করে।
-# - SEO-ফ্রেন্ডলি URL এবং ভিডিও প্লেয়ার ইন্টিগ্রেটেড।
-#
-# কীভাবে ডিপ্লয় করবেন (How to Deploy):
-# ------------------------------------
-# ১. GitHub-এ একটি রিপোজিটরি তৈরি করুন।
-# ২. এই সম্পূর্ণ কোডটি `index.py` নামে একটি ফাইলে পেস্ট করুন।
-# ৩. `requirements.txt` নামে আরেকটি ফাইল তৈরি করে প্রয়োজনীয় প্যাকেজের নামগুলো লিখুন।
-# ৪. Render.com এ যান, GitHub রিপোজিটরিটি কানেক্ট করুন এবং নিচের Environment Variable-গুলো যোগ করুন।
-#
-# প্রয়োজনীয় Environment Variables (Render.com এ যোগ করতে হবে):
-# -------------------------------------------------------------
-# - FLASK_SECRET      : একটি র‍্যান্ডম সিক্রেট কী (যেমন: my_super_secret_key_12345)
-# - MONGO_URI         : আপনার MongoDB কানেকশন স্ট্রিং (ডেটা স্থায়ীভাবে সেভ করার জন্য)
-# - TMDB_API_KEY      : আপনার TMDB API কী (মুভি ইম্পোর্টের জন্য)
-# - ADMIN_USERNAME    : অ্যাডমিন প্যানেলের ইউজারনেম (যেমন: admin)
-# - ADMIN_PASSWORD    : অ্যাডমিন প্যানেলের পাসওয়ার্ড (যেমন: admin123)
-#
+# FINAL & READY (Vercel Fixed): Single-File Professional Movie Website
+# Version 2.0: Includes bug fix for MongoDB connection failure.
 # ====================================================================================
 
 from __future__ import annotations
@@ -36,15 +11,13 @@ import uuid
 import hashlib
 from datetime import datetime
 
-# Flask ইনস্টল করা না থাকলে, এটি একটি এরর দেখাবে।
 try:
     from flask import Flask, request, redirect, url_for, render_template_string, session, abort, jsonify
 except Exception:
     raise SystemExit("Flask is required. Install with: pip install Flask")
 
-# ঐচ্ছিক প্যাকেজ (না থাকলেও অ্যাপ চলবে, কিন্তু কিছু ফিচার কাজ করবে না)
 try:
-    import requests  # TMDB থেকে মুভি ইম্পোর্টের জন্য
+    import requests
 except Exception:
     requests = None
 try:
@@ -53,23 +26,18 @@ try:
 except Exception:
     PYMONGO_AVAILABLE = False
 
-
-# --- অ্যাপ কনফিগারেশন ---
+# --- App Configuration ---
+# Vercel-এ serverless ফাংশন হিসেবে চলার জন্য 'app' ভ্যারিয়েবলটি এক্সপোর্ট করতে হবে।
 app = Flask(__name__)
-# সেশন ব্যবহারের জন্য সিক্রেট কী। এটি Environment Variable থেকে আসবে।
 app.secret_key = os.getenv("FLASK_SECRET", "default_secret_key_for_local_development")
-
-# অ্যাডমিন অ্যাকাউন্টের ডিফল্ট তথ্য
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-
 # --------------------------
-# ডেটাবেস লেয়ার (MongoDB অথবা ইন-মেমোরি)
+# Database Layer (Mongo or Memory)
 # --------------------------
-
-# এটি একটি ক্লাস যা ডেটাবেস না থাকলেও ডেটাবেসের মতো কাজ করে।
 class MemoryCollection:
+    # ... (এই ক্লাসের কোড অপরিবর্তিত) ...
     def __init__(self): self.data = {}
     def insert_one(self, doc):
         _id = doc.get("_id") or str(uuid.uuid4()); doc["_id"] = _id
@@ -101,35 +69,50 @@ class MemoryCollection:
             elif doc.get(k) != v: return False
         return True
 
-# ডেটাবেস কানেকশন সেটআপ
+# --- Database Connection (BUG FIXED LOGIC) ---
 MONGO_URI = os.getenv("MONGO_URI")
-if MONGO_URI and PYMONGO_AVAILABLE:
-    try:
-        mongo_client = MongoClient(MONGO_URI)
-        db = mongo_client.get_default_database()
-        movies_col = db["movies"]
-        users_col = db["users"]
-        movies_col.create_index([("slug", 1)], unique=True)
-        USE_MONGO = True
-        print("[INFO] Successfully connected to MongoDB.")
-    except Exception as e:
-        USE_MONGO = False
-        print(f"[WARN] MongoDB connection failed: {e}. Falling back to in-memory store.")
-else:
-    USE_MONGO = False
+USE_MONGO = False
+movies_col, users_col = None, None
+
+def initialize_database():
+    global USE_MONGO, movies_col, users_col
+    
+    # প্রথমে ইন-মেমোরি ডেটাবেস সেট করা হলো ফলব্যাক হিসেবে
     movies_col = MemoryCollection()
     users_col = MemoryCollection()
-    print("[INFO] MONGO_URI not set. Using temporary in-memory data store.")
+    USE_MONGO = False
+    
+    if MONGO_URI and PYMONGO_AVAILABLE:
+        try:
+            mongo_client = MongoClient(MONGO_URI)
+            # URL-এ ডেটাবেসের নাম না থাকলে এরর দেখাবে, তাই get_database() ব্যবহার করা নিরাপদ
+            db_name = MONGO_URI.split('/')[-1].split('?')[0]
+            if not db_name:
+                raise ValueError("No database name found in MONGO_URI")
+            
+            db = mongo_client[db_name]
+            movies_col = db["movies"]
+            users_col = db["users"]
+            movies_col.create_index([("slug", 1)], unique=True)
+            USE_MONGO = True
+            print("[INFO] Successfully connected to MongoDB.")
+        except Exception as e:
+            print(f"[WARN] MongoDB connection failed: {e}. Falling back to in-memory store.")
+            # যেহেতু ফলব্যাক আগেই সেট করা আছে, তাই এখানে কিছু করার দরকার নেই।
+    else:
+        print("[INFO] MONGO_URI not set or pymongo not available. Using temporary in-memory data store.")
 
-# অ্যাডমিন ইউজার তৈরি করা (যদি না থাকে)
+initialize_database() # অ্যাপ শুরু হওয়ার সময় ডেটাবেস কানেক্ট করা হচ্ছে
+
+# --- Admin User Seeding ---
 if not users_col.find_one({"username": ADMIN_USERNAME}):
     users_col.insert_one({
-        "username": ADMIN_USERNAME,
-        "password_hash": hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest(),
-        "role": "admin",
-        "created_at": datetime.utcnow().isoformat()
+        "username": ADMIN_USERNAME, "password_hash": hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest(),
+        "role": "admin", "created_at": datetime.utcnow().isoformat()
     })
 
+# ... (বাকি সম্পূর্ণ কোড অপরিবর্তিত থাকবে) ...
+# ... আপনি আগের উত্তর থেকে বাকি কোড (হেল্পার ফাংশন, টেমপ্লেট, রাউট ইত্যাদি) এখানে পেস্ট করে দিন ...
 # --------------------------
 # হেল্পার ফাংশন
 # --------------------------
@@ -459,12 +442,7 @@ if not USE_MONGO and not list(movies_col.find()):
     ]
     for movie in sample_movies: upsert_movie(movie)
 
-# --------------------------
-# অ্যাপ চালানোর জন্য এন্ট্রি পয়েন্ট
-# --------------------------
+# --- App Entrypoint for local development ---
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f"\n🚀 Movie website starting on http://127.0.0.1:{port}")
-    print(f"🔑 Admin Login: {ADMIN_USERNAME} / {ADMIN_PASSWORD}")
-    if not USE_MONGO: print("⚠️  Running in DEMO mode with temporary in-memory data.")
-    app.run(host="0.0.0.0", port=port, debug=False) # Debug=False for production
+    app.run(host="0.0.0.0", port=port, debug=True)
