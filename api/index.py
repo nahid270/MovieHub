@@ -700,10 +700,15 @@ def movies_by_category(cat_name):
 
 @app.route('/wait')
 def wait_page():
-    target_url = request.args.get('target')
-    if not target_url:
+    encoded_target_url = request.args.get('target')
+    if not encoded_target_url:
         return redirect(url_for('home'))
-    return render_template_string(wait_page_html, target_url=target_url)
+    
+    # *** THIS IS THE FIX ***
+    # Decode the URL before passing it to the template
+    decoded_target_url = unquote(encoded_target_url)
+    
+    return render_template_string(wait_page_html, target_url=decoded_target_url)
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
