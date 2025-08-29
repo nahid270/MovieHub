@@ -5,14 +5,14 @@ from flask import Flask, render_template_string, request, redirect, url_for, Res
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
-from urllib.parse import urlparse, unquote, quote
+from urllib.parse import unquote, quote
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "270")
-WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
+WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "MovieZonehub")
 
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
@@ -72,11 +72,9 @@ index_html = """
 <head>
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{{ website_name }} - Your Entertainment Hub</title>
-<!-- FAVICON AND META TAGS ADDED HERE -->
-<link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png"> <!-- আপনার নিজের আইকনের লিঙ্ক এখানে দিন -->
+<link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="Watch and download the latest movies and series on {{ website_name }}. Your ultimate entertainment hub.">
 <meta name="keywords" content="movies, series, download, watch online, {{ website_name }}, bengali movies, hindi movies, english movies">
-
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
@@ -87,7 +85,7 @@ index_html = """
   body {font-family: 'Poppins', sans-serif;background-color: var(--bg-color);color: var(--text-light);overflow-x: hidden;}
   a { text-decoration: none; color: inherit; }
   img { max-width: 100%; display: block; }
-  .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
   ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #222; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
   .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
   .main-header.scrolled { background-color: var(--bg-color); }
@@ -100,9 +98,9 @@ index_html = """
   .search-input { background: transparent; border: none; color: var(--text-light); padding: 5px 10px; width: 220px; font-size: 0.9rem; }
   .search-input:focus { outline: none; }
   .search-btn { background: var(--primary-color); border: none; color: var(--text-light); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display:grid; place-items:center; }
-  .menu-toggle { display: none; font-size: 1.5rem; cursor: pointer; }
-  .hero-slider {width: 100%;margin-top: var(--nav-height);aspect-ratio: 16 / 9; max-height: 600px; }
-  .hero-slide {position: relative;display: flex;align-items: flex-end;justify-content: flex-start;border-radius: 12px;overflow: hidden;}
+  .menu-toggle { display: none; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
+  .hero-slider {width: 100%;margin-top: var(--nav-height);aspect-ratio: 16 / 9; max-height: 600px; border-radius: 12px; overflow: hidden; }
+  .hero-slide {position: relative;display: flex;align-items: flex-end;justify-content: flex-start;}
   .hero-bg-img {position: absolute;top: 0;left: 0;width: 100%;height: 100%;object-fit: cover;object-position: center;}
   .hero-slide::before {content: '';position: absolute;top: 0;left: 0;width: 100%;height: 100%;background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 25%, transparent 60%);}
   .hero-content {position: relative;z-index: 2;padding: 20px 40px;width: 100%;}
@@ -129,14 +127,39 @@ index_html = """
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
   .ad-container { margin: 40px 0; display: flex; justify-content: center; align-items: center; }
-  @media (max-width: 992px) {.nav-links, .search-form { display: none; } .menu-toggle { display: block; } }
+  .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
+  .mobile-nav-menu.active {transform: translateX(0);}
+  .mobile-nav-menu .close-btn {position: absolute;top: 20px;right: 20px;font-size: 2.5rem;color: white;background: none;border: none;cursor: pointer;}
+  .mobile-links {display: flex;flex-direction: column;text-align: center;gap: 25px;}
+  .mobile-links a {font-size: 1.5rem;font-weight: 500;color: var(--text-light);transition: color 0.2s;}
+  .mobile-links a:hover {color: var(--primary-color);}
+  .mobile-links hr {width: 50%;border-color: #333;margin: 10px auto;}
+  .bottom-nav {display: none; position: fixed; bottom: 0; left: 0; right: 0; height: 60px; background-color: #181818; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: space-around; align-items: center;}
+  .bottom-nav .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dark); background: none; border: none; font-size: 10px; flex-grow: 1; }
+  .bottom-nav .nav-item i { font-size: 20px; margin-bottom: 4px; }
+  .bottom-nav .nav-item.active, .bottom-nav .nav-item:hover { color: var(--primary-color); }
+  .search-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: none; flex-direction: column; padding: 20px; }
+  .search-overlay.active { display: flex; }
+  .search-container { width: 100%; max-width: 800px; margin: 0 auto; }
+  .close-search-btn { position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: white; background: none; border: none; cursor: pointer; }
+  #search-input-live { width: 100%; padding: 15px; font-size: 1.2rem; border-radius: 8px; border: 2px solid var(--primary-color); background: var(--card-bg); color: white; margin-top: 60px; }
+  #search-results-live { margin-top: 20px; max-height: calc(100vh - 150px); overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px; }
+  .search-result-item { color: white; text-align: center; }
+  .search-result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 5px; }
+  @media (max-width: 992px) {.nav-links, .search-form { display: none; } .menu-toggle { display: block; } .container { padding: 0 20px; } }
   @media (max-width: 768px) {
-    .container, .full-page-grid-container { padding: 0 20px; } .full-page-grid-container{padding-top:100px;padding-bottom:40px;} .logo { font-size: 1.5rem; } 
+    body { padding-bottom: 60px; }
+    .main-header .search-form, .main-header .nav-links { display: none; }
+    .bottom-nav { display: flex; }
+    .full-page-grid-container{padding-top:100px;padding-bottom:40px;} 
+    .logo { font-size: 1.5rem; } 
     .hero-slider { margin-top: calc(var(--nav-height) + 10px); aspect-ratio: 16 / 10; }
     .hero-content { padding: 15px 20px; } .hero-title { font-size: 1.5rem; } .hero-meta { font-size: 0.8rem; }
     .slide-type-tag { font-size: 0.7rem; padding: 4px 10px; top: 15px; right: 15px; }
-    .category-title { font-size: 1.4rem; } .movie-poster { width: 160px; } .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } 
+    .category-title { font-size: 1.4rem; } .movie-poster { width: 160px; } 
+    .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } 
   }
+  @media (min-width: 769px) { .bottom-nav { display: none; } }
 </style>
 </head>
 <body>
@@ -153,9 +176,19 @@ index_html = """
             <input type="search" name="q" class="search-input" placeholder="Search..." value="{{ query|default('') }}">
             <button class="search-btn" type="submit"><i class="fas fa-search"></i></button>
         </form>
-        <div class="menu-toggle"><i class="fas fa-bars"></i></div>
+        <button class="menu-toggle"><i class="fas fa-bars"></i></button>
     </div>
 </header>
+<div class="mobile-nav-menu">
+    <button class="close-btn">&times;</button>
+    <div class="mobile-links">
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Latest Movies</a>
+        <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Latest Series</a>
+        <hr>
+        {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', cat_name=cat) }}">{{ cat }}</a>{% endfor %}
+    </div>
+</div>
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
@@ -212,9 +245,7 @@ index_html = """
     {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
     {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
     {% for cat_name, movies_list in categorized_content.items() %}
-        {% if cat_name != 'Trending' %}
-             {{ render_carousel_section(cat_name, movies_list, cat_name) }}
-        {% endif %}
+        {% if cat_name != 'Trending' %}{{ render_carousel_section(cat_name, movies_list, cat_name) }}{% endif %}
     {% endfor %}
     </div>
   {% endif %}
@@ -222,12 +253,67 @@ index_html = """
 <footer class="main-footer">
     <p>&copy; 2024 {{ website_name }}. All Rights Reserved.</p>
 </footer>
+<nav class="bottom-nav">
+  <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}" class="nav-item"><i class="fas fa-film"></i><span>Movies</span></a>
+  <button id="live-search-btn" class="nav-item"><i class="fas fa-search"></i><span>Search</span></button>
+  <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}" class="nav-item"><i class="fas fa-tv"></i><span>Series</span></a>
+  <a href="https://t.me/Movie_Request_Group_23" target="_blank" class="nav-item"><i class="fab fa-telegram-plane"></i><span>Join Us</span></a>
+</nav>
+<div id="search-overlay" class="search-overlay">
+  <button id="close-search-btn" class="close-search-btn">&times;</button>
+  <div class="search-container">
+    <input type="text" id="search-input-live" placeholder="Type to search for movies or series..." autocomplete="off">
+    <div id="search-results-live"><p style="color: #555; text-align: center;">Start typing to see results</p></div>
+  </div>
+</div>
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
     new Swiper('.hero-slider', { loop: true, autoplay: { delay: 4000 }, pagination: { el: '.swiper-pagination', clickable: true }, });
     new Swiper('.movie-carousel', { slidesPerView: 'auto', spaceBetween: 20, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev', }, breakpoints: { 320: { spaceBetween: 15 }, 768: { spaceBetween: 20 }, } });
+    const menuToggle = document.querySelector('.menu-toggle');
+    const mobileMenu = document.querySelector('.mobile-nav-menu');
+    const closeBtn = document.querySelector('.close-btn');
+    if (menuToggle && mobileMenu && closeBtn) {
+        menuToggle.addEventListener('click', () => { mobileMenu.classList.add('active'); });
+        closeBtn.addEventListener('click', () => { mobileMenu.classList.remove('active'); });
+        const mobileLinks = document.querySelectorAll('.mobile-links a');
+        mobileLinks.forEach(link => { link.addEventListener('click', () => { mobileMenu.classList.remove('active'); }); });
+    }
+    const liveSearchBtn = document.getElementById('live-search-btn');
+    const searchOverlay = document.getElementById('search-overlay');
+    const closeSearchBtn = document.getElementById('close-search-btn');
+    const searchInputLive = document.getElementById('search-input-live');
+    const searchResultsLive = document.getElementById('search-results-live');
+    let debounceTimer;
+    liveSearchBtn.addEventListener('click', () => { searchOverlay.classList.add('active'); searchInputLive.focus(); });
+    closeSearchBtn.addEventListener('click', () => { searchOverlay.classList.remove('active'); });
+    searchInputLive.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            const query = searchInputLive.value.trim();
+            if (query.length > 1) {
+                searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Searching...</p>';
+                fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        let html = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                html += `<a href="/movie/${item._id}" class="search-result-item"><img src="${item.poster}" alt="${item.title}"><span>${item.title}</span></a>`;
+                            });
+                        } else {
+                            html = '<p style="color: #555; text-align: center;">No results found.</p>';
+                        }
+                        searchResultsLive.innerHTML = html;
+                    });
+            } else {
+                searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Start typing to see results</p>';
+            }
+        }, 300);
+    });
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
@@ -238,11 +324,9 @@ detail_html = """
 <head>
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
-<!-- FAVICON AND META TAGS ADDED HERE -->
-<link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png"> <!-- আপনার নিজের আইকনের লিঙ্ক এখানে দিন -->
+<link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
 <meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
-
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 {{ ad_settings.ad_header | safe }}
@@ -382,10 +466,8 @@ wait_page_html = """
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generating Link... - {{ website_name }}</title>
-    <!-- FAVICON AND META TAGS ADDED HERE -->
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png"> <!-- আপনার নিজের আইকনের লিঙ্ক এখানে দিন -->
-    <meta name="robots" content="noindex, nofollow"> <!-- Prevents search engines from indexing wait pages -->
-
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
+    <meta name="robots" content="noindex, nofollow">
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
     {{ ad_settings.ad_header | safe }}
     <style>
@@ -415,7 +497,6 @@ wait_page_html = """
             const countdownElement = document.getElementById('countdown');
             const linkButton = document.getElementById('get-link-btn');
             const targetUrl = "{{ target_url | safe }}";
-
             const timer = setInterval(() => {
                 if (timeLeft <= 0) {
                     clearInterval(timer);
@@ -441,10 +522,8 @@ admin_html = """
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - {{ website_name }}</title>
-    <!-- FAVICON AND META TAGS ADDED HERE -->
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png"> <!-- আপনার নিজের আইকনের লিঙ্ক এখানে দিন -->
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
     <meta name="robots" content="noindex, nofollow">
-
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
     <style>
@@ -490,7 +569,6 @@ admin_html = """
 <body>
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
-    
     <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
     <form method="post">
         <input type="hidden" name="form_action" value="update_ads">
@@ -507,7 +585,6 @@ admin_html = """
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
     </form>
     <hr>
-    
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method (Search TMDB)</legend><div class="form-group"><div class="tmdb-fetcher"><input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame"><button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button></div></div></fieldset>
     <form method="post">
@@ -595,10 +672,8 @@ edit_html = """
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Content - {{ website_name }}</title>
-    <!-- FAVICON AND META TAGS ADDED HERE -->
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png"> <!-- আপনার নিজের আইকনের লিঙ্ক এখানে দিন -->
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
     <meta name="robots" content="noindex, nofollow">
-
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
     <style>
@@ -775,15 +850,13 @@ def admin():
                     if watch_url or download_url:
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
-            else: # Series
+            else:
                 seasons, numbers, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 for i in range(len(seasons)):
                     if seasons[i] and numbers[i] and links[i]:
                         movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
             movies.insert_one(movie_data)
-            
         return redirect(url_for('admin'))
-
     content_list = list(movies.find().sort('_id', -1))
     return render_template_string(admin_html, content_list=content_list)
 
@@ -816,12 +889,10 @@ def edit_movie(movie_id):
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": ""}})
-        else: # Series
+        else:
             update_data["episodes"] = [{"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()} for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')) if s and e and w]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
-        
         return redirect(url_for('admin'))
-
     return render_template_string(edit_html, movie=movie_obj)
 
 @app.route('/delete_movie/<movie_id>')
@@ -857,6 +928,24 @@ def api_get_details():
     details = get_tmdb_details(tmdb_id, media_type)
     if details: return jsonify(details)
     else: return jsonify({"error": "Details not found on TMDb"}), 404
+
+# --- API Route for Live Search ---
+@app.route('/api/search')
+def api_search():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify([])
+    try:
+        results = list(movies.find(
+            {"title": {"$regex": query, "$options": "i"}},
+            {"_id": 1, "title": 1, "poster": 1}
+        ).limit(10))
+        for item in results:
+            item['_id'] = str(item['_id'])
+        return jsonify(results)
+    except Exception as e:
+        print(f"API Search Error: {e}")
+        return jsonify({"error": "An error occurred during search"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
