@@ -1,280 +1,428 @@
-import os
-import time
-import requests
-from flask import (Flask, request, render_template_string, redirect, url_for, flash, Blueprint, session)
-from pymongo import MongoClient, DESCENDING
-from bson.objectid import ObjectId
-from functools import wraps
+""" Single-file Professional Movie Website (Flask)
 
-# ==============================================================================
-# ========= HTML TEMPLATES (সমস্ত টেমপ্লেট এখানে) ============================
-# ==============================================================================
+One-file deploy: index.py
 
-PAGE_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{ title or "Movie Zone" }}</title><script src="https://cdn.tailwindcss.com"></script><link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>"><style>body{background-color:#040714;color:#f9f9f9;}.poster-card{transition:all .3s ease}.poster-card:hover{transform:scale(1.05)}.banner-wrapper{display:flex;transition:transform .5s ease-in-out}.scroll-container{scrollbar-width:none;-ms-overflow-style:none}.scroll-container::-webkit-scrollbar{display:none}</style></head><body class="overflow-x-hidden"><header class="sticky top-0 z-50 h-20 px-4 sm:px-6 md:px-12 flex items-center justify-between bg-[#090b13]"><a href="{{ url_for('home') }}" class="text-xl sm:text-2xl font-extrabold tracking-tight text-white uppercase">Movie<span class="text-blue-500">Zone</span></a><form action="{{ url_for('search') }}" method="get" class="w-full max-w-[150px] sm:max-w-xs ml-auto"><input name="q" value="{{ query or '' }}" placeholder="Search..." class="bg-gray-800 text-white rounded-full px-4 py-2 text-sm outline-none w-full" /></form></header><main class="pt-6">{% if not query and banners %}<section class="relative mb-8 sm:mb-12 w-full overflow-hidden md:px-12" id="banner-carousel"><div class="banner-wrapper">{% for banner in banners %}<div class="w-full flex-shrink-0"><a href="{{ url_for('content_detail', content_id=banner.content_id) }}"><div class="relative px-4 sm:px-6 md:px-0"><img src="{{ banner.src }}" alt="{{ banner.title }}" class="w-full h-auto object-cover rounded-none md:rounded-lg min-h-[200px] sm:min-h-[300px] md:min-h-[450px]"><div class="absolute inset-0 bg-gradient-to-r from-[#040714] via-transparent to-transparent rounded-none md:rounded-lg"></div><div class="absolute bottom-6 sm:bottom-10 md:bottom-20 left-8 sm:left-10 md:left-12 max-w-lg"><h1 class="text-2xl sm:text-3xl md:text-5xl font-bold drop-shadow-lg">{{ banner.title }}</h1><p class="hidden sm:block text-sm md:text-base mt-4 line-clamp-3 text-gray-300 drop-shadow-md">{{ banner.overview }}</p></div></div></a></div>{% endfor %}</div></section>{% endif %}<div class="px-4 sm:px-6 md:px-12 space-y-12">{% if shelves %}{% for shelf in shelves %}{% if shelf.content %}<section><h2 class="text-xl sm:text-2xl font-semibold tracking-wide mb-4">{{ shelf.name }}</h2><div class="flex space-x-4 sm:space-x-6 overflow-x-auto pb-4 scroll-container">{% for item in shelf.content %}<a href="{{ url_for('content_detail', content_id=item._id) }}" class="poster-card group rounded-lg overflow-hidden border-2 border-gray-800 hover:border-gray-400 shadow-lg flex-shrink-0 w-36 sm:w-40 md:w-48 lg:w-52"><div class="relative"><img src="{{ item.poster }}" alt="{{ item.title }}" class="w-full h-auto object-cover aspect-[2/3]"><div class="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-xs font-bold text-yellow-400"><span>⭐</span><span>{{ item.rating }}</span></div></div></a>{% endfor %}</div></section>{% endif %}{% endfor %}{% elif query %}<section><h2 class="text-xl sm:text-2xl font-semibold tracking-wide mb-4">Results for “{{ query }}”</h2>{% if content %}<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">{% for item in content %}<a href="{{ url_for('content_detail', content_id=item._id) }}" class="poster-card group rounded-lg overflow-hidden border-2 border-gray-800 hover:border-gray-400 shadow-lg"><div class="relative"><img src="{{ item.poster }}" alt="{{ item.title }}" class="w-full h-auto object-cover aspect-[2/3]"><div class="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-xs font-bold text-yellow-400"><span>⭐</span><span>{{ item.rating }}</span></div></div></a>{% endfor %}</div>{% else %}<p class="text-center py-10 text-gray-400">No content found for your search.</p>{% endif %}</section>{% else %}<div class="text-center py-20 text-gray-400"><h2 class="text-2xl sm:text-3xl font-bold">Welcome to MovieZone!</h2><p class="mt-2">No content has been added yet.</p></div>{% endif %}</div>{% if error_message %}<div class="mt-12 mx-4 sm:mx-6 md:mx-12 bg-red-900/50 border-red-500/50 text-red-200 rounded-xl p-6 text-center"><h2 class="text-2xl font-bold mb-2">Application Error!</h2><p class="font-mono text-sm">{{ error_message }}</p></div>{% endif %}</main><footer class="text-center text-xs text-gray-500 py-8 mt-12"><div>© {{ year }} Movie Zone</div></footer><script>document.addEventListener('DOMContentLoaded',()=>{const e=document.getElementById("banner-carousel");if(!e)return;const t=e.querySelector(".banner-wrapper"),o=t.children;if(o.length<=1)return;let n=0;function r(e){t.style.transform=`translateX(-${e*100}%)`}function c(){n=(n+1)%o.length,r(n)}let l=setInterval(c,5e3);e.addEventListener("mouseenter",()=>clearInterval(l)),e.addEventListener("mouseleave",()=>l=setInterval(c,5e3))})</script></body></html>"""
-CONTENT_DETAIL_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{ item.title }} • Movie Zone</title><script src="https://cdn.tailwindcss.com"></script><link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>"><style>body { background-color: #040714; color: #f9f9f9; }</style></head><body><div class="relative min-h-screen"><div class="absolute inset-0 z-0"><img src="{{ item.backdrop or item.poster }}" alt="{{ item.title }}" class="w-full h-full object-cover opacity-20"></div><div class="absolute inset-0 z-10 bg-gradient-to-t from-[#040714] via-[#040714]/80 to-transparent"></div><main class="relative z-20 max-w-5xl mx-auto px-4 sm:px-6 py-12 pt-24"><a href="{{ url_for('home') }}" class="text-sm text-gray-400 hover:text-white mb-8 inline-block">&larr; Back to Home</a><div class="md:flex md:space-x-8"><div class="w-full max-w-xs mx-auto md:w-1/3 flex-shrink-0"><img src="{{ item.poster }}" alt="{{ item.title }}" class="rounded-lg shadow-2xl w-full"></div><div class="md:w-2/3 mt-8 md:mt-0"><h1 class="text-3xl sm:text-4xl md:text-5xl font-bold">{{ item.title }} ({{ item.year }})</h1><div class="flex flex-wrap items-center gap-4 mt-4"><div class="flex items-center gap-1 text-yellow-400 font-bold text-lg"><span>⭐</span><span>{{ item.rating }}</span></div>{% for category_name in item.categories_names %}<span class="bg-gray-800 text-gray-300 text-xs font-semibold px-3 py-1 rounded-full">{{ category_name }}</span>{% endfor %}</div><p class="text-gray-300 mt-4 text-base sm:text-lg">{{ item.overview }}</p><div class="mt-8 flex flex-col sm:flex-row flex-wrap gap-4">{% if item.watch_link %}<a href="{{ item.watch_link }}" target="_blank" rel="noopener" class="w-full sm:w-auto text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition">▶ Watch Now</a>{% else %}<button class="w-full sm:w-auto text-center bg-gray-600 text-white font-bold py-3 px-8 rounded-lg text-lg cursor-not-allowed" disabled>Watch Link Not Available</button>{% endif %}{% if item.download_link %}<a href="{{ item.download_link }}" target="_blank" rel="noopener" class="w-full sm:w-auto text-center bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg text-lg transition">⬇ Download</a>{% else %}<button class="w-full sm:w-auto text-center bg-gray-800 text-white font-bold py-3 px-8 rounded-lg text-lg cursor-not-allowed" disabled>Download Link Not Available</button>{% endif %}</div></div></div></main></div></body></html>"""
-ADMIN_LOGIN_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin Login</title><script src="https://cdn.tailwindcss.com"></script><meta name="color-scheme" content="dark"></head><body class="bg-gray-950 text-gray-200 flex items-center justify-center min-h-screen"><div class="w-full max-w-md p-4"><form method="POST" class="bg-gray-900 border border-white/10 shadow-lg rounded-2xl p-8 space-y-6"><h2 class="text-3xl font-bold text-center">Admin Login</h2>{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="p-3 rounded-lg bg-red-500/20 text-red-300 text-sm">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}<div><label for="username" class="block text-sm font-medium text-gray-400">Username</label><input type="text" name="username" id="username" required class="mt-1 block w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="password" class="block text-sm font-medium text-gray-400">Password</label><input type="password" name="password" id="password" required class="mt-1 block w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition">Login</button></form></div></body></html>"""
-ADMIN_BASE_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{{ title or "Admin Panel" }} • Movie Zone</title><script src="https://cdn.tailwindcss.com"></script><meta name="color-scheme" content="dark"></head><body class="bg-gray-900 text-gray-200 antialiased"><div class="relative md:flex min-h-screen"><aside id="sidebar" class="w-64 bg-gray-950 border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out"><div class="p-6"><h1 class="text-2xl font-bold">🎬 Admin Panel</h1></div><nav class="flex-grow px-4"><a href="{{ url_for('admin.dashboard') }}" class="block px-4 py-2 rounded-lg hover:bg-white/10">Dashboard</a><a href="{{ url_for('admin.manage_content') }}" class="block mt-2 px-4 py-2 rounded-lg hover:bg-white/10">Manage Content</a><a href="{{ url_for('admin.manage_categories') }}" class="block mt-2 px-4 py-2 rounded-lg hover:bg-white/10">Manage Categories</a></nav><div class="p-4 border-t border-white/10"><a href="{{ url_for('home') }}" target="_blank" class="block w-full text-center px-4 py-2 rounded-lg hover:bg-white/10 text-sm mb-2">View Site ↗</a><a href="{{ url_for('admin.logout') }}" class="block w-full text-center px-4 py-2 rounded-lg bg-red-600/50 hover:bg-red-600/80 text-sm">Logout</a></div></aside><div class="flex-1 md:ml-64"><header class="md:hidden sticky top-0 bg-gray-950/80 backdrop-blur-sm z-20 flex items-center justify-between p-4 border-b border-white/10"><button id="menu-btn" class="text-white">☰</button><h1 class="text-lg font-bold">Admin Panel</h1><div></div></header><main class="p-4 sm:p-8">{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="mb-4 p-4 rounded-lg {% if category == 'success' %}bg-green-500/20 text-green-300 border border-green-500/30{% elif category == 'error' %}bg-red-500/20 text-red-300 border border-red-500/30{% else %}bg-blue-500/20 text-blue-300 border border-blue-500/30{% endif %}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}{{ content | safe }}</main></div></div><script>document.getElementById('menu-btn')?.addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('-translate-x-full'); });</script></body></html>"""
-ADMIN_DASHBOARD_CONTENT = """<h1 class="text-2xl sm:text-3xl font-bold mb-6">Dashboard</h1><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="bg-gray-950/50 p-6 rounded-xl border border-white/10"><h2 class="text-lg font-semibold text-gray-400">Total Content on Site</h2><p class="text-4xl sm:text-5xl font-bold mt-2">{{ content_count }}</p></div><div class="bg-gray-950/50 p-6 rounded-xl border border-white/10"><h2 class="text-lg font-semibold text-gray-400">Total Categories</h2><p class="text-4xl sm:text-5xl font-bold mt-2">{{ category_count }}</p></div></div>"""
-ADMIN_CONTENT_TEMPLATE = """<h1 class="text-2xl sm:text-3xl font-bold mb-6">Manage Content</h1><div class="bg-gray-950/50 p-4 sm:p-6 rounded-xl border border-white/10 mb-8"><h2 class="text-xl font-bold mb-4">Add New Content from TMDB</h2><form method="POST"><div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4"><label class="text-gray-300 flex-shrink-0">Content Type:</label><div class="flex gap-4"><label class="flex items-center"><input type="radio" name="type" value="movie" checked class="h-4 w-4 bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-600"><span class="ml-2">Movie</span></label><label class="flex items-center"><input type="radio" name="type" value="tv" class="h-4 w-4 bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-600"><span class="ml-2">TV Series</span></label></div></div><div class="flex flex-col sm:flex-row gap-4"><input type="search" name="query" placeholder="Search on TMDB..." required class="flex-grow bg-white/5 border border-white/10 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">Search</button></div></form>{% if tmdb_results %}<div class="mt-6"><h3 class="font-semibold mb-2">Search Results:</h3><div class="max-h-80 overflow-y-auto space-y-2 pr-2">{% for item in tmdb_results %}<div class="flex items-center gap-4 p-2 bg-white/5 rounded-lg"><img src="{{ item.poster }}" class="w-12 h-auto rounded-md flex-shrink-0"><div class="flex-grow min-w-0"><p class="font-bold truncate">{{ item.title }} <span class="text-xs text-gray-400">({{ item.type }})</span></p><p class="text-sm text-gray-400">{{ item.year }}</p></div><form action="{{ url_for('admin.add_content', type=item.type, tmdb_id=item.tmdb_id) }}" method="POST"><button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-1 px-3 rounded-md flex-shrink-0">+</button></form></div>{% endfor %}</div></div>{% endif %}</div><div class="bg-gray-950/50 p-4 sm:p-6 rounded-xl border border-white/10"><div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4"><h2 class="text-xl font-bold">Content on Your Site ({{ site_content|length }})</h2><form action="{{ url_for('admin.delete_all_content') }}" method="POST" onsubmit="return confirm('Are you sure?');"><button type="submit" class="bg-red-800 hover:bg-red-700 text-white text-sm font-bold py-2 px-4 rounded-lg">Delete All</button></form></div><div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="border-b border-white/10"><th class="p-3">Poster</th><th class="p-3">Title</th><th class="p-3 hidden md:table-cell">Categories</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>{% for item in site_content %}<tr class="border-b border-white/5"><td><img src="{{ item.poster }}" class="w-12 h-auto rounded-md"></td><td class="font-semibold">{{ item.title }}<br><span class="text-xs text-gray-400 uppercase">{{ item.type }}</span></td><td class="hidden md:table-cell"><div class="text-xs max-w-xs">{% for category_name in item.categories_names %}<span class="bg-gray-700 rounded-full px-2 py-1 mr-1 mb-1 inline-block">{{ category_name }}</span>{% endfor %}</div></td><td class="text-right"><a href="{{ url_for('admin.edit_content', content_id=item._id) }}" class="text-blue-400 hover:text-blue-300 font-bold mr-2 sm:mr-4">Edit</a><form action="{{ url_for('admin.delete_content', content_id=item._id) }}" method="POST" class="inline"><button type="submit" class="text-red-400 hover:text-red-300 font-bold">Delete</button></form></td></tr>{% else %}<tr><td colspan="4" class="p-4 text-center text-gray-500">No content found.</td></tr>{% endfor %}</tbody></table></div></div>"""
-ADMIN_EDIT_CONTENT_TEMPLATE = """<h1 class="text-2xl sm:text-3xl font-bold mb-2">Edit Content</h1><p class="text-gray-400 mb-6">Editing: <strong class="text-white">{{ item.title }}</strong></p><form method="POST" class="max-w-xl mx-auto bg-gray-950/50 p-6 sm:p-8 rounded-xl border border-white/10 space-y-6"><div><label class="block text-sm font-medium text-gray-300 mb-2">Assign to Additional Categories</label><p class="text-xs text-gray-500 mb-2">TMDB genres are added automatically. Use this to add to custom categories like '18+ Zone'.</p><div class="space-y-2 max-h-40 overflow-y-auto bg-white/5 p-4 rounded-md">{% for category in all_categories %}<label class="flex items-center"><input type="checkbox" name="categories" value="{{ category._id }}" {% if category._id in item.categories %}checked{% endif %} class="h-4 w-4 bg-gray-700 border-gray-600 text-blue-500 rounded focus:ring-blue-600"><span class="ml-3 text-gray-200">{{ category.name }}</span></label>{% else %}<p class="text-sm text-gray-500">No custom categories created yet.</p>{% endfor %}</div></div><div><label for="watch_link" class="block text-sm font-medium text-gray-300 mb-1">Watch/Streaming Link</label><input type="url" name="watch_link" id="watch_link" value="{{ item.watch_link or '' }}" placeholder="https://..." class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="download_link" class="block text-sm font-medium text-gray-300 mb-1">Download Link</label><input type="url" name="download_link" id="download_link" value="{{ item.download_link or '' }}" placeholder="https://..." class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"></div><div class="flex justify-end gap-4 pt-4"><a href="{{ url_for('admin.manage_content') }}" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg">Cancel</a><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">Save Changes</button></div></form>"""
-ADMIN_CATEGORIES_TEMPLATE = """<h1 class="text-2xl sm:text-3xl font-bold mb-6">Manage Custom Categories</h1><div class="grid grid-cols-1 md:grid-cols-3 gap-8"><div class="md:col-span-1"><div class="bg-gray-950/50 p-6 rounded-xl border border-white/10"><h2 class="text-xl font-bold mb-4">Create Custom Category</h2><p class="text-sm text-gray-400 mb-4">Note: TMDB genres are added automatically. Use this form to create special categories like "18+ Zone" or "Dubbed".</p><form method="POST" class="space-y-4"><div><label for="name" class="block text-sm font-medium text-gray-300 mb-1">Category Name</label><input type="text" name="name" id="name" required placeholder="e.g., 18+ Zone" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg">Create</button></form></div></div><div class="md:col-span-2"><div class="bg-gray-950/50 p-6 rounded-xl border border-white/10"><h2 class="text-xl font-bold mb-4">Existing Categories</h2><div class="space-y-3">{% for category in categories %}<div class="flex justify-between items-center bg-white/5 p-3 rounded-lg"><span>{{ category.name }}</span><form action="{{ url_for('admin.delete_category', category_id=category._id) }}" method="POST"><button type="submit" class="text-red-500 hover:text-red-400 text-xs font-bold">DELETE</button></form></div>{% else %}<p class="text-gray-500">No categories created yet.</p>{% endfor %}</div></div></div></div>"""
+Features: Home, Search, Movie Details, Responsive UI (mobile/desktop), Auth (login/register), Watchlist, Admin Panel (add movie + TMDB import), Simple Analytics (views), SEO-friendly slugs.
 
-# =======================================================================
-# ========= FLASK APPLICATION LOGIC (মূল পাইথন কোড) ===================
-# =======================================================================
+DB: MongoDB (recommended). If MONGO_URI not set, uses in-memory store (for demo only).
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "a_very_secret_key_for_local_use")
+Player: Video.js via CDN with HLS support (if m3u8 links provided).
 
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "password123"
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-MONGO_URI = os.getenv("MONGO_URI")
+Styling: TailwindCSS via CDN; Framer Motion-lite animations (CSS transitions only here).
 
-TMDB_BASE_URL = "https://api.themoviedb.org/3"
-IMG_POSTER = "https://image.tmdb.org/t/p/w500"
-IMG_BANNER = "https://image.tmdb.org/t/p/original"
+Ready for Docker/Render/railway.app/Heroku. Vercel note: Python on Vercel requires serverless functions configuration; consider Render/railway for persistent Flask apps.
 
-client, db, content_collection, categories_collection, DB_CONNECTION_ERROR = None, None, None, None, None
-if MONGO_URI:
-    try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-        client.admin.command('ping')
-        print("MongoDB connection successful.")
-        db = client["movie_db"]
-        content_collection = db.content
-        categories_collection = db.categories
-        categories_collection.create_index("name", unique=True)
-    except Exception as e:
-        DB_CONNECTION_ERROR = f"Database connection failed. Check URI/IP whitelist. Error: {e}"
-else:
-    DB_CONNECTION_ERROR = "MONGO_URI environment variable is not set."
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'admin_logged_in' not in session: return redirect(url_for('admin.login'))
-        return f(*args, **kwargs)
-    return decorated_function
+ENV VARS (set before running):
 
-def tmdb_get(path, params=None):
-    if not TMDB_API_KEY: return {}
-    params = params or {}; params["api_key"] = TMDB_API_KEY
-    try: r = requests.get(f"{TMDB_BASE_URL}{path}", params=params, timeout=10); r.raise_for_status(); return r.json()
-    except: return {}
+FLASK_SECRET      : Flask session secret (required for login sessions)
 
-def search_tmdb(query, type): return tmdb_get(f"/search/{type}", params={"query": query, "include_adult": "true"}).get("results", [])
-def get_tmdb_details(tmdb_id, type): return tmdb_get(f"/{type}/{tmdb_id}")
+MONGO_URI         : MongoDB connection string (optional; if missing, uses in-memory store)
 
-def map_content_from_tmdb(m, type):
-    is_movie = type == 'movie'
-    title = m.get("title") if is_movie else m.get("name")
-    date = m.get("release_date") if is_movie else m.get("first_air_date")
-    genres = [g['name'] for g in m.get('genres', [])]
-    rating = f"{m.get('vote_average', 0.0):.1f}"
-    return {
-        "tmdb_id": m.get("id"), "type": type, "title": title or "Untitled",
-        "year": (date or "")[:4] or "N/A",
-        "poster": f"{IMG_POSTER}{m.get('poster_path')}" if m.get('poster_path') else "https://via.placeholder.com/500x750?text=No+Image",
-        "backdrop": f"{IMG_BANNER}{m.get('backdrop_path')}" if m.get('backdrop_path') else None,
-        "overview": m.get("overview") or "", "watch_link": "", "download_link": "",
-        "categories_names": genres, "categories": [], "rating": rating
-    }
+TMDB_API_KEY      : (optional) for importing movie metadata
 
-@app.context_processor
-def inject_globals(): return dict(year=time.strftime("%Y"))
-def render_admin_page(content_template, **kwargs): return render_template_string(ADMIN_BASE_TEMPLATE, **kwargs)
+ADMIN_USERNAME    : Admin login (default: admin)
 
-admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+ADMIN_PASSWORD    : Admin password (default: admin123)
 
-@admin_bp.route('/login', methods=['GET', 'POST'])
-def login():
-    if 'admin_logged_in' in session: return redirect(url_for('admin.dashboard'))
-    if request.method == 'POST':
-        if request.form.get('username') == ADMIN_USERNAME and request.form.get('password') == ADMIN_PASSWORD:
-            session['admin_logged_in'] = True
-            return redirect(url_for('admin.dashboard'))
-        flash('Invalid username or password.', 'error')
-    return render_template_string(ADMIN_LOGIN_TEMPLATE)
+BASE_URL          : (optional) canonical base URL for SEO (e.g., https://example.com)
 
-@admin_bp.route('/logout')
-def logout():
-    session.pop('admin_logged_in', None)
-    return redirect(url_for('admin.login'))
 
-@admin_bp.route('/')
-@login_required
-def dashboard():
-    content_count = content_collection.count_documents({}) if content_collection is not None else 0
-    category_count = categories_collection.count_documents({}) if categories_collection is not None else 0
-    return render_admin_page(content=ADMIN_DASHBOARD_CONTENT, title="Dashboard", content_count=content_count, category_count=category_count)
+RUN LOCALLY
 
-@admin_bp.route('/content', methods=['GET', 'POST'])
-@login_required
-def manage_content():
-    tmdb_results = []
-    if request.method == 'POST':
-        query, content_type = request.form.get('query'), request.form.get('type', 'movie')
-        if query: tmdb_results = [map_content_from_tmdb(m, content_type) for m in search_tmdb(query, content_type)]
-    site_content = []
-    if content_collection is not None:
-        site_content = list(content_collection.find().sort('_id', DESCENDING))
-        all_categories_map = {cat['_id']: cat for cat in categories_collection.find()}
-        for item in site_content:
-            item['categories_names'] = [all_categories_map.get(cat_id, {}).get('name', 'N/A') for cat_id in item.get('categories', [])]
-    return render_admin_page(content=ADMIN_CONTENT_TEMPLATE, title="Manage Content", site_content=site_content, tmdb_results=tmdb_results)
+python3 index.py
 
-@admin_bp.route('/content/add/<string:type>/<int:tmdb_id>', methods=['POST'])
-@login_required
-def add_content(type, tmdb_id):
-    if content_collection is None:
-        flash('Database not connected.', 'error')
-        return redirect(url_for('admin.manage_content'))
-    try:
-        if content_collection.find_one({"tmdb_id": tmdb_id, "type": type}):
-            flash('This content already exists.', 'warning')
-        else:
-            details = get_tmdb_details(tmdb_id, type)
-            if details:
-                new_content = map_content_from_tmdb(details, type)
-                category_ids = []
-                genres = new_content.get('categories_names', [])
-                if genres:
-                    primary_genre = genres[0]
-                    categories_collection.update_one({"name": primary_genre}, {"$setOnInsert": {"name": primary_genre}}, upsert=True)
-                    category_doc = categories_collection.find_one({"name": primary_genre})
-                    if category_doc:
-                        category_ids.append(category_doc['_id'])
-                new_content['categories'] = category_ids
-                content_collection.insert_one(new_content)
-                flash(f"'{new_content['title']}' added and categorized as '{genres[0] if genres else 'N/A'}'!", 'success')
-            else:
-                flash('Could not fetch details from TMDB.', 'error')
-    except Exception as e:
-        flash(f"Failed to add content. Error: {e}", 'error')
-    return redirect(url_for('admin.manage_content'))
+REQUIREMENTS (pip install)
 
-@admin_bp.route('/content/edit/<content_id>', methods=['GET', 'POST'])
-@login_required
-def edit_content(content_id):
-    if content_collection is None: return redirect(url_for('admin.manage_content'))
-    try:
-        item = content_collection.find_one({"_id": ObjectId(content_id)})
-        if not item:
-            flash('Content not found.', 'error')
-            return redirect(url_for('admin.manage_content'))
-        if request.method == 'POST':
-            manual_categories = [ObjectId(cat_id) for cat_id in request.form.getlist('categories')]
-            original_genres = item.get('categories_names', [])
-            auto_cat_ids = []
-            for genre in original_genres:
-                cat_doc = categories_collection.find_one({"name": genre})
-                if cat_doc: auto_cat_ids.append(cat_doc['_id'])
-            all_cat_ids = list(set(auto_cat_ids + manual_categories))
-            updated_data = {"watch_link": request.form.get('watch_link', '').strip(), "download_link": request.form.get('download_link', '').strip(), "categories": all_cat_ids}
-            content_collection.update_one({"_id": ObjectId(content_id)}, {"$set": updated_data})
-            flash('Content updated successfully.', 'success')
-            return redirect(url_for('admin.manage_content'))
-        all_categories = list(categories_collection.find())
-        return render_admin_page(content=ADMIN_EDIT_CONTENT_TEMPLATE, title="Edit Content", item=item, all_categories=all_categories)
-    except Exception as e:
-        flash(f"An error occurred: {e}", "error")
-        return redirect(url_for('admin.manage_content'))
+Flask==3.0.0 pymongo==4.7.2 requests==2.32.3
 
-@admin_bp.route('/content/delete/<content_id>', methods=['POST'])
-@login_required
-def delete_content(content_id):
-    if content_collection is not None: content_collection.delete_one({"_id": ObjectId(content_id)}); flash('Content deleted.', 'success')
-    return redirect(url_for('admin.manage_content'))
+(If you can't install now, the app still runs with in-memory DB without pymongo.)
 
-@admin_bp.route('/content/delete_all', methods=['POST'])
-@login_required
-def delete_all_content():
-    if content_collection is not None: content_collection.delete_many({}); flash('All content deleted!', 'danger')
-    return redirect(url_for('admin.manage_content'))
+""" from future import annotations import os import re import json import time import uuid import math import hashlib from datetime import datetime from urllib.parse import quote_plus, unquote_plus
 
-@admin_bp.route('/categories', methods=['GET', 'POST'])
-@login_required
-def manage_categories():
-    if request.method == 'POST' and categories_collection is not None:
-        cat_name = request.form.get('name', '').strip()
-        if cat_name:
-            if categories_collection.find_one({"name": cat_name}): flash("Category already exists.", "warning")
-            else: categories_collection.insert_one({"name": cat_name}); flash("Category created.", "success")
-        else: flash("Category name cannot be empty.", "error")
-        return redirect(url_for('admin.manage_categories'))
-    all_categories = list(categories_collection.find().sort("name", 1)) if categories_collection is not None else []
-    return render_admin_page(content=ADMIN_CATEGORIES_TEMPLATE, title="Manage Categories", categories=all_categories)
+try: from flask import Flask, request, redirect, url_for, render_template_string, session, abort, jsonify, make_response except Exception as e: raise SystemExit("Flask is required. Install with: pip install Flask")
 
-@admin_bp.route('/categories/delete/<category_id>', methods=['POST'])
-@login_required
-def delete_category(category_id):
-    if categories_collection is not None and content_collection is not None:
-        content_collection.update_many({}, {"$pull": {"categories": ObjectId(category_id)}})
-        categories_collection.delete_one({"_id": ObjectId(category_id)})
-        flash("Category deleted.", "success")
-    return redirect(url_for('admin.manage_categories'))
+Optional deps
 
-app.register_blueprint(admin_bp)
+try: import requests  # for TMDB import except Exception: requests = None
 
-def pick_banners(content_list, need=5):
-    banners = []
-    for m in content_list:
-        if m.get("_id"):
-            banners.append({"src": m.get("backdrop") or m.get("poster"), "title": m.get("title"), "overview": m.get("overview"), "content_id": str(m.get("_id"))})
-        if len(banners) >= need: break
-    if not banners:
-        banners.append({ "src": "https://via.placeholder.com/1280x720/040714/f9f9f9?text=Welcome", "title": "Welcome to Movie Zone", "overview": "Add content from the admin panel.", "content_id": "#"})
-    return banners
+Optional Mongo support
 
-@app.route("/")
-def home():
-    if DB_CONNECTION_ERROR: return render_template_string(PAGE_TEMPLATE, error_message=DB_CONNECTION_ERROR)
-    shelves = []
-    banner_content = []
-    try:
-        if content_collection is not None:
-            banner_content = list(content_collection.find().sort('_id', DESCENDING).limit(5))
-            
-            # Fixed Shelves
-            latest_movies = list(content_collection.find({"type": "movie"}).sort('_id', DESCENDING).limit(10))
-            if latest_movies: shelves.append({"name": "Latest Movies", "content": latest_movies})
+USE_MONGO = False mongo_client = None movies_col = None users_col = None
 
-            latest_tv = list(content_collection.find({"type": "tv"}).sort('_id', DESCENDING).limit(10))
-            if latest_tv: shelves.append({"name": "Latest TV Series", "content": latest_tv})
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin") ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-            # Dynamic Shelves
-            all_categories = list(categories_collection.find().sort('name', 1))
-            for cat in all_categories:
-                content_in_cat = list(content_collection.find({"categories": cat['_id']}).sort('_id', DESCENDING).limit(10))
-                if content_in_cat:
-                    shelves.append({"name": cat['name'], "content": content_in_cat})
-    except Exception as e:
-        return render_template_string(PAGE_TEMPLATE, error_message=f"Could not fetch data. Error: {e}")
-    return render_template_string(PAGE_TEMPLATE, title="Movie Zone", banners=pick_banners(banner_content), shelves=shelves)
+app = Flask(name) app.secret_key = os.getenv("FLASK_SECRET", os.urandom(24)) BASE_URL = os.getenv("BASE_URL", "")
 
-@app.route("/content/<content_id>")
-def content_detail(content_id):
-    if DB_CONNECTION_ERROR: return redirect(url_for("home"))
-    try:
-        item = content_collection.find_one({"_id": ObjectId(content_id)}) if content_collection is not None else None
-        if not item: return "Content not found", 404
-        all_categories_map = {cat['_id']: cat for cat in categories_collection.find()}
-        item['categories_names'] = [all_categories_map.get(cat_id, {}).get('name', '') for cat_id in item.get('categories', [])]
-        return render_template_string(CONTENT_DETAIL_TEMPLATE, item=item)
-    except Exception as e:
-        return f"Invalid Content ID or database error: {e}", 400
+--------------------------
 
-@app.route("/search")
-def search():
-    if DB_CONNECTION_ERROR: return redirect(url_for("home"))
-    q = (request.args.get("q") or "").strip()
-    search_results = []
-    if q and content_collection is not None:
-        search_results = list(content_collection.find({"title": {"$regex": q, "$options": "i"}}).limit(20))
-    elif not q:
-        return redirect(url_for('home'))
-    return render_template_string(PAGE_TEMPLATE, title=f"Search • {q}", content=search_results, query=q, banners=None)
+Data Layer (Mongo or Memory)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+--------------------------
+
+class MemoryCollection: def init(self): self.data = {}
+
+def insert_one(self, doc):
+    _id = doc.get("_id") or str(uuid.uuid4())
+    doc["_id"] = _id
+    self.data[_id] = json.loads(json.dumps(doc))
+    return type("InsertResult", (), {"inserted_id": _id})
+
+def find_one(self, query):
+    for doc in self.data.values():
+        if _match(doc, query):
+            return json.loads(json.dumps(doc))
+    return None
+
+def find(self, query=None, sort=None, limit=0, skip=0):
+    items = list(self.data.values())
+    if query:
+        items = [d for d in items if _match(d, query)]
+    if sort:
+        key, direction = sort[0]
+        items.sort(key=lambda d: d.get(key, 0), reverse=(direction < 0))
+    if skip:
+        items = items[skip:]
+    if limit:
+        items = items[:limit]
+    # return shallow copy
+    for d in items:
+        yield json.loads(json.dumps(d))
+
+def update_one(self, query, update):
+    for _id, doc in list(self.data.items()):
+        if _match(doc, query):
+            if "$set" in update:
+                for k, v in update["$set"].items():
+                    _set_nested(doc, k, v)
+            if "$inc" in update:
+                for k, v in update["$inc"].items():
+                    doc[k] = doc.get(k, 0) + v
+            self.data[_id] = doc
+            return
+
+def delete_one(self, query):
+    for _id, doc in list(self.data.items()):
+        if _match(doc, query):
+            del self.data[_id]
+            return
+
+def _set_nested(d, path, value): parts = path.split(".") cur = d for p in parts[:-1]: cur = cur.setdefault(p, {}) cur[parts[-1]] = value
+
+def _match(doc, query): # very small subset: {field: value} or {field: {"$regex": pattern, "$options": "i"}} for k, v in (query or {}).items(): if isinstance(v, dict) and "$regex" in v: pattern = v["$regex"] flags = re.IGNORECASE if v.get("$options") == "i" else 0 val = str(doc.get(k, "")) if re.search(pattern, val, flags) is None: return False else: if doc.get(k) != v: return False return True
+
+Initialize DB
+
+MONGO_URI = os.getenv("MONGO_URI") if MONGO_URI: try: from pymongo import MongoClient, ASCENDING, DESCENDING mongo_client = MongoClient(MONGO_URI) db = mongo_client.get_default_database() if "/" in MONGO_URI.split("@")[ -1 ] else mongo_client["movie_site"] movies_col = db["movies"] users_col = db["users"] movies_col.create_index([("slug", 1)], unique=True) movies_col.create_index([("title", 1)]) movies_col.create_index([("year", 1)]) movies_col.create_index([("genres", 1)]) movies_col.create_index([("language", 1)]) movies_col.create_index([("views", -1)]) USE_MONGO = True except Exception as e: print("[WARN] Mongo init failed, falling back to in-memory store:", e)
+
+if not USE_MONGO: movies_col = MemoryCollection() users_col = MemoryCollection()
+
+Seed admin user if missing
+
+if not users_col.find_one({"username": ADMIN_USERNAME}): users_col.insert_one({ "username": ADMIN_USERNAME, "password_hash": hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest(), "role": "admin", "created_at": datetime.utcnow().isoformat() })
+
+--------------------------
+
+Utilities
+
+--------------------------
+
+def slugify(text: str) -> str: text = re.sub(r"[^a-zA-Z0-9\s-]", "", text) text = re.sub(r"\s+", "-", text.strip()) return text.lower()
+
+def require_login(role: str | None = None): def decorator(fn): def wrapper(*args, **kwargs): user = session.get("user") if not user: return redirect(url_for("login", next=request.path)) if role and user.get("role") != role: abort(403) return fn(*args, **kwargs) wrapper.name = fn.name return wrapper return decorator
+
+def get_user(): return session.get("user")
+
+def upsert_movie(doc: dict) -> str: # ensure fields doc.setdefault("title", "Untitled") doc.setdefault("year", None) doc.setdefault("language", "Unknown") doc.setdefault("genres", []) doc.setdefault("description", "") doc.setdefault("poster_url", "") doc.setdefault("trailer_url", "") doc.setdefault("stream_links", [])  # list of dict: {label, url} doc.setdefault("rating", None) doc.setdefault("views", 0)
+
+slug = doc.get("slug") or slugify(f"{doc['title']} {doc.get('year') or ''}")
+doc["slug"] = slug
+
+existing = movies_col.find_one({"slug": slug})
+if existing:
+    movies_col.update_one({"_id": existing["_id"]}, {"$set": doc})
+    return existing["_id"]
+res = movies_col.insert_one(doc)
+return str(res.inserted_id)
+
+--------------------------
+
+TEMPLATES (render_template_string)
+
+--------------------------
+
+BASE_TEMPLATE = """ <!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ meta_title or 'Movie Site' }}</title>
+  {% if base_url %}<link rel="canonical" href="{{ base_url + request.path }}" />{% endif %}
+  <meta name="description" content="{{ meta_desc or 'Watch movies, search, and explore details.' }}" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+  <link rel="icon" href="https://fav.farm/🎬" />
+  <style>
+    .container{max-width:1100px;margin:0 auto}
+    .card{transition:transform .15s ease, box-shadow .15s ease}
+    .card:hover{transform:translateY(-2px); box-shadow:0 10px 25px rgba(0,0,0,.08)}
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="border-b bg-white/80 backdrop-blur sticky top-0 z-40">
+    <div class="container px-4 py-3 flex items-center gap-3">
+      <a href="{{ url_for('home') }}" class="font-bold text-xl">🎬 MovieZone</a>
+      <form action="{{ url_for('search') }}" method="get" class="flex-1">
+        <input name="q" value="{{ request.args.get('q','') }}" placeholder="Search movies..." class="w-full rounded-xl border px-4 py-2" />
+      </form>
+      {% if user %}
+        <a class="px-3 py-2 rounded-xl hover:bg-slate-100" href="{{ url_for('watchlist') }}">⭐ Watchlist</a>
+        {% if user.role == 'admin' %}
+          <a class="px-3 py-2 rounded-xl hover:bg-slate-100" href="{{ url_for('admin') }}">🛠️ Admin</a>
+        {% endif %}
+        <a class="px-3 py-2 rounded-xl hover:bg-slate-100" href="{{ url_for('logout') }}">Logout</a>
+      {% else %}
+        <a class="px-3 py-2 rounded-xl hover:bg-slate-100" href="{{ url_for('login') }}">Login</a>
+      {% endif %}
+    </div>
+  </header>  <main class="container px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>  <footer class="border-t py-6 text-center text-sm text-slate-500">© {{ now.year }} MovieZone</footer>
+</body>
+</html>
+"""HOME_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <h1 class="text-2xl font-semibold mb-4">Trending</h1>
+  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    {% for m in movies %}
+    <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+      <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" alt="{{ m.title }}" class="w-full aspect-[2/3] object-cover" />
+      <div class="p-3">
+        <div class="font-medium line-clamp-1">{{ m.title }}</div>
+        <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+{% endblock %}
+"""SEARCH_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <h1 class="text-xl font-semibold mb-4">Search results for "{{ q }}"</h1>
+  {% if movies|length == 0 %}
+    <div class="p-6 bg-white rounded-2xl border">No results found.</div>
+  {% else %}
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {% for m in movies %}
+      <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+        <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" alt="{{ m.title }}" class="w-full aspect-[2/3] object-cover" />
+        <div class="p-3">
+          <div class="font-medium line-clamp-1">{{ m.title }}</div>
+          <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
+"""DETAILS_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-4">
+      {% if movie.trailer_url %}
+      <div class="rounded-2xl overflow-hidden border bg-black">
+        <iframe class="w-full aspect-video" src="{{ movie.trailer_url|replace('watch?v=','embed/') }}" allowfullscreen></iframe>
+      </div>
+      {% endif %}{% if movie.stream_links %}
+  <div class="rounded-2xl overflow-hidden border bg-black p-4">
+    <video id="player" class="video-js vjs-default-skin w-full aspect-video" controls preload="auto"></video>
+    <div class="mt-3 flex flex-wrap gap-2">
+      {% for s in movie.stream_links %}
+        <a href="{{ url_for('play', slug=movie.slug, idx=loop.index0) }}" class="px-3 py-1 rounded-xl border bg-white">Play: {{ s.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="rounded-2xl overflow-hidden border bg-white p-4">
+    <h1 class="text-2xl font-bold">{{ movie.title }} <span class="text-slate-500 font-normal">({{ movie.year }})</span></h1>
+    <div class="text-sm text-slate-500">{{ movie.language }} • {{ (movie.genres or [])|join(', ') }}</div>
+    <p class="mt-3 text-slate-700">{{ movie.description }}</p>
+  </div>
+
+  {% if related|length %}
+  <div class="rounded-2xl overflow-hidden border bg-white p-4">
+    <h2 class="text-lg font-semibold mb-3">Related</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {% for m in related %}
+      <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+        <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" class="w-full aspect-[2/3] object-cover"/>
+        <div class="p-3">
+          <div class="font-medium line-clamp-1">{{ m.title }}</div>
+          <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<aside class="space-y-4">
+  <img src="{{ movie.poster_url or 'https://picsum.photos/400/600?blur=2' }}" class="w-full rounded-2xl border" />
+  <div class="rounded-2xl overflow-hidden border bg-white p-4 text-sm">
+    <div>Rating: {{ movie.rating or 'N/A' }}</div>
+    <div>Views: {{ movie.views or 0 }}</div>
+    {% if user %}
+      <form method="post" action="{{ url_for('toggle_watchlist', slug=movie.slug) }}" class="mt-3">
+        <button class="px-4 py-2 rounded-xl border bg-amber-50">⭐ {{ 'Remove from' if in_watchlist else 'Add to' }} Watchlist</button>
+      </form>
+    {% else %}
+      <a href="{{ url_for('login', next=request.path) }}" class="inline-block mt-3 px-4 py-2 rounded-xl border">Login to add to Watchlist</a>
+    {% endif %}
+  </div>
+</aside>
+
+  </div>
+{% endblock %}
+"""AUTH_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <div class="max-w-md mx-auto bg-white rounded-2xl border p-6">
+    <h1 class="text-xl font-semibold mb-4">{{ mode|title }}</h1>
+    <form method="post" class="space-y-3">
+      <input name="username" placeholder="Username" class="w-full border rounded-xl px-3 py-2" required />
+      <input name="password" placeholder="Password" type="password" class="w-full border rounded-xl px-3 py-2" required />
+      <button class="w-full px-4 py-2 rounded-xl bg-black text-white">{{ mode|title }}</button>
+    </form>
+  </div>
+{% endblock %}
+"""ADMIN_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <h1 class="text-2xl font-semibold mb-4">Admin Panel</h1>
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="bg-white border rounded-2xl p-4">
+      <h2 class="font-semibold mb-3">Add / Update Movie</h2>
+      <form method="post" action="{{ url_for('admin_add') }}" class="space-y-2">
+        <input class="w-full border rounded-xl px-3 py-2" name="title" placeholder="Title" required>
+        <input class="w-full border rounded-xl px-3 py-2" name="year" placeholder="Year">
+        <input class="w-full border rounded-xl px-3 py-2" name="language" placeholder="Language">
+        <input class="w-full border rounded-xl px-3 py-2" name="genres" placeholder="Genres (comma-separated)">
+        <input class="w-full border rounded-xl px-3 py-2" name="poster_url" placeholder="Poster URL">
+        <input class="w-full border rounded-xl px-3 py-2" name="trailer_url" placeholder="Trailer URL (YouTube)">
+        <textarea class="w-full border rounded-xl px-3 py-2" name="description" placeholder="Description"></textarea>
+        <textarea class="w-full border rounded-xl px-3 py-2" name="stream_links" placeholder='Stream links JSON (e.g., [{"label":"1080p","url":"https://...m3u8"}])'></textarea>
+        <button class="px-4 py-2 rounded-xl bg-black text-white">Save</button>
+      </form>
+    </div><div class="bg-white border rounded-2xl p-4">
+  <h2 class="font-semibold mb-3">Import from TMDB</h2>
+  <form method="post" action="{{ url_for('admin_tmdb') }}" class="space-y-2">
+    <input class="w-full border rounded-xl px-3 py-2" name="tmdb_id" placeholder="TMDB Movie ID" required>
+    <button class="px-4 py-2 rounded-xl bg-black text-white">Import</button>
+  </form>
+  <p class="text-sm text-slate-500 mt-2">Requires TMDB_API_KEY</p>
+</div>
+
+  </div>  <h2 class="text-xl font-semibold mt-8 mb-4">Recent Movies</h2>
+  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+    {% for m in movies %}
+    <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+      <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" class="w-full aspect-[2/3] object-cover"/>
+      <div class="p-2 text-xs">
+        <div class="font-medium line-clamp-1">{{ m.title }}</div>
+        <div class="text-slate-500">{{ m.year }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+{% endblock %}
+"""WATCHLIST_TEMPLATE = """ {% extends base %} {% block content %}
+
+  <h1 class="text-xl font-semibold mb-4">My Watchlist</h1>
+  {% if items|length == 0 %}
+    <div class="p-6 bg-white rounded-2xl border">Your watchlist is empty.</div>
+  {% else %}
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {% for m in items %}
+      <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+        <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" class="w-full aspect-[2/3] object-cover"/>
+        <div class="p-3">
+          <div class="font-medium line-clamp-1">{{ m.title }}</div>
+          <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
+"""--------------------------
+
+Routes
+
+--------------------------
+
+@app.context_processor def inject_globals(): class UserWrap: def init(self, u): self.username = u.get("username") self.role = u.get("role", "user") u = session.get("user") return { "base": BASE_TEMPLATE, "user": UserWrap(u) if u else None, "now": datetime.utcnow(), "base_url": BASE_URL, }
+
+@app.route("/") def home(): # top by views items = list(movies_col.find({}, sort=[("views", -1)], limit=20)) return render_template_string(HOME_TEMPLATE, movies=items, meta_title="Home • MovieZone")
+
+@app.route("/search") def search(): q = request.args.get("q", "").strip() items = [] if q: regex = {"$regex": re.escape(q), "$options": "i"} items = list(movies_col.find({"title": regex}, sort=[("views", -1)], limit=60)) return render_template_string(SEARCH_TEMPLATE, movies=items, q=q, meta_title=f"Search: {q} • MovieZone")
+
+@app.route("/movie/<slug>") def movie_details(slug): m = movies_col.find_one({"slug": slug}) if not m: abort(404) # increment views movies_col.update_one({"_id": m["_id"]}, {"$inc": {"views": 1}}) # related by first genre g0 = (m.get("genres") or [None])[0] related = list(movies_col.find({"genres": g0}, sort=[("views", -1)], limit=10)) if g0 else []
+
+user = session.get("user")
+in_watch = False
+if user:
+    u = users_col.find_one({"username": user["username"]})
+    wl = set(u.get("watchlist", []))
+    in_watch = m["slug"] in wl
+
+return render_template_string(DETAILS_TEMPLATE,
+    movie=m,
+    related=[r for r in related if r.get("slug") != slug][:10],
+    in_watchlist=in_watch,
+    meta_title=f"{m['title']} ({m.get('year') or ''}) • MovieZone",
+    meta_desc=(m.get('description') or '')[:150]
+)
+
+@app.route("/play/<slug>/int:idx") def play(slug, idx): m = movies_col.find_one({"slug": slug}) if not m: abort(404) links = m.get("stream_links") or [] if not (0 <= idx < len(links)): abort(404) # simple redirect to the actual stream link (lets browser/player handle it) return redirect(links[idx]["url"])  # you can embed signed links logic here
+
+@app.route("/login", methods=["GET", "POST"]) def login(): next_url = request.args.get("next") or url_for("home") if request.method == "POST": username = request.form.get("username", "").strip() password = request.form.get("password", "") user = users_col.find_one({"username": username}) if user: if user.get("password_hash") == hashlib.sha256(password.encode()).hexdigest(): session["user"] = {"username": user["username"], "role": user.get("role", "user")} return redirect(next_url) return render_template_string(AUTH_TEMPLATE, mode="login", error="Invalid credentials") return render_template_string(AUTH_TEMPLATE, mode="login")
+
+@app.route("/register", methods=["GET", "POST"]) def register(): if request.method == "POST": username = request.form.get("username", "").strip() password = request.form.get("password", "") if users_col.find_one({"username": username}): return render_template_string(AUTH_TEMPLATE, mode="register", error="Username exists") users_col.insert_one({ "username": username, "password_hash": hashlib.sha256(password.encode()).hexdigest(), "role": "user", "watchlist": [], "created_at": datetime.utcnow().isoformat() }) session["user"] = {"username": username, "role": "user"} return redirect(url_for("home")) return render_template_string(AUTH_TEMPLATE, mode="register")
+
+@app.route("/logout") def logout(): session.pop("user", None) return redirect(url_for("home"))
+
+@app.route("/watchlist") @require_login() def watchlist(): u = users_col.find_one({"username": session["user"]["username"]}) slugs = u.get("watchlist", []) items = [] for s in slugs: m = movies_col.find_one({"slug": s}) if m: items.append(m) return render_template_string(WATCHLIST_TEMPLATE, items=items, meta_title="My Watchlist • MovieZone")
+
+@app.route("/watchlist/toggle/<slug>", methods=["POST"]) @require_login() def toggle_watchlist(slug): u = users_col.find_one({"username": session["user"]["username"]}) wl = set(u.get("watchlist", [])) if slug in wl: wl.remove(slug) else: wl.add(slug) users_col.update_one({"_id": u["_id"]}, {"$set": {"watchlist": list(wl)}}) return redirect(url_for("movie_details", slug=slug))
+
+@app.route("/admin") @require_login("admin") def admin(): items = list(movies_col.find({}, sort=[("_id", -1)], limit=24)) return render_template_string(ADMIN_TEMPLATE, movies=items, meta_title="Admin • MovieZone")
+
+@app.route("/admin/add", methods=["POST"]) @require_login("admin") def admin_add(): form = request.form stream_links = form.get("stream_links", "").strip() try: stream_links = json.loads(stream_links) if stream_links else [] except Exception: stream_links = [] doc = { "title": form.get("title", "Untitled").strip(), "year": int(form.get("year") or 0) or None, "language": form.get("language", "").strip() or None, "genres": [g.strip() for g in (form.get("genres", "").split(",") if form.get("genres") else []) if g.strip()], "poster_url": form.get("poster_url", "").strip(), "trailer_url": form.get("trailer_url", "").strip(), "description": form.get("description", "").strip(), "stream_links": stream_links, } upsert_movie(doc) return redirect(url_for("admin"))
+
+@app.route("/admin/tmdb", methods=["POST"]) @require_login("admin") def admin_tmdb(): if not requests: return "requests lib not available", 500 api_key = os.getenv("TMDB_API_KEY") if not api_key: return "TMDB_API_KEY not set", 400 tmdb_id = request.form.get("tmdb_id") try: r = requests.get(f"https://api.themoviedb.org/3/movie/{tmdb_id}", params={"api_key": api_key, "language": "en-US"}, timeout=10) r.raise_for_status() mv = r.json() title = mv.get("title") or mv.get("name") year = (mv.get("release_date") or "")[:4] poster = mv.get("poster_path") poster_url = f"https://image.tmdb.org/t/p/w500{poster}" if poster else "" genres = [g.get("name") for g in (mv.get("genres") or [])] doc = { "title": title, "year": int(year) if year.isdigit() else None, "language": (mv.get("original_language") or "").upper(), "genres": genres, "poster_url": poster_url, "trailer_url": "", "description": mv.get("overview") or "", "stream_links": [], "rating": mv.get("vote_average"), } upsert_movie(doc) return redirect(url_for("admin")) except Exception as e: return f"TMDB import failed: {e}", 500
+
+--------------------------
+
+Error Handlers
+
+--------------------------
+
+@app.errorhandler(404) def not_found(e): return render_template_string(""" {% extends base %} {% block content %} <div class='bg-white border rounded-2xl p-8 text-center'> <div class='text-6xl'>🧐</div> <h1 class='text-2xl font-semibold mt-3'>Page not found</h1> <p class='text-slate-500 mt-2'>The page you are looking for does not exist.</p> <a href='{{ url_for('home') }}' class='inline-block mt-4 px-4 py-2 rounded-xl border'>Go Home</a> </div> {% endblock %} """), 404
+
+--------------------------
+
+Seed sample data (only for memory mode)
+
+--------------------------
+
+if not USE_MONGO: sample = [ { "title": "Inception", "year": 2010, "language": "EN", "genres": ["Sci-Fi", "Thriller"], "description": "A thief who steals corporate secrets through dream-sharing technology…", "poster_url": "https://image.tmdb.org/t/p/w500/qmDpIHrmpJINaRKAfWQfftjCdyi.jpg", "trailer_url": "https://www.youtube.com/watch?v=YoHD9XEInc0", "stream_links": [{"label": "720p", "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"}], "rating": 8.8, }, { "title": "Interstellar", "year": 2014, "language": "EN", "genres": ["Sci-Fi", "Adventure"], "description": "A team travels through a wormhole in space in an attempt to ensure humanity's survival.", "poster_url": "https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg", "trailer_url": "https://www.youtube.com/watch?v=zSWdZVtXT7E", "stream_links": [{"label": "1080p", "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"}], "rating": 8.6, }, ] for s in sample: upsert_movie(s)
+
+--------------------------
+
+App Entrypoint
+
+--------------------------
+
+if name == "main": port = int(os.getenv("PORT", "5000")) print(f"\n🚀 Movie website running on http://127.0.0.1:{port}\nAdmin Login: {ADMIN_USERNAME} / {ADMIN_PASSWORD}\n") app.run(host="0.0.0.0", port=port, debug=True)
+
