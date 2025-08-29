@@ -96,18 +96,81 @@ index_html = """
   .search-input:focus { outline: none; }
   .search-btn { background: var(--primary-color); border: none; color: var(--text-light); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display:grid; place-items:center; }
   .menu-toggle { display: none; font-size: 1.5rem; cursor: pointer; }
-  .hero-slider { height: 70vh; width: 100%; margin-top: var(--nav-height); }
-  .hero-slide { position: relative; display: flex; align-items: center; }
-  .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-  .hero-slide::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, var(--bg-color) 0%, rgba(12,12,12,0.8) 30%, rgba(12,12,12,0.2) 60%, transparent 100%), linear-gradient(to top, var(--bg-color) 0%, transparent 20%); }
-  .hero-content { position: relative; z-index: 2; padding: 0 40px; max-width: 50%; }
-  .hero-title { font-size: 3.5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.1; }
-  .hero-meta { display: flex; align-items: center; gap: 15px; margin-bottom: 1rem; color: var(--text-dark); }
-  .hero-meta .rating { color: #f5c518; font-weight: 600; }
-  .hero-overview { font-size: 1rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 2rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .hero-btn { background-color: var(--primary-color); padding: 12px 28px; border-radius: 50px; font-weight: 600; transition: transform 0.2s ease; }
-  .hero-btn:hover { transform: scale(1.05); }
-  .swiper-pagination-bullet-active { background: var(--primary-color); }
+
+  /* === [START] HERO SLIDER STYLE CHANGES === */
+  .hero-slider {
+    width: 100%;
+    margin-top: var(--nav-height);
+    aspect-ratio: 16 / 9; /* This creates the landscape ratio */
+    max-height: 600px; /* Optional: limits height on very large screens */
+  }
+  .hero-slide {
+    position: relative;
+    display: flex;
+    align-items: flex-end; /* Align content to the bottom */
+    justify-content: flex-start;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .hero-bg-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+  .hero-slide::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* New gradient from bottom to top for text readability */
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 25%, transparent 60%);
+  }
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    padding: 20px 40px; /* Adjusted padding */
+    width: 100%;
+  }
+  .hero-title {
+    font-size: 2.2rem; /* Adjusted font size */
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0;
+  }
+  .hero-meta {
+    font-size: 0.9rem;
+    color: var(--text-dark);
+    margin-top: 5px;
+  }
+  .slide-type-tag {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    z-index: 3;
+    text-transform: uppercase;
+  }
+  /* === [END] HERO SLIDER STYLE CHANGES === */
+
+  .swiper-pagination-bullet {
+    background: rgba(255,255,255,0.5);
+  }
+  .swiper-pagination-bullet-active {
+    background: var(--primary-color);
+    width: 20px;
+    border-radius: 5px;
+  }
   .category-section { margin: 50px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.8rem; font-weight: 600; }
@@ -126,8 +189,24 @@ index_html = """
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
   .ad-container { margin: 40px 0; display: flex; justify-content: center; align-items: center; }
-  @media (max-width: 992px) {.nav-links, .search-form { display: none; } .menu-toggle { display: block; } .hero-content { max-width: 80%; } .hero-title { font-size: 2.5rem; } }
-  @media (max-width: 768px) {.container, .full-page-grid-container { padding: 0 20px; } .full-page-grid-container{padding-top:100px;padding-bottom:40px;} .logo { font-size: 1.5rem; } .hero-slider { height: 60vh; } .hero-content { padding: 0 20px; max-width: 100%; text-align: center; } .hero-meta { justify-content: center; } .hero-overview { display: none; } .category-title { font-size: 1.4rem; } .movie-poster { width: 160px; } .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
+  
+  @media (max-width: 992px) {.nav-links, .search-form { display: none; } .menu-toggle { display: block; } }
+  
+  @media (max-width: 768px) {
+    .container, .full-page-grid-container { padding: 0 20px; } 
+    .full-page-grid-container{padding-top:100px;padding-bottom:40px;} 
+    .logo { font-size: 1.5rem; } 
+    /* Mobile slider adjustments */
+    .hero-slider { margin-top: calc(var(--nav-height) + 10px); aspect-ratio: 16 / 10; }
+    .hero-content { padding: 15px 20px; }
+    .hero-title { font-size: 1.5rem; }
+    .hero-meta { font-size: 0.8rem; }
+    .slide-type-tag { font-size: 0.7rem; padding: 4px 10px; top: 15px; right: 15px; }
+
+    .category-title { font-size: 1.4rem; } 
+    .movie-poster { width: 160px; } 
+    .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } 
+  }
 </style>
 </head>
 <body>
@@ -163,26 +242,27 @@ index_html = """
         {% else %}<div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>{% endif %}
     </div>
   {% else %}
-    <div class="swiper hero-slider">
-        <div class="swiper-wrapper">
-        {% for movie in recently_added %}{% if movie.backdrop %}
-            <div class="swiper-slide hero-slide">
-                <img src="{{ movie.backdrop }}" alt="" class="hero-bg-img">
-                <div class="container hero-content">
-                    <h1 class="hero-title">{{ movie.title }}</h1>
-                    <div class="hero-meta">
-                        {% if movie.vote_average %}<span class="rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</span>{% endif %}
-                        {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
-                        {% if movie.genres %}<span>{{ movie.genres|first }}</span>{% endif %}
-                    </div>
-                    <p class="hero-overview">{{ movie.overview }}</p>
-                    <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="hero-btn">More Info <i class="fas fa-play"></i></a>
-                </div>
-            </div>
-        {% endif %}{% endfor %}
-        </div>
-        <div class="swiper-pagination"></div>
+    <!-- [START] HERO SLIDER HTML CHANGES -->
+    <div class="container">
+      <div class="swiper hero-slider">
+          <div class="swiper-wrapper">
+          {% for movie in recently_added %}{% if movie.backdrop %}
+              <div class="swiper-slide hero-slide">
+                  <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" style="position:absolute; width:100%; height:100%; z-index:2;"></a>
+                  <img src="{{ movie.backdrop }}" alt="{{ movie.title }}" class="hero-bg-img">
+                  <div class="slide-type-tag">{{ movie.type | title }}</div>
+                  <div class="hero-content">
+                      <h2 class="hero-title">{{ movie.title }} {% if movie.language %} [{{ movie.language }}] {% endif %}</h2>
+                      {% if movie.release_date %}<p class="hero-meta">{{ movie.release_date.split('-')[0] }}</p>{% endif %}
+                  </div>
+              </div>
+          {% endif %}{% endfor %}
+          </div>
+          <div class="swiper-pagination"></div>
+      </div>
     </div>
+    <!-- [END] HERO SLIDER HTML CHANGES -->
+
     <div class="container">
     {% macro render_carousel_section(title, movies_list, cat_name) %}
         {% if movies_list %}
@@ -219,205 +299,15 @@ index_html = """
 <script>
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
-    new Swiper('.hero-slider', { loop: true, autoplay: { delay: 5000 }, pagination: { el: '.swiper-pagination', clickable: true }, });
+    new Swiper('.hero-slider', { 
+        loop: true, 
+        autoplay: { delay: 4000 }, 
+        pagination: { el: '.swiper-pagination', clickable: true }, 
+    });
     new Swiper('.movie-carousel', { slidesPerView: 'auto', spaceBetween: 20, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev', }, breakpoints: { 320: { spaceBetween: 15 }, 768: { spaceBetween: 20 }, } });
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
-"""
-detail_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-{{ ad_settings.ad_header | safe }}
-<style>
-  :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); }
-  a { text-decoration: none; color: inherit; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
-  .detail-hero { position: relative; padding: 120px 0 60px; min-height: 70vh; display: flex; align-items: center; }
-  .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(15px) brightness(0.3); transform: scale(1.1); }
-  .detail-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, var(--bg-color) 0%, rgba(12,12,12,0.7) 40%, transparent 100%); }
-  .detail-content { position: relative; z-index: 2; display: flex; gap: 40px; }
-  .detail-poster { width: 300px; height: 450px; flex-shrink: 0; border-radius: 12px; object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-  .detail-info { max-width: 700px; }
-  .detail-title { font-size: 3rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
-  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; font-size: 0.9rem; }
-  .meta-item { display: flex; align-items: center; gap: 8px; }
-  .meta-item.rating { color: #f5c518; font-weight: 600; }
-  .detail-overview { font-size: 1rem; line-height: 1.7; color: var(--text-dark); margin-bottom: 30px; }
-  .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 25px; border-radius: 50px; font-weight: 600; transition: all 0.2s ease; text-align: center; }
-  .btn-download { background-color: var(--primary-color); } .btn-download:hover { transform: scale(1.05); }
-  .btn-watch { background-color: var(--watch-color); } .btn-watch:hover { transform: scale(1.05); }
-  .tabs-container { margin: 40px 0; }
-  .tabs-nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid #333; }
-  .tab-link { padding: 15px 30px; cursor: pointer; font-weight: 500; color: var(--text-dark); position: relative; }
-  .tab-link.active { color: var(--text-light); }
-  .tab-link.active::after { content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background-color: var(--primary-color); }
-  .tabs-content { padding: 30px 0; }
-  .tab-pane { display: none; }
-  .tab-pane.active { display: block; }
-  .link-group { margin-bottom: 30px; text-align: center; }
-  .link-group h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; }
-  .link-buttons { display: inline-flex; flex-wrap: wrap; gap: 15px; justify-content: center;}
-  .quality-group { margin-bottom: 20px; }
-  .quality-group h4 { margin-bottom: 10px; color: var(--text-dark); }
-  .episode-list { display: flex; flex-direction: column; gap: 10px; }
-  .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
-  .episode-name { font-weight: 500; }
-  .ad-container { margin: 20px 0; text-align: center; }
-  @media (max-width: 768px) {
-    .container { padding: 0 20px; }
-    .detail-hero { padding: 100px 0 40px; }
-    .detail-content { flex-direction: column; align-items: center; text-align: center; }
-    .detail-poster { width: 60%; max-width: 250px; height: auto; }
-    .detail-title { font-size: 2rem; }
-    .detail-meta { justify-content: center; }
-    .tab-link { padding: 12px 15px; font-size: 0.9rem; }
-    .episode-item { flex-direction: column; gap: 10px; align-items: flex-start; }
-  }
-</style>
-</head>
-<body>
-{{ ad_settings.ad_body_top | safe }}
-{% if movie %}
-<div class="detail-hero">
-    <img src="{{ movie.backdrop or movie.poster }}" class="hero-background" alt="">
-    <div class="container detail-content">
-        <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
-        <div class="detail-info">
-            <h1 class="detail-title">{{ movie.title }}</h1>
-            <div class="detail-meta">
-                {% if movie.vote_average %}<div class="meta-item rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</div>{% endif %}
-                {% if movie.release_date %}<div class="meta-item"><i class="fas fa-calendar-alt"></i> {{ movie.release_date.split('-')[0] }}</div>{% endif %}
-                {% if movie.language %}<div class="meta-item"><i class="fas fa-language"></i> {{ movie.language }}</div>{% endif %}
-                {% if movie.genres %}<div class="meta-item"><i class="fas fa-tag"></i> {{ movie.genres | join(' / ') }}</div>{% endif %}
-            </div>
-            <p class="detail-overview">{{ movie.overview }}</p>
-        </div>
-    </div>
-</div>
-<div class="container">
-    <div class="tabs-container">
-        <nav class="tabs-nav">
-            <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Links</div>
-            {% if movie.type == 'series' and movie.episodes %}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
-                <div class="tab-link" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
-                {% endfor %}
-            {% endif %}
-        </nav>
-        <div class="tabs-content">
-            <div class="tab-pane active" id="downloads">
-                {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
-                {% if movie.type == 'movie' %}
-                    {% if movie.links %}
-                    <div class="link-group">
-                        <h3>Watch & Download Links</h3>
-                        {% for link_item in movie.links %}
-                        <div class="quality-group">
-                            <h4>{{ link_item.quality }}</h4>
-                            <div class="link-buttons">
-                                {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn btn-watch"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
-                                {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn btn-download"><i class="fas fa-download"></i> Download</a>{% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}<p style="text-align:center;">No links available yet.</p>
-                    {% endif %}
-                {% elif movie.type == 'series' %}<p style="text-align:center;">Please select a season tab to view episode links.</p>
-                {% else %}<p style="text-align:center;">No links available.</p>
-                {% endif %}
-            </div>
-            {% if movie.type == 'series' and movie.episodes %}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
-                <div class="tab-pane" id="season-{{ season_num }}"><div class="episode-list">
-                    {% for ep in movie.episodes | selectattr('season', 'equalto', season_num) | sort(attribute='episode_number') %}
-                    <div class="episode-item">
-                        <span class="episode-name"><i class="fas fa-play-circle"></i> Episode {{ ep.episode_number }} {% if ep.title %}- {{ep.title}}{% endif %}</span>
-                        {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn btn-download">Download / Watch</a>{% endif %}
-                    </div>
-                    {% endfor %}
-                </div></div>
-                {% endfor %}
-            {% endif %}
-        </div>
-    </div>
-</div>
-{% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
-<script>
-    const tabLinks = document.querySelectorAll('.tab-link'), tabPanes = document.querySelectorAll('.tab-pane');
-    tabLinks.forEach(link => { link.addEventListener('click', () => {
-        const tabId = link.getAttribute('data-tab');
-        tabLinks.forEach(item => item.classList.remove('active'));
-        tabPanes.forEach(pane => pane.classList.remove('active'));
-        link.classList.add('active');
-        document.getElementById(tabId).classList.add('active');
-    }); });
-</script>
-{{ ad_settings.ad_footer | safe }}
-</body></html>
-"""
-wait_page_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generating Link... - {{ website_name }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
-    {{ ad_settings.ad_header | safe }}
-    <style>
-        :root {--primary-color: #E50914; --bg-color: #0c0c0c; --text-light: #ffffff; --text-dark: #a0a0a0;}
-        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; text-align: center; margin: 0; padding: 20px;}
-        .wait-container { background-color: #1a1a1a; padding: 40px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h1 { font-size: 1.8rem; color: var(--primary-color); margin-bottom: 20px; }
-        p { color: var(--text-dark); margin-bottom: 30px; font-size: 1rem; }
-        .timer { font-size: 2.5rem; font-weight: 700; color: var(--text-light); margin-bottom: 30px; }
-        .get-link-btn { display: inline-block; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: #555; transition: background-color 0.2s; }
-        .get-link-btn.ready { background-color: var(--primary-color); }
-        .ad-container { margin: 30px 0; min-height: 50px; display: flex; justify-content: center; align-items: center; }
-    </style>
-</head>
-<body>
-    {{ ad_settings.ad_body_top | safe }}
-    <div class="wait-container">
-        <h1>Please Wait</h1>
-        <p>Your download link is being generated. You will be redirected automatically.</p>
-        <div class="timer">Please wait <span id="countdown">5</span> seconds...</div>
-        <a id="get-link-btn" class="get-link-btn" href="#">Generating Link...</a>
-        {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
-    </div>
-    <script>
-        (function() {
-            let timeLeft = 5;
-            const countdownElement = document.getElementById('countdown');
-            const linkButton = document.getElementById('get-link-btn');
-            const targetUrl = "{{ target_url | safe }}";
-
-            const timer = setInterval(() => {
-                if (timeLeft <= 0) {
-                    clearInterval(timer);
-                    countdownElement.parentElement.textContent = "Your link is ready!";
-                    linkButton.classList.add('ready');
-                    linkButton.textContent = 'Click Here to Proceed';
-                    linkButton.href = targetUrl;
-                    window.location.href = targetUrl;
-                } else {
-                    countdownElement.textContent = timeLeft;
-                }
-                timeLeft--;
-            }, 1000);
-        })();
-    </script>
-    {{ ad_settings.ad_footer | safe }}
-</body>
-</html>
 """
 admin_html = """
 <!DOCTYPE html>
