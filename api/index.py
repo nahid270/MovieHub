@@ -21,7 +21,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "270")
 
 # [MODIFIED] Centralized website name
-WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "MovieZone")
+WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "MovieZonehub")
 # [NEW & IMPORTANT] Add your full website URL in environment variables. Example: https://my-movie-site.vercel.app
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "").rstrip('/')
 
