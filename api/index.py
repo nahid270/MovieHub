@@ -194,148 +194,133 @@ index_html = """
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>PmwBD - Your Entertainment Hub</title>
+<!-- [NEW] Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- [NEW] Swiper.js CDN -->
+<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
-  :root { --netflix-red: #E50914; --netflix-black: #141414; --text-light: #f5f5f5; --text-dark: #a0a0a0; --nav-height: 60px; }
+  :root {
+    --primary-color: #E50914;
+    --bg-color: #0c0c0c;
+    --card-bg: #1a1a1a;
+    --text-light: #ffffff;
+    --text-dark: #a0a0a0;
+    --nav-height: 70px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Roboto', sans-serif; background-color: var(--netflix-black); color: var(--text-light); overflow-x: hidden; }
+  body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-light);
+    overflow-x: hidden;
+  }
   a { text-decoration: none; color: inherit; }
-  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #222; } ::-webkit-scrollbar-thumb { background: #555; } ::-webkit-scrollbar-thumb:hover { background: var(--netflix-red); }
-  
-  /* [MODIFIED] Main Nav for Centered Logo & Menu */
-  .main-nav { position: fixed; top: 0; left: 0; width: 100%; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background: linear-gradient(to bottom, rgba(0,0,0,0.8) 10%, rgba(0,0,0,0)); }
-  .main-nav.scrolled { background-color: var(--netflix-black); }
-  .nav-left, .nav-right { display: flex; align-items: center; flex: 1; }
-  .nav-right { justify-content: flex-end; }
-  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 32px; color: var(--netflix-red); font-weight: 700; letter-spacing: 1px; margin: 0 auto; }
-  .menu-toggle { font-size: 24px; cursor: pointer; color: var(--text-light); z-index: 1002;}
-  
-  /* [NEW] Drawer Menu */
-  .drawer-menu { position: fixed; top: 0; left: -280px; width: 280px; height: 100%; background-color: #181818; z-index: 1001; transition: left 0.3s ease; padding-top: 80px; }
-  .drawer-menu.open { left: 0; }
-  .drawer-menu a { display: block; padding: 15px 25px; color: var(--text-light); font-size: 1.1rem; font-weight: 500; border-bottom: 1px solid #282828; }
-  .drawer-menu a:hover { background-color: var(--netflix-red); }
-  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease; }
-  .overlay.open { opacity: 1; visibility: visible; }
-  
-  .nav-links { display: flex; gap: 20px; align-items: center; }
-  .nav-links a { font-weight: 500; font-size: 0.9rem; transition: color 0.2s ease; }
-  .nav-links a:hover { color: var(--netflix-red); }
-  .search-container { }
-  .search-input { background-color: rgba(0,0,0,0.7); border: 1px solid #777; color: var(--text-light); padding: 8px 15px; border-radius: 4px; transition: width 0.3s ease, background-color 0.3s ease; width: 250px; }
-  .search-input:focus { background-color: rgba(0,0,0,0.9); border-color: var(--text-light); outline: none; }
-  
-  /* [MODIFIED] Hero Section Height */
-  .hero-section { height: 65vh; position: relative; color: white; overflow: hidden; margin-top: var(--nav-height); }
-  .hero-slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center top; display: flex; align-items: flex-end; padding: 50px; opacity: 0; transition: opacity 1.5s ease-in-out; z-index: 1; }
-  .hero-slide.active { opacity: 1; z-index: 2; }
-  .hero-slide::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, var(--netflix-black) 10%, transparent 50%), linear-gradient(to right, rgba(0,0,0,0.8) 0%, transparent 60%); }
-  .hero-content { position: relative; z-index: 3; max-width: 50%; }
-  .hero-title { font-family: 'Bebas Neue', sans-serif; font-size: 5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1; }
-  .hero-overview { font-size: 1.1rem; line-height: 1.5; margin-bottom: 1.5rem; max-width: 600px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .hero-buttons .btn { padding: 8px 20px; margin-right: 0.8rem; border: none; border-radius: 4px; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: opacity 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
-  .btn.btn-primary { background-color: var(--netflix-red); color: white; } .btn.btn-secondary { background-color: rgba(109, 109, 110, 0.7); color: white; } .btn:hover { opacity: 0.8; }
-  main { padding: 0 50px; }
+  img { max-width: 100%; display: block; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #222; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
 
-  /* [NEW] Category Buttons Section */
-  .category-buttons { padding: 20px 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; }
-  .cat-btn { padding: 10px 25px; background-color: #222; border: 1px solid #444; color: var(--text-light); border-radius: 20px; font-size: 1rem; font-weight: 500; transition: all 0.2s ease; }
-  .cat-btn:hover { background-color: var(--netflix-red); border-color: var(--netflix-red); transform: translateY(-2px); }
+  /* Header */
+  .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
+  .main-header.scrolled { background-color: var(--bg-color); }
+  .header-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+  .logo { font-size: 2rem; font-weight: 700; color: var(--primary-color); }
+  .nav-links { display: flex; gap: 30px; }
+  .nav-links a { font-weight: 500; transition: color 0.2s ease; }
+  .nav-links a:hover, .nav-links a.active { color: var(--primary-color); }
+  .search-form { display: flex; align-items: center; background-color: rgba(255,255,255,0.1); border-radius: 50px; padding: 5px; }
+  .search-input { background: transparent; border: none; color: var(--text-light); padding: 5px 10px; width: 220px; font-size: 0.9rem; }
+  .search-input:focus { outline: none; }
+  .search-btn { background: var(--primary-color); border: none; color: var(--text-light); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display:grid; place-items:center; }
+  .menu-toggle { display: none; font-size: 1.5rem; cursor: pointer; }
+  
+  /* Hero Slider */
+  .hero-slider { height: 75vh; width: 100%; margin-top: var(--nav-height); }
+  .hero-slide { position: relative; display: flex; align-items: center; }
+  .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .hero-slide::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, var(--bg-color) 0%, rgba(12,12,12,0.8) 30%, rgba(12,12,12,0.2) 60%, transparent 100%), linear-gradient(to top, var(--bg-color) 0%, transparent 20%); }
+  .hero-content { position: relative; z-index: 2; padding: 0 40px; max-width: 50%; }
+  .hero-title { font-size: 3.5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.1; }
+  .hero-meta { display: flex; align-items: center; gap: 15px; margin-bottom: 1rem; color: var(--text-dark); }
+  .hero-meta .rating { color: #f5c518; font-weight: 600; }
+  .hero-overview { font-size: 1rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 2rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hero-btn { background-color: var(--primary-color); padding: 12px 28px; border-radius: 50px; font-weight: 600; transition: transform 0.2s ease; }
+  .hero-btn:hover { transform: scale(1.05); }
+  .swiper-pagination-bullet-active { background: var(--primary-color); }
 
-  .movie-card { display: block; cursor: pointer; transition: transform 0.3s ease; }
-  .poster-wrapper { position: relative; width: 100%; border-radius: 6px; overflow: hidden; background-color: #222; display: flex; flex-direction: column; }
-  .movie-poster-container { position: relative; overflow: hidden; width:100%; flex-grow:1; aspect-ratio: 2 / 3; }
-  .movie-poster { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
-  .poster-badge { position: absolute; top: 10px; left: 10px; background-color: var(--netflix-red); color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; z-index: 4; }
-  .rating-badge { position: absolute; bottom: 10px; right: 10px; background-color: transparent; color: white; padding: 5px; font-size: 0.8rem; font-weight: 700; z-index: 3; display: flex; align-items: center; gap: 5px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
-  .rating-badge .fa-star { color: #f5c518; }
-  .card-info-static { padding: 10px 8px; background-color: #1a1a1a; text-align: left; width: 100%; flex-shrink: 0; }
-  .card-info-title { font-size: 0.9rem; font-weight: 500; color: var(--text-light); margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card-info-meta { font-size: 0.75rem; color: var(--text-dark); margin: 0; }
-  @media (hover: hover) { .movie-card:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 20px rgba(229, 9, 20, 0.5); } .movie-card:hover .movie-poster { transform: scale(1.1); } }
-  .full-page-grid-container { padding-top: 100px; padding-bottom: 50px; }
+  /* Category Carousel */
+  .category-section { margin: 50px 0; }
+  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .category-title { font-size: 1.8rem; font-weight: 600; }
+  .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; }
+  .movie-carousel .swiper-slide { width: auto; }
+  .movie-card { display: block; }
+  .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  .movie-card:hover .movie-poster { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+  .card-title { font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { font-size: 0.8rem; color: var(--text-dark); }
+  .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
+
+  /* Full Page Grid */
+  .full-page-grid-container { padding: 120px 40px 50px; }
   .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; }
-  .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px 15px; }
-  .category-section { margin: 40px 0; }
-  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-  .category-title { font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 1.6rem; margin: 0; }
-  .see-all-link { color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
-  .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-height); background-color: #181818; border-top: 1px solid #282828; justify-content: space-around; align-items: center; z-index: 200; }
-  .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-dark); font-size: 10px; flex-grow: 1; padding: 5px 0; transition: color 0.2s ease; }
-  .nav-item i { font-size: 20px; margin-bottom: 4px; } .nav-item.active { color: var(--text-light); } .nav-item.active i { color: var(--netflix-red); }
-  .ad-container { margin: 40px 0; display: flex; justify-content: center; align-items: center; }
-  .telegram-join-section { background-color: #181818; padding: 40px 20px; text-align: center; margin: 50px -50px 0 -50px; }
-  .telegram-join-section .telegram-icon { font-size: 4rem; color: #2AABEE; margin-bottom: 15px; } .telegram-join-section h2 { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: var(--text-light); margin-bottom: 10px; }
-  .telegram-join-section p { font-size: 1.1rem; color: var(--text-dark); max-width: 600px; margin: 0 auto 25px auto; }
-  .telegram-join-button { display: inline-flex; align-items: center; gap: 10px; background-color: #2AABEE; color: white; padding: 12px 30px; border-radius: 50px; font-size: 1.1rem; font-weight: 700; transition: all 0.2s ease; }
-  .telegram-join-button:hover { transform: scale(1.05); background-color: #1e96d1; } .telegram-join-button i { font-size: 1.3rem; }
-  /* [NEW] Footer */
-  .main-footer { padding: 20px 50px; text-align: center; background-color: #181818; color: var(--text-dark); font-size: 0.9rem; }
-  .main-footer a { color: var(--text-dark); transition: color 0.2s ease; } .main-footer a:hover { color: var(--netflix-red); }
+  .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
+  .full-page-grid .movie-poster { width: 100%; }
+
+  /* Footer */
+  .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
+  .main-footer a { color: var(--primary-color); }
   
-  @media (max-width: 992px) { .nav-links { display: none; } }
+  /* Responsive */
+  @media (max-width: 992px) {
+    .nav-links, .search-form { display: none; }
+    .menu-toggle { display: block; }
+    .hero-content { max-width: 80%; }
+    .hero-title { font-size: 2.5rem; }
+  }
   @media (max-width: 768px) {
-      body { padding-bottom: var(--nav-height); } .main-nav { padding: 10px 15px; } main { padding: 0 15px; } .logo { font-size: 24px; }
-      .search-container { flex: 2; text-align: right; }
-      .search-input { width: 150px; }
-      /* [MODIFIED] Hero Section Height for Mobile */
-      .hero-section { height: 50vh; margin: 0 -15px;}
-      .hero-slide { padding: 15px; align-items: center; } .hero-content { max-width: 90%; text-align: center; } .hero-title { font-size: 2.8rem; } .hero-overview { display: none; }
-      .category-section { margin: 25px 0; } .category-title { font-size: 1.2rem; }
-      .category-grid, .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px 10px; }
-      .full-page-grid-container { padding-top: 80px; } .full-page-grid-title { font-size: 1.8rem; }
-      .bottom-nav { display: flex; } .ad-container { margin: 25px 0; }
-      .telegram-join-section { margin: 50px -15px 0 -15px; }
-      .telegram-join-section h2 { font-size: 2rem; } .telegram-join-section p { font-size: 1rem; }
-      .main-footer { padding: 20px 15px; }
+    .container, .full-page-grid-container { padding: 0 20px; }
+    .full-page-grid-container { padding-top: 100px; padding-bottom: 40px; }
+    .logo { font-size: 1.5rem; }
+    .hero-slider { height: 60vh; }
+    .hero-content { padding: 0 20px; max-width: 100%; text-align: center; }
+    .hero-meta { justify-content: center; }
+    .hero-overview { display: none; }
+    .category-title { font-size: 1.4rem; }
+    .movie-poster { width: 160px; }
+    .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
-<!-- [MODIFIED] Main navigation with new structure -->
-<header class="main-nav">
-    <div class="nav-left">
+
+<header class="main-header">
+    <div class="container header-content">
+        <a href="{{ url_for('home') }}" class="logo">PmwBD</a>
+        <nav class="nav-links">
+            <a href="{{ url_for('home') }}" class="active">Home</a>
+            <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Movies</a>
+            <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Series</a>
+            <a href="{{ url_for('genres_page') }}">Genres</a>
+        </nav>
+        <form method="GET" action="/" class="search-form">
+            <input type="search" name="q" class="search-input" placeholder="Search for movies, series..." value="{{ query|default('') }}">
+            <button class="search-btn" type="submit"><i class="fas fa-search"></i></button>
+        </form>
         <div class="menu-toggle"><i class="fas fa-bars"></i></div>
     </div>
-    <a href="{{ url_for('home') }}" class="logo">PmwBD</a>
-    <div class="nav-right">
-        <div class="search-container">
-            <form method="GET" action="/" class="search-form">
-                <input type="search" name="q" class="search-input" placeholder="Search..." value="{{ query|default('') }}" />
-            </form>
-        </div>
-    </div>
 </header>
-
-<!-- [NEW] Drawer Menu -->
-<div class="overlay"></div>
-<nav class="drawer-menu">
-    <a href="{{ url_for('home') }}">Home</a>
-    <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Movies</a>
-    <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Web Series</a>
-    <a href="{{ url_for('genres_page') }}">Genres</a>
-    <a href="{{ url_for('contact') }}">Request/Contact</a>
-    <a href="{{ url_for('disclaimer') }}">Disclaimer</a>
-    <a href="{{ url_for('dmca') }}">DMCA</a>
-</nav>
 
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-      <div class="poster-wrapper">
-        <div class="movie-poster-container">
-           <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-           {% if m.poster_badge %}<div class="poster-badge">{{ m.poster_badge }}</div>{% endif %}
-           {% if m.vote_average and m.vote_average > 0 %}<div class="rating-badge"><i class="fas fa-star"></i> {{ "%.1f"|format(m.vote_average) }}</div>{% endif %}
-        </div>
-        <div class="card-info-static">
-          <h4 class="card-info-title">{{ m.title }}</h4>
-          {% if m.release_date %}<p class="card-info-meta">{{ m.release_date.split('-')[0] }}</p>{% endif %}
-        </div>
-      </div>
+      <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+      <h4 class="card-title">{{ m.title }}</h4>
+      <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
     </a>
   {% endmacro %}
 
@@ -343,7 +328,7 @@ index_html = """
     <div class="full-page-grid-container">
         <h2 class="full-page-grid-title">{{ query }}</h2>
         {% if movies|length == 0 %}
-            <p style="text-align:center; color: var(--text-dark); margin-top: 40px;">No content found.</p>
+            <p>No content found.</p>
         {% else %}
             <div class="full-page-grid">
                 {% for m in movies %}
@@ -353,99 +338,97 @@ index_html = """
         {% endif %}
     </div>
   {% else %}
-    {% if recently_added %}<div class="hero-section">{% for movie in recently_added %}<div class="hero-slide {% if loop.first %}active{% endif %}" style="background-image: url('{{ movie.poster or '' }}');"><div class="hero-content"><h1 class="hero-title">{{ movie.title }}</h1><p class="hero-overview">{{ movie.overview }}</p><div class="hero-buttons">{% if movie.watch_link and not movie.is_coming_soon %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}<a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-secondary"><i class="fas fa-info-circle"></i> More Info</a></div></div></div>{% endfor %}</div>{% endif %}
-
-    <!-- [NEW] Category buttons -->
-    <div class="category-buttons">
-        <a href="{{ url_for('movies_by_category', cat_name='Hindi') }}" class="cat-btn">Hindi</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Bengali') }}" class="cat-btn">Bengali</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}" class="cat-btn">Web Series</a>
-        <a href="{{ url_for('movies_by_category', cat_name='English') }}" class="cat-btn">English & Hollywood</a>
+    <!-- Hero Slider -->
+    <div class="swiper hero-slider">
+        <div class="swiper-wrapper">
+        {% for movie in recently_added %}
+            <div class="swiper-slide hero-slide">
+                <img src="{{ movie.poster or '' }}" alt="" class="hero-bg-img">
+                <div class="container hero-content">
+                    <h1 class="hero-title">{{ movie.title }}</h1>
+                    <div class="hero-meta">
+                        {% if movie.vote_average %}<span class="rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</span>{% endif %}
+                        {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
+                        {% if movie.genres %}<span>{{ movie.genres|first }}</span>{% endif %}
+                    </div>
+                    <p class="hero-overview">{{ movie.overview }}</p>
+                    <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="hero-btn">Watch Now <i class="fas fa-play"></i></a>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+        <div class="swiper-pagination"></div>
     </div>
 
-    {% macro render_grid_section(title, movies_list, endpoint, cat_name) %}
+    <div class="container">
+    {% macro render_carousel_section(title, movies_list, endpoint, cat_name) %}
         {% if movies_list %}
-        <div class="category-section">
+        <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for(endpoint, cat_name=cat_name) }}" class="see-all-link">See All ></a>
+                <a href="{{ url_for(endpoint, cat_name=cat_name) }}" class="view-all-link">View All</a>
             </div>
-            <div class="category-grid">
-                {% for m in movies_list %}
-                    {{ render_movie_card(m) }}
-                {% endfor %}
+            <div class="swiper movie-carousel">
+                <div class="swiper-wrapper">
+                    {% for m in movies_list %}
+                    <div class="swiper-slide">{{ render_movie_card(m) }}</div>
+                    {% endfor %}
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
             </div>
-        </div>
+        </section>
         {% endif %}
     {% endmacro %}
 
-    <!-- [MODIFIED] New category sections -->
-    {{ render_grid_section('Trending Now', trending_movies, 'movies_by_category', 'Trending') }}
-    {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
-    {{ render_grid_section('Latest Movies', latest_movies, 'movies_by_category', 'Latest Movie') }}
-    {{ render_grid_section('Web Series', latest_series, 'movies_by_category', 'Latest Series') }}
-    {% if ad_settings.native_banner_code %}<div class="ad-container">{{ ad_settings.native_banner_code|safe }}</div>{% endif %}
-    {{ render_grid_section('Hindi', hindi_movies, 'movies_by_category', 'Hindi') }}
-    {{ render_grid_section('Bengali', bengali_movies, 'movies_by_category', 'Bengali') }}
-    {{ render_grid_section('English & Hollywood', english_movies, 'movies_by_category', 'English') }}
-    {{ render_grid_section('Coming Soon', coming_soon_movies, 'coming_soon', '') }}
-    
-    <div class="telegram-join-section">
-        <i class="fa-brands fa-telegram telegram-icon"></i>
-        <h2>Join Our Telegram Channel</h2>
-        <p>Get the latest movie updates, news, and direct download links right on your phone!</p>
-        <a href="{{ main_channel_link or '#' }}" target="_blank" class="telegram-join-button"><i class="fa-brands fa-telegram"></i> Join Main Channel</a>
+    <!-- Category Sections -->
+    {{ render_carousel_section('Trending Now', trending_movies, 'movies_by_category', 'Trending') }}
+    {{ render_carousel_section('Latest Movies', latest_movies, 'movies_by_category', 'Latest Movie') }}
+    {{ render_carousel_section('Web Series', latest_series, 'movies_by_category', 'Latest Series') }}
+    {{ render_carousel_section('Hindi', hindi_movies, 'movies_by_category', 'Hindi') }}
+    {{ render_carousel_section('Bengali', bengali_movies, 'movies_by_category', 'Bengali') }}
+    {{ render_carousel_section('English & Hollywood', english_movies, 'movies_by_category', 'English') }}
+    {{ render_carousel_section('Coming Soon', coming_soon_movies, 'coming_soon', '') }}
     </div>
+    
   {% endif %}
 </main>
-<nav class="bottom-nav">
-    <a href="{{ url_for('home') }}" class="nav-item {% if request.endpoint == 'home' %}active{% endif %}">
-        <i class="fas fa-home"></i><span>Home</span>
-    </a>
-    <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}" class="nav-item">
-        <i class="fas fa-film"></i><span>Movies</span>
-    </a>
-    <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}" class="nav-item">
-        <i class="fas fa-tv"></i><span>Series</span>
-    </a>
-    <a href="{{ url_for('genres_page') }}" class="nav-item {% if request.endpoint == 'genres_page' %}active{% endif %}">
-        <i class="fas fa-layer-group"></i><span>Genres</span>
-    </a>
-    <a href="{{ url_for('contact') }}" class="nav-item {% if request.endpoint == 'contact' %}active{% endif %}">
-        <i class="fas fa-envelope"></i><span>Request</span>
-    </a>
-</nav>
-<!-- [NEW] Footer -->
+
 <footer class="main-footer">
-    <a href="https://t.me/PrimeCineZone" target="_blank" rel="noopener">&copy; ALL RIGHTS RESERVED PMWBD</a>
+    <p>&copy; 2024 PmwBD. All Rights Reserved. For educational purposes only.</p>
+    <p><a href="{{ url_for('disclaimer') }}">Disclaimer</a> | <a href="{{ url_for('dmca') }}">DMCA</a> | <a href="{{ url_for('contact') }}">Contact Us</a></p>
 </footer>
+
+<!-- [NEW] Swiper.js -->
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
-    const nav = document.querySelector('.main-nav');
-    window.addEventListener('scroll', () => { window.scrollY > 50 ? nav.classList.add('scrolled') : nav.classList.remove('scrolled'); });
-    document.addEventListener('DOMContentLoaded', function() { 
-        const slides = document.querySelectorAll('.hero-slide'); 
-        if (slides.length > 1) { 
-            let currentSlide = 0; 
-            const showSlide = (index) => slides.forEach((s, i) => s.classList.toggle('active', i === index)); 
-            setInterval(() => { currentSlide = (currentSlide + 1) % slides.length; showSlide(currentSlide); }, 5000); 
+    // Sticky Header
+    const header = document.querySelector('.main-header');
+    window.addEventListener('scroll', () => {
+        window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled');
+    });
+
+    // Hero Slider
+    new Swiper('.hero-slider', {
+        loop: true,
+        autoplay: { delay: 5000 },
+        pagination: { el: '.swiper-pagination', clickable: true },
+    });
+
+    // Movie Carousels
+    new Swiper('.movie-carousel', {
+        slidesPerView: 'auto',
+        spaceBetween: 20,
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+        breakpoints: {
+            320: { spaceBetween: 15 },
+            768: { spaceBetween: 20 },
         }
-        
-        // [NEW] Drawer Menu Logic
-        const menuToggle = document.querySelector('.menu-toggle');
-        const drawerMenu = document.querySelector('.drawer-menu');
-        const overlay = document.querySelector('.overlay');
-        menuToggle.addEventListener('click', () => {
-            drawerMenu.classList.toggle('open');
-            overlay.classList.toggle('open');
-        });
-        overlay.addEventListener('click', () => {
-            drawerMenu.classList.remove('open');
-            overlay.classList.remove('open');
-        });
     });
 </script>
-{% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-{% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
 </body>
 </html>
 """
