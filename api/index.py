@@ -670,27 +670,47 @@ def admin():
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         
+        # Step 1: Collect all data from the form first
         movie_data = {
             "title": request.form.get("title").strip(),
             "type": content_type,
-            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-            "backdrop": request.form.get("backdrop").strip() or None,
+            "poster": request.form.get("poster").strip(),
+            "backdrop": request.form.get("backdrop").strip(),
             "overview": request.form.get("overview").strip(),
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "screenshots": [url.strip() for url in request.form.get("screenshots").splitlines() if url.strip()],
-            "episodes": [], "links": [], "streaming_links": [], "categories": [] # Default empty
+            "episodes": [], "links": [], "streaming_links": [], "categories": [] # Defaults
         }
         
-        # Merge with TMDb data if available
+        # Step 2: Fetch data from TMDB if an ID is provided
         tmdb_id = request.form.get("tmdb_id")
         if tmdb_id:
             tmdb_details = get_tmdb_details_from_api(tmdb_id, content_type)
             if tmdb_details:
-                # Keep manually entered data over TMDB data
-                final_data = tmdb_details
-                final_data.update({k: v for k, v in movie_data.items() if v})
-                movie_data = final_data
+                # Step 3: Fill in ONLY the empty fields from the form with TMDB data
+                # This prioritizes manual entries over fetched data
+                movie_data['title'] = movie_data['title'] or tmdb_details.get('title')
+                movie_data['overview'] = movie_data['overview'] or tmdb_details.get('overview')
+                movie_data['poster'] = movie_data['poster'] or tmdb_details.get('poster')
+                movie_data['backdrop'] = movie_data['backdrop'] or tmdb_details.get('backdrop')
+                
+                # If form genres are empty, use TMDB genres
+                if not movie_data['genres'] and tmdb_details.get('genres'):
+                    movie_data['genres'] = tmdb_details['genres']
 
+                # Add extra details from TMDB that are not on the form
+                movie_data['release_date'] = tmdb_details.get('release_date')
+                movie_data['vote_average'] = tmdb_details.get('vote_average')
+
+        # Step 4: Final check for poster and backdrop
+        # Use placeholder only if poster is still empty after everything
+        if not movie_data['poster']:
+            movie_data['poster'] = PLACEHOLDER_POSTER
+        # Keep backdrop as None if it's empty
+        if not movie_data['backdrop']:
+            movie_data['backdrop'] = None
+
+        # Step 5: Add links based on content type
         if content_type == "movie":
             movie_data["watch_link"] = request.form.get("watch_link", "").strip() or None
             movie_data["streaming_links"] = [
