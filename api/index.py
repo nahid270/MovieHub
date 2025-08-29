@@ -67,7 +67,7 @@ def inject_globals():
     return dict(website_name=WEBSITE_NAME)
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (No Changes Here, Already Perfect) ===========================
+# === [START] HTML TEMPLATES (Admin Panel has been updated) ===============================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -400,6 +400,16 @@ admin_html = """
         .dynamic-item .btn-danger { position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; }
         hr { border: 0; height: 1px; background-color: var(--light-gray); margin: 50px 0; }
         .tmdb-fetcher { display: flex; gap: 10px; }
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: var(--dark-gray); padding: 30px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-close { background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; }
+        #search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
+        .result-item { cursor: pointer; text-align: center; }
+        .result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; transition: transform 0.2s; }
+        .result-item:hover img { transform: scale(1.05); border: 2px solid var(--netflix-red); }
+        .result-item p { font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -407,16 +417,16 @@ admin_html = """
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method</legend>
-        <div class="form-group"><label for="tmdb_url_input">Fetch from TMDB (Paste Movie/Series URL)</label>
+        <div class="form-group"><label for="tmdb_search_query">Search by Movie/Series Name</label>
             <div class="tmdb-fetcher">
-                <input type="url" id="tmdb_url_input" placeholder="https://www.themoviedb.org/movie/xxxxx-movie-title">
-                <button type="button" id="tmdb_find_btn" class="btn btn-primary" onclick="fetchFromTmdb()">Find</button>
+                <input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame">
+                <button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button>
             </div>
         </div>
     </fieldset>
     <form method="post">
         <input type="hidden" name="tmdb_id" id="tmdb_id">
-        <fieldset><legend>Manual Details</legend>
+        <fieldset><legend>Content Details</legend>
             <div class="form-group"><label>Title:</label><input type="text" name="title" id="title" required></div>
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL (Slider Image):</label><input type="url" name="backdrop" id="backdrop"></div>
@@ -427,10 +437,6 @@ admin_html = """
         </fieldset>
         <div id="movie_fields">
             <fieldset><legend>Movie Links</legend>
-                <div class="form-group"><label>Watch Link (Main Embed):</label><input type="url" name="watch_link"></div><hr>
-                <p><b>Streaming Links (Optional)</b></p>
-                <div class="form-group"><label>Server 1 Link:</label><input type="url" name="streaming_link_1"></div>
-                <div class="form-group"><label>Server 2 Link:</label><input type="url" name="streaming_link_2"></div><hr>
                 <p><b>Direct Download Links</b></p>
                 <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p"></div>
                 <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p"></div>
@@ -460,7 +466,23 @@ admin_html = """
     {% endfor %}
     </tbody></table></div>
 </div>
+
+<!-- Search Results Modal -->
+<div class="modal-overlay" id="search-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Select Content</h2>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div id="search-results"><p>Type a name and click search to see results.</p></div>
+    </div>
+</div>
+
 <script>
+    const modal = document.getElementById('search-modal');
+    const searchResultsContainer = document.getElementById('search-results');
+    const searchBtn = document.getElementById('tmdb_search_btn');
+
     function toggleFields() {
         const isSeries = document.getElementById('content_type').value === 'series';
         document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none';
@@ -477,15 +499,64 @@ admin_html = """
             <div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`;
         c.appendChild(d);
     }
-    async function fetchFromTmdb() {
-        const url = document.getElementById('tmdb_url_input').value;
-        if (!url) return alert('Please enter a TMDb URL.');
-        const btn = document.getElementById('tmdb_find_btn');
-        btn.disabled = true; btn.innerHTML = 'Finding...';
+    
+    // --- New TMDb Search and Fetch Logic ---
+
+    function openModal() { modal.style.display = 'flex'; }
+    function closeModal() { modal.style.display = 'none'; }
+
+    async function searchTmdb() {
+        const query = document.getElementById('tmdb_search_query').value;
+        if (!query) return alert('Please enter a movie or series name to search.');
+        
+        searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...';
+        searchResultsContainer.innerHTML = '<p>Loading results...</p>';
+        openModal();
+
+        try {
+            const response = await fetch('/admin/api/search_tmdb?query=' + encodeURIComponent(query));
+            const results = await response.json();
+            if (!response.ok) throw new Error(results.error);
+
+            if (results.length === 0) {
+                searchResultsContainer.innerHTML = '<p>No results found.</p>';
+                return;
+            }
+
+            searchResultsContainer.innerHTML = ''; // Clear previous results
+            results.forEach(item => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result-item';
+                resultDiv.onclick = () => selectResult(item.id, item.media_type);
+                resultDiv.innerHTML = `
+                    <img src="${item.poster}" alt="${item.title}">
+                    <p>${item.title} (${item.year})</p>
+                `;
+                searchResultsContainer.appendChild(resultDiv);
+            });
+        } catch (error) {
+            searchResultsContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+        } finally {
+            searchBtn.disabled = false; searchBtn.innerHTML = 'Search';
+        }
+    }
+
+    function selectResult(tmdbId, mediaType) {
+        closeModal();
+        // Construct a dummy URL for the existing fetch details function
+        const url = `https://www.themoviedb.org/${mediaType}/${tmdbId}`;
+        getTmdbDetails(url);
+    }
+
+    async function getTmdbDetails(url) {
+        const btn = document.getElementById('tmdb_search_btn'); // Use search btn for status
+        btn.disabled = true; btn.innerHTML = 'Fetching...';
         try {
             const response = await fetch('/admin/api/fetch_tmdb?url=' + encodeURIComponent(url));
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
+            
+            // Populate the form
             document.getElementById('tmdb_id').value = data.tmdb_id || '';
             document.getElementById('title').value = data.title || '';
             document.getElementById('overview').value = data.overview || '';
@@ -493,8 +564,14 @@ admin_html = """
             document.getElementById('backdrop').value = data.backdrop || '';
             document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
             document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie';
+            
+            alert(`'${data.title}' details have been filled. Please add download links and save.`);
             toggleFields();
-        } catch (error) { alert('Failed to fetch from TMDB. ' + error.message); } finally { btn.disabled = false; btn.innerHTML = 'Find'; }
+        } catch (error) {
+            alert('Failed to fetch details from TMDB. ' + error.message);
+        } finally {
+            btn.disabled = false; btn.innerHTML = 'Search';
+        }
     }
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
@@ -541,10 +618,6 @@ edit_html = """
     </fieldset>
     <div id="movie_fields">
         <fieldset><legend>Movie Links</legend>
-            <div class="form-group"><label>Watch Link (Main Embed):</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}"></div><hr>
-            <p><b>Streaming Links</b></p>
-            <div class="form-group"><label>Server 1 Link:</label><input type="url" name="streaming_link_1" value="{{ (movie.streaming_links | selectattr('name', 'equalto', 'Server 1') | map(attribute='url') | first) or '' }}"></div>
-            <div class="form-group"><label>Server 2 Link:</label><input type="url" name="streaming_link_2" value="{{ (movie.streaming_links | selectattr('name', 'equalto', 'Server 2') | map(attribute='url') | first) or '' }}"></div><hr>
             <p><b>Download Links</b></p>
             <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" value="{% for l in movie.links %}{% if l.quality == '480p' %}{{ l.url }}{% endif %}{% endfor %}"></div>
             <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" value="{% for l in movie.links %}{% if l.quality == '720p' %}{{ l.url }}{% endif %}{% endfor %}"></div>
@@ -655,7 +728,6 @@ def movies_by_category(cat_name):
 
 @app.route('/genres')
 def genres_page():
-    # You need a genres_html template for this to work
     return "Genres page coming soon!", 200
 
 @app.route('/genre/<genre_name>')
@@ -670,7 +742,6 @@ def admin():
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         
-        # Step 1: Collect all data from the form first
         movie_data = {
             "title": request.form.get("title").strip(),
             "type": content_type,
@@ -679,46 +750,26 @@ def admin():
             "overview": request.form.get("overview").strip(),
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "screenshots": [url.strip() for url in request.form.get("screenshots").splitlines() if url.strip()],
-            "episodes": [], "links": [], "streaming_links": [], "categories": [] # Defaults
+            "episodes": [], "links": [], "streaming_links": [], "categories": []
         }
         
-        # Step 2: Fetch data from TMDB if an ID is provided
         tmdb_id = request.form.get("tmdb_id")
         if tmdb_id:
             tmdb_details = get_tmdb_details_from_api(tmdb_id, content_type)
             if tmdb_details:
-                # Step 3: Fill in ONLY the empty fields from the form with TMDB data
-                # This prioritizes manual entries over fetched data
                 movie_data['title'] = movie_data['title'] or tmdb_details.get('title')
                 movie_data['overview'] = movie_data['overview'] or tmdb_details.get('overview')
                 movie_data['poster'] = movie_data['poster'] or tmdb_details.get('poster')
                 movie_data['backdrop'] = movie_data['backdrop'] or tmdb_details.get('backdrop')
-                
-                # If form genres are empty, use TMDB genres
-                if not movie_data['genres'] and tmdb_details.get('genres'):
-                    movie_data['genres'] = tmdb_details['genres']
-
-                # Add extra details from TMDB that are not on the form
+                if not movie_data['genres']: movie_data['genres'] = tmdb_details.get('genres', [])
                 movie_data['release_date'] = tmdb_details.get('release_date')
                 movie_data['vote_average'] = tmdb_details.get('vote_average')
 
-        # Step 4: Final check for poster and backdrop
-        # Use placeholder only if poster is still empty after everything
-        if not movie_data['poster']:
-            movie_data['poster'] = PLACEHOLDER_POSTER
-        # Keep backdrop as None if it's empty
-        if not movie_data['backdrop']:
-            movie_data['backdrop'] = None
+        if not movie_data['poster']: movie_data['poster'] = PLACEHOLDER_POSTER
+        if not movie_data['backdrop']: movie_data['backdrop'] = None
 
-        # Step 5: Add links based on content type
         if content_type == "movie":
-            movie_data["watch_link"] = request.form.get("watch_link", "").strip() or None
-            movie_data["streaming_links"] = [
-                {"name": name, "url": url} for name, url in [("Server 1", request.form.get("streaming_link_1")), ("Server 2", request.form.get("streaming_link_2"))] if url and url.strip()
-            ]
-            movie_data["links"] = [
-                {"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()
-            ]
+            movie_data["links"] = [{"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()]
         else: # Series
             for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')):
                 if s and e and w:
@@ -749,13 +800,11 @@ def edit_movie(movie_id):
         }
         
         if content_type == "movie":
-            update_data["watch_link"] = request.form.get("watch_link").strip() or None
-            update_data["streaming_links"] = [{"name": name, "url": url} for name, url in [("Server 1", request.form.get("streaming_link_1")), ("Server 2", request.form.get("streaming_link_2"))] if url and url.strip()]
             update_data["links"] = [{"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": ""}})
         else: # Series
             update_data["episodes"] = [{"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()} for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')) if s and e and w]
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": "", "watch_link": "", "streaming_links": ""}})
+            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         
         return redirect(url_for('admin'))
 
@@ -767,6 +816,34 @@ def delete_movie(movie_id):
     movies.delete_one({"_id": ObjectId(movie_id)})
     return redirect(url_for('admin'))
 
+# --- NEW/UPDATED API Routes for Admin Panel ---
+
+@app.route('/admin/api/search_tmdb')
+@requires_auth
+def search_tmdb():
+    query = request.args.get('query')
+    if not query:
+        return jsonify({"error": "Query parameter is missing"}), 400
+    try:
+        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={query}"
+        res = requests.get(search_url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        
+        results = []
+        for item in data.get('results', []):
+            if item.get('media_type') in ['movie', 'tv']:
+                results.append({
+                    "id": item.get('id'),
+                    "title": item.get('title') or item.get('name'),
+                    "year": (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0],
+                    "poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}" if item.get('poster_path') else "https://via.placeholder.com/200x300.png?text=No+Image",
+                    "media_type": item.get('media_type')
+                })
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/admin/api/fetch_tmdb')
 @requires_auth
 def fetch_tmdb_data():
@@ -774,15 +851,19 @@ def fetch_tmdb_data():
     if not tmdb_url: return jsonify({"error": "URL parameter is missing"}), 400
     try:
         path_parts = [part for part in urlparse(unquote(tmdb_url)).path.split('/') if part]
-        content_type = "series" if path_parts[0] == 'tv' else "movie"
+        content_type_str = path_parts[0]
         tmdb_id = path_parts[1].split('-')[0]
-        if not tmdb_id.isdigit(): raise ValueError("Invalid ID.")
+
+        if not tmdb_id.isdigit() or content_type_str not in ['movie', 'tv']:
+             raise ValueError("Invalid TMDb URL structure.")
+        
+        content_type = "series" if content_type_str == 'tv' else "movie"
         details = get_tmdb_details_from_api(tmdb_id, content_type)
         return jsonify(details) if details else (jsonify({"error": "Details not found on TMDB"}), 404)
     except Exception as e:
-        return jsonify({"error": f"An error occurred: {e}"}), 400
+        return jsonify({"error": f"An error occurred while parsing URL: {e}"}), 400
 
-# This is a dummy webhook route. It does nothing but returns 'ok'.
+
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
     return jsonify(status='ok')
