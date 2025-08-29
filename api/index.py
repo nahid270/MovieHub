@@ -1,179 +1,486 @@
-# ====================================================================================
-# FINAL & GUARANTEED: Single-File Professional Movie Website (Vercel-Optimized)
-# Version 3.0: Refactored database connection for Vercel's serverless environment.
-# This version uses a lazy-loading pattern for the database to ensure stability.
-# ====================================================================================
+# index.py
+"""
+Single-file Professional Movie Website (Flask)
+- One file: index.py
+- Supports: MongoDB (optional) or in-memory fallback
+- Features: Home, Search, Movie Details, Player links, Auth, Watchlist, Admin (add + TMDB import)
+- Exported `app` for Vercel import; also runnable locally.
+ENV:
+  FLASK_SECRET, MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD, BASE_URL
+"""
 
 from __future__ import annotations
-import os, re, json, uuid, hashlib
+import os
+import re
+import json
+import uuid
+import hashlib
 from datetime import datetime
+from typing import Optional
 
+# Flask
 try:
-    from flask import Flask, request, redirect, url_for, render_template_string, session, abort, jsonify
+    from flask import Flask, request, redirect, url_for, render_template_string, session, abort
 except Exception:
-    raise SystemExit("Flask is required. Please add it to requirements.txt")
+    raise SystemExit("Flask is required. Install with: pip install Flask")
 
+# optional
 try:
     import requests
 except Exception:
     requests = None
+
+# optional pymongo
 try:
-    from pymongo import MongoClient, DESCENDING
+    from pymongo import MongoClient
     PYMONGO_AVAILABLE = True
 except Exception:
     PYMONGO_AVAILABLE = False
 
-# --- App Configuration ---
+# App config
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET", "a_strong_default_secret_key_for_safety")
+app.secret_key = os.getenv("FLASK_SECRET", "dev_secret_please_change")
+BASE_URL = os.getenv("BASE_URL", "")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-MONGO_URI = os.getenv("MONGO_URI")
 
 # --------------------------
-# Vercel-Optimized Database Layer
+# In-memory Collection (fallback)
 # --------------------------
-db_connection = None # গ্লোবাল ভ্যারিয়েবল কানেকশন ক্যাশ করার জন্য
-
 class MemoryCollection:
-    # ... (এই ক্লাসের কোড অপরিবর্তিত) ...
-    def __init__(self): self.data = {}
+    def __init__(self):
+        self.data = {}
+
     def insert_one(self, doc):
-        _id = doc.get("_id") or str(uuid.uuid4()); doc["_id"] = _id
-        self.data[_id] = json.loads(json.dumps(doc)); return type("R", (), {"inserted_id": _id})
+        _id = doc.get("_id") or str(uuid.uuid4())
+        doc["_id"] = _id
+        # store deep-serializable copy
+        self.data[_id] = json.loads(json.dumps(doc))
+        return type("IR", (), {"inserted_id": _id})
+
     def find_one(self, query):
         for doc in self.data.values():
-            if self._match(doc, query): return json.loads(json.dumps(doc))
+            if _match(doc, query):
+                return json.loads(json.dumps(doc))
         return None
+
     def find(self, query=None, sort=None, limit=0, skip=0):
-        items = [d for d in list(self.data.values()) if self._match(d, query)]
+        items = list(self.data.values())
+        if query:
+            items = [d for d in items if _match(d, query)]
         if sort:
-            key, direction = sort[0]; items.sort(key=lambda d: d.get(key,0), reverse=(direction<0))
-        if skip: items=items[skip:]
-        if limit: items=items[:limit]
-        for d in items: yield json.loads(json.dumps(d))
+            key, direction = sort[0]
+            items.sort(key=lambda d: d.get(key, 0), reverse=(direction < 0))
+        if skip:
+            items = items[skip:]
+        if limit:
+            items = items[:limit]
+        for d in items:
+            yield json.loads(json.dumps(d))
+
     def update_one(self, query, update):
         for _id, doc in list(self.data.items()):
-            if self._match(doc, query):
-                if "$set" in update: doc.update(update["$set"])
+            if _match(doc, query):
+                if "$set" in update:
+                    for k, v in update["$set"].items():
+                        _set_nested(doc, k, v)
                 if "$inc" in update:
-                    for k,v in update["$inc"].items(): doc[k]=doc.get(k,0)+v
-                self.data[_id]=doc; return
-    def _match(self, doc, query):
-        for k, v in (query or {}).items():
-            if isinstance(v, dict) and "$regex" in v:
-                if re.search(v["$regex"],str(doc.get(k,"")),re.IGNORECASE) is None: return False
-            elif doc.get(k) != v: return False
-        return True
+                    for k, v in update["$inc"].items():
+                        doc[k] = doc.get(k, 0) + v
+                self.data[_id] = doc
+                return
 
-def get_db():
-    """
-    এই ফাংশনটি ডেটাবেস কানেকশন তৈরি করে এবং রিটার্ন করে।
-    এটি Vercel-এর জন্য অপটিমাইজ করা। কানেকশন শুধু जरूरतের সময় তৈরি হবে।
-    """
-    global db_connection
-    if db_connection:
-        return db_connection
+    def delete_one(self, query):
+        for _id, doc in list(self.data.items()):
+            if _match(doc, query):
+                del self.data[_id]
+                return
+
+# nested setter helper
+def _set_nested(d, path, value):
+    parts = path.split(".")
+    cur = d
+    for p in parts[:-1]:
+        cur = cur.setdefault(p, {})
+    cur[parts[-1]] = value
+
+# simple matcher for memory queries
+def _match(doc, query):
+    if not query:
+        return True
+    for k, v in query.items():
+        if isinstance(v, dict) and "$regex" in v:
+            pat = v["$regex"]
+            flags = re.IGNORECASE if v.get("$options") == "i" else 0
+            if re.search(pat, str(doc.get(k, "")), flags) is None:
+                return False
+        else:
+            if doc.get(k) != v:
+                return False
+    return True
+
+# --------------------------
+# Database initialization (robust)
+# --------------------------
+MONGO_URI = os.getenv("MONGO_URI", "").strip()
+USE_MONGO = False
+movies_col = None
+users_col = None
+
+def initialize_database():
+    global USE_MONGO, movies_col, users_col
+    # default fallback
+    movies_col = MemoryCollection()
+    users_col = MemoryCollection()
+    USE_MONGO = False
 
     if MONGO_URI and PYMONGO_AVAILABLE:
         try:
-            client = MongoClient(MONGO_URI)
-            db_name = MONGO_URI.split('/')[-1].split('?')[0]
-            if not db_name: raise ValueError("No database name in MONGO_URI")
+            client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+            # try simple server selection to validate connection
+            client.server_info()
+            # determine DB name from URI last path segment if present, else use 'movie_site'
+            db_name = None
+            # try to parse DB from URI (works for typical mongodb+srv://.../dbname)
+            if "/" in MONGO_URI:
+                parts = MONGO_URI.rsplit("/", 1)
+                if len(parts) > 1 and parts[1]:
+                    db_name = parts[1].split("?")[0]
+            if not db_name:
+                db_name = "movie_site"
             db = client[db_name]
             movies = db["movies"]
             users = db["users"]
-            movies.create_index([("slug", 1)], unique=True)
-            print("[INFO] MongoDB connection successful.")
-            db_connection = (movies, users)
-            return db_connection
+            # ensure indexes (safe if already exists)
+            try:
+                movies.create_index([("slug", 1)], unique=True)
+                movies.create_index([("views", -1)])
+            except Exception:
+                pass
+            movies_col = movies
+            users_col = users
+            USE_MONGO = True
+            print("[INFO] Connected to MongoDB, DB:", db_name)
         except Exception as e:
-            print(f"[WARN] MongoDB connection failed: {e}. Falling back to memory store.")
+            print("[WARN] MongoDB connect failed, using memory DB. Error:", e)
+    else:
+        if not MONGO_URI:
+            print("[INFO] MONGO_URI not set. Using in-memory DB.")
+        else:
+            print("[INFO] pymongo not available. Using in-memory DB.")
 
-    # ফলব্যাক: ইন-মেমোরি ডেটাবেস
-    print("[INFO] Using temporary in-memory data store.")
-    movies_mem = MemoryCollection()
-    users_mem = MemoryCollection()
-    # অ্যাডমিন এবং ডেমো ডেটা যোগ করা হচ্ছে
-    if not users_mem.find_one({"username": ADMIN_USERNAME}):
-        users_mem.insert_one({"username": ADMIN_USERNAME, "password_hash": hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest(), "role": "admin"})
-    if not list(movies_mem.find()):
-        sample_movies = [
-            {"title": "Inception", "year": 2010, "genres": ["Sci-Fi"], "description": "A thief who steals corporate secrets...", "poster_url": "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq27gApcjBJUuNXa6.jpg", "rating": 8.8, "slug": "inception-2010", "views": 0},
-            {"title": "Interstellar", "year": 2014, "genres": ["Sci-Fi"], "description": "A team of explorers travel through a wormhole...", "poster_url": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg", "rating": 8.6, "slug": "interstellar-2014", "views": 0}
-        ]
-        for movie in sample_movies: movies_mem.insert_one(movie)
-    db_connection = (movies_mem, users_mem)
-    return db_connection
+# Initialize on import (Vercel import will run this)
+initialize_database()
 
 # --------------------------
-# Helper Functions & Templates (No changes here)
+# Seed admin user if missing
+# --------------------------
+def seed_admin():
+    try:
+        if not users_col.find_one({"username": ADMIN_USERNAME}):
+            users_col.insert_one({
+                "username": ADMIN_USERNAME,
+                "password_hash": hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest(),
+                "role": "admin",
+                "created_at": datetime.utcnow().isoformat()
+            })
+    except Exception:
+        # in case pymongo returns cursor exceptions etc., ignore and continue
+        pass
+
+seed_admin()
+
+# --------------------------
+# Utilities
 # --------------------------
 def slugify(text: str) -> str:
-    text = re.sub(r"[^a-zA-Z0-9\s-]", "", text).strip().lower()
-    return re.sub(r"\s+", "-", text)
+    text = re.sub(r"[^a-zA-Z0-9\s-]", "", text)
+    text = re.sub(r"\s+", "-", text.strip())
+    return text.lower()
 
-def require_login(role: str | None = None):
+def require_login(role: Optional[str] = None):
     def decorator(fn):
         def wrapper(*args, **kwargs):
-            if not session.get("user"): return redirect(url_for("login", next=request.path))
-            if role and session["user"].get("role") != role: abort(403)
+            u = session.get("user")
+            if not u:
+                return redirect(url_for("login", next=request.path))
+            if role and u.get("role") != role:
+                abort(403)
             return fn(*args, **kwargs)
         wrapper.__name__ = fn.__name__
         return wrapper
     return decorator
 
-BASE_TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>{{ meta_title or 'MovieZone' }}</title><script src="https://cdn.tailwindcss.com"></script><style>body{font-family: 'Inter', sans-serif;}.card{transition:all .2s ease}.card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.1)}</style></head><body class="bg-gray-100 text-gray-800"><header class="bg-white/90 backdrop-blur-lg sticky top-0 z-50 border-b"><div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3"><a href="{{ url_for('home') }}" class="font-bold text-2xl">🎬 MovieZone</a><nav class="flex items-center gap-2">{% if user %}<a class="px-3 py-2 rounded-lg hover:bg-gray-200 text-sm" href="{{ url_for('watchlist') }}">⭐ Watchlist</a>{% if user.role == 'admin' %}<a class="px-3 py-2 rounded-lg hover:bg-gray-200 text-sm" href="{{ url_for('admin') }}">🛠️ Admin</a>{% endif %}<a class="px-3 py-2 rounded-lg hover:bg-gray-200 text-sm" href="{{ url_for('logout') }}">Logout</a>{% else %}<a class="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm" href="{{ url_for('login') }}">Login</a>{% endif %}</nav></div></header><main class="max-w-6xl mx-auto px-4 py-8">{% block content %}{% endblock %}</main><footer class="border-t py-6 text-center text-sm text-gray-500">© {{ now.year }} MovieZone</footer></body></html>"""
-HOME_TEMPLATE = """{% extends base %}{% block content %}<h1 class="text-3xl font-bold mb-6">{{ page_title or 'Trending Movies' }}</h1><div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">{% for m in movies %}<a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-xl overflow-hidden border bg-white shadow-sm"><img src="{{ m.poster_url or 'https://placehold.co/400x600?text=No+Image' }}" alt="{{ m.title }}" class="w-full aspect-[2/3] object-cover" /><div class="p-3"><h3 class="font-semibold text-md truncate">{{ m.title }}</h3><p class="text-xs text-gray-500">{{ m.year }}</p></div></a>{% endfor %}</div>{% if movies|length == 0 %}<div class="bg-white p-6 rounded-xl border">No movies found.</div>{% endif %}{% endblock %}"""
-DETAILS_TEMPLATE = """{% extends base %}{% block content %}<div class="grid grid-cols-1 lg:grid-cols-3 gap-8"><div class="lg:col-span-2 bg-white rounded-xl border p-5"><h1 class="text-4xl font-extrabold">{{ movie.title }} <span class="text-gray-400 font-normal">({{ movie.year }})</span></h1><div class="mt-2 flex flex-wrap gap-2">{% for g in movie.genres %}<span class="text-xs bg-gray-200 px-2 py-1 rounded-full">{{g}}</span>{% endfor %}</div><p class="mt-4 text-gray-700 leading-relaxed">{{ movie.description }}</p></div><aside class="space-y-6"><img src="{{ movie.poster_url or 'https://placehold.co/400x600?text=No+Image' }}" class="w-full rounded-xl border shadow-md" /><div class="bg-white rounded-xl border p-4 text-sm"><p><strong>Rating:</strong> {{ movie.rating or 'N/A' }}</p><p><strong>Views:</strong> {{ movie.views or 0 }}</p>{% if user %}<form method="post" action="{{ url_for('toggle_watchlist', slug=movie.slug) }}" class="mt-4"><button class="w-full px-4 py-2 rounded-lg font-semibold {{ 'bg-yellow-400' if in_watchlist else 'bg-yellow-200' }}">⭐ {{ 'Remove from' if in_watchlist else 'Add to' }} Watchlist</button></form>{% else %}<a href="{{ url_for('login', next=request.path) }}" class="block text-center mt-4 px-4 py-2 rounded-lg bg-yellow-200 font-semibold">Login to Add</a>{% endif %}</div></aside></div>{% endblock %}"""
-AUTH_TEMPLATE = """{% extends base %}{% block content %}<div class="max-w-sm mx-auto bg-white rounded-xl border p-8"><h1 class="text-2xl font-bold text-center mb-6">{{ mode|title }}</h1>{% if error %}<p class="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm">{{error}}</p>{% endif %}<form method="post" class="space-y-4"><input name="username" placeholder="Username" class="w-full border rounded-lg px-4 py-2" required /><input name="password" placeholder="Password" type="password" class="w-full border rounded-lg px-4 py-2" required /><button class="w-full px-4 py-3 rounded-lg bg-blue-600 text-white font-semibold">{{ mode|title }}</button></form><div class="text-center mt-4 text-sm">{% if mode == 'login' %}Don't have an account? <a href="{{ url_for('register') }}" class="text-blue-600">Register</a>{% else %}Already have an account? <a href="{{ url_for('login') }}" class="text-blue-600">Login</a>{% endif %}</div></div>{% endblock %}"""
-ADMIN_TEMPLATE = """{% extends base %}{% block content %}<h1 class="text-3xl font-bold mb-6">Admin Panel</h1><div class="grid md:grid-cols-2 gap-8"><div class="bg-white border rounded-xl p-5"><h2 class="text-xl font-semibold mb-4">Add / Update Movie</h2><form method="post" action="{{ url_for('admin_add') }}" class="space-y-3"><input class="w-full border rounded-lg p-2" name="title" placeholder="Title*" required><input class="w-full border rounded-lg p-2" name="year" placeholder="Year"><input class="w-full border rounded-lg p-2" name="genres" placeholder="Genres (comma-separated)"><input class="w-full border rounded-lg p-2" name="poster_url" placeholder="Poster URL"><textarea class="w-full border rounded-lg p-2" name="description" placeholder="Description" rows="3"></textarea><button class="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold">Save Movie</button></form></div><div class="bg-white border rounded-xl p-5"><h2 class="text-xl font-semibold mb-4">Import from TMDB</h2><form method="post" action="{{ url_for('admin_tmdb') }}" class="space-y-3"><input class="w-full border rounded-lg p-2" name="tmdb_id" placeholder="TMDB ID" required><button class="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold" {% if not tmdb_enabled %}disabled{% endif %}>Import</button></form>{% if not tmdb_enabled %}<p class="text-sm text-red-600 mt-2">TMDB_API_KEY not set.</p>{% endif %}</div></div>{% endblock %}"""
+def upsert_movie(doc: dict) -> str:
+    doc.setdefault("title", "Untitled")
+    doc.setdefault("year", None)
+    doc.setdefault("language", "Unknown")
+    doc.setdefault("genres", [])
+    doc.setdefault("description", "")
+    doc.setdefault("poster_url", "")
+    doc.setdefault("trailer_url", "")
+    doc.setdefault("stream_links", [])
+    doc.setdefault("rating", None)
+    doc.setdefault("views", 0)
+    slug = doc.get("slug") or slugify(f"{doc['title']} {doc.get('year') or ''}")
+    doc["slug"] = slug
+
+    existing = movies_col.find_one({"slug": slug})
+    if existing:
+        # update
+        movies_col.update_one({"_id": existing["_id"]}, {"$set": doc})
+        return existing["_id"]
+    res = movies_col.insert_one(doc)
+    return str(res.inserted_id)
 
 # --------------------------
-# Routes (All routes now use get_db())
+# Templates (kept inline for single-file)
+# --------------------------
+BASE_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ meta_title or 'MovieSite' }}</title>
+  {% if base_url %}<link rel="canonical" href="{{ base_url + request.path }}" />{% endif %}
+  <meta name="description" content="{{ meta_desc or 'Watch movies online' }}" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+  <style>.container{max-width:1100px;margin:0 auto} .card{transition:transform .15s ease} .card:hover{transform:translateY(-2px)}</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="border-b bg-white/80 sticky top-0 z-40">
+    <div class="container px-4 py-3 flex items-center gap-3">
+      <a href="{{ url_for('home') }}" class="font-bold text-xl">🎬 MovieZone</a>
+      <form action="{{ url_for('search') }}" method="get" class="flex-1">
+        <input name="q" value="{{ request.args.get('q','') }}" placeholder="Search movies..." class="w-full rounded-xl border px-4 py-2" />
+      </form>
+      {% if user %}
+        <a class="px-3 py-2 rounded-xl" href="{{ url_for('watchlist') }}">⭐ Watchlist</a>
+        {% if user.role == 'admin' %}<a class="px-3 py-2 rounded-xl" href="{{ url_for('admin') }}">🛠️ Admin</a>{% endif %}
+        <a class="px-3 py-2 rounded-xl" href="{{ url_for('logout') }}">Logout</a>
+      {% else %}
+        <a class="px-3 py-2 rounded-xl" href="{{ url_for('login') }}">Login</a>
+      {% endif %}
+    </div>
+  </header>
+  <main class="container px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="border-t py-6 text-center text-sm text-slate-500">© {{ now.year }} MovieZone</footer>
+</body>
+</html>"""
+
+HOME_TEMPLATE = """{% extends base %}
+{% block content %}
+  <h1 class="text-2xl font-semibold mb-4">Trending</h1>
+  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    {% for m in movies %}
+    <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+      <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" alt="{{ m.title }}" class="w-full aspect-[2/3] object-cover" />
+      <div class="p-3">
+        <div class="font-medium">{{ m.title }}</div>
+        <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+{% endblock %}"""
+
+DETAILS_TEMPLATE = """{% extends base %}
+{% block content %}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-4">
+      {% if movie.trailer_url %}
+      <div class="rounded-2xl overflow-hidden border bg-black">
+        <iframe class="w-full aspect-video" src="{{ movie.trailer_url|replace('watch?v=','embed/') }}" allowfullscreen></iframe>
+      </div>
+      {% endif %}
+      {% if movie.stream_links %}
+      <div class="rounded-2xl overflow-hidden border bg-black p-4">
+        <video id="player" class="video-js vjs-default-skin w-full aspect-video" controls preload="auto" poster="{{ movie.poster_url }}"></video>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for s in movie.stream_links %}
+            <a href="{{ url_for('play', slug=movie.slug, idx=loop.index0) }}" class="px-3 py-1 rounded-xl border bg-white">Play: {{ s.label }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <div class="rounded-2xl overflow-hidden border bg-white p-4">
+        <h1 class="text-2xl font-bold">{{ movie.title }} <span class="text-slate-500">({{ movie.year }})</span></h1>
+        <div class="text-sm text-slate-500">{{ movie.language }} • {{ (movie.genres or [])|join(', ') }}</div>
+        <p class="mt-3 text-slate-700">{{ movie.description }}</p>
+      </div>
+    </div>
+    <aside class="space-y-4">
+      <img src="{{ movie.poster_url or 'https://picsum.photos/400/600?blur=2' }}" class="w-full rounded-2xl border" />
+      <div class="rounded-2xl overflow-hidden border bg-white p-4 text-sm">
+        <div>Rating: {{ movie.rating or 'N/A' }}</div>
+        <div>Views: {{ movie.views or 0 }}</div>
+        {% if user %}
+          <form method="post" action="{{ url_for('toggle_watchlist', slug=movie.slug) }}" class="mt-3">
+            <button class="px-4 py-2 rounded-xl border bg-amber-50">⭐ {{ 'Remove' if in_watchlist else 'Add' }} Watchlist</button>
+          </form>
+        {% else %}
+          <a href="{{ url_for('login', next=request.path) }}" class="inline-block mt-3 px-4 py-2 rounded-xl border">Login to add to Watchlist</a>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+{% endblock %}"""
+
+AUTH_TEMPLATE = """{% extends base %}
+{% block content %}
+  <div class="max-w-md mx-auto bg-white rounded-2xl border p-6">
+    <h1 class="text-xl font-semibold mb-4">{{ mode|title }}</h1>
+    {% if error %}<p class="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm">{{ error }}</p>{% endif %}
+    <form method="post" class="space-y-3">
+      <input name="username" placeholder="Username" class="w-full border rounded-xl px-3 py-2" required />
+      <input name="password" placeholder="Password" type="password" class="w-full border rounded-xl px-3 py-2" required />
+      <button class="w-full px-4 py-2 rounded-xl bg-black text-white">{{ mode|title }}</button>
+    </form>
+  </div>
+{% endblock %}"""
+
+ADMIN_TEMPLATE = """{% extends base %}
+{% block content %}
+  <h1 class="text-2xl font-semibold mb-4">Admin Panel</h1>
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="bg-white border rounded-2xl p-4">
+      <h2 class="font-semibold mb-3">Add / Update Movie</h2>
+      <form method="post" action="{{ url_for('admin_add') }}" class="space-y-2">
+        <input class="w-full border rounded-xl px-3 py-2" name="title" placeholder="Title" required>
+        <input class="w-full border rounded-xl px-3 py-2" name="year" placeholder="Year">
+        <input class="w-full border rounded-xl px-3 py-2" name="language" placeholder="Language">
+        <input class="w-full border rounded-xl px-3 py-2" name="genres" placeholder="Genres (comma-separated)">
+        <input class="w-full border rounded-xl px-3 py-2" name="poster_url" placeholder="Poster URL">
+        <input class="w-full border rounded-xl px-3 py-2" name="trailer_url" placeholder="Trailer URL (YouTube)">
+        <textarea class="w-full border rounded-xl px-3 py-2" name="description" placeholder="Description"></textarea>
+        <textarea class="w-full border rounded-xl px-3 py-2" name="stream_links" placeholder='Stream links JSON (e.g., [{"label":"1080p","url":"...m3u8"}])'></textarea>
+        <button class="px-4 py-2 rounded-xl bg-black text-white">Save</button>
+      </form>
+    </div>
+    <div class="bg-white border rounded-2xl p-4">
+      <h2 class="font-semibold mb-3">Import from TMDB</h2>
+      <form method="post" action="{{ url_for('admin_tmdb') }}" class="space-y-2">
+        <input class="w-full border rounded-xl px-3 py-2" name="tmdb_id" placeholder="TMDB Movie ID" required>
+        <button class="px-4 py-2 rounded-xl bg-black text-white">Import</button>
+      </form>
+      <p class="text-sm text-slate-500 mt-2">Requires TMDB_API_KEY</p>
+    </div>
+  </div>
+{% endblock %}"""
+
+WATCHLIST_TEMPLATE = """{% extends base %}
+{% block content %}
+  <h1 class="text-xl font-semibold mb-4">My Watchlist</h1>
+  {% if items|length == 0 %}
+    <div class="p-6 bg-white rounded-2xl border">Your watchlist is empty.</div>
+  {% else %}
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {% for m in items %}
+      <a href="{{ url_for('movie_details', slug=m.slug) }}" class="card rounded-2xl overflow-hidden border bg-white">
+        <img src="{{ m.poster_url or 'https://picsum.photos/300/450?blur=2' }}" class="w-full aspect-[2/3] object-cover"/>
+        <div class="p-3">
+          <div class="font-medium">{{ m.title }}</div>
+          <div class="text-xs text-slate-500">{{ m.year }} • {{ (m.genres or [])|join(', ') }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}"""
+
+# --------------------------
+# Routes
 # --------------------------
 @app.context_processor
 def inject_globals():
-    return {"base": BASE_TEMPLATE, "user": session.get("user"), "now": datetime.utcnow()}
+    u = session.get("user")
+    class UserWrap:
+        def __init__(self, raw):
+            self.username = raw.get("username")
+            self.role = raw.get("role", "user")
+    return {"base": BASE_TEMPLATE, "user": UserWrap(u) if u else None, "now": datetime.utcnow(), "base_url": BASE_URL}
 
 @app.route("/")
 def home():
-    movies_col, _ = get_db()
-    movies = list(movies_col.find({}, sort=[("views", -1)], limit=20))
-    return render_template_string(HOME_TEMPLATE, movies=movies)
+    try:
+        items = list(movies_col.find({}, sort=[("views", -1)], limit=20))
+    except Exception:
+        # fallback in case pymongo object doesn't accept same signature
+        items = list(movies_col.find())
+    return render_template_string(HOME_TEMPLATE, movies=items, meta_title="Home • MovieZone")
+
+@app.route("/search")
+def search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return redirect(url_for("home"))
+    regex = {"$regex": re.escape(q), "$options": "i"}
+    try:
+        movies = list(movies_col.find({"title": regex}, sort=[("views", -1)], limit=60))
+    except Exception:
+        movies = [m for m in movies_col.find() if re.search(re.escape(q), m.get("title",""), re.IGNORECASE)]
+    return render_template_string(HOME_TEMPLATE, movies=movies, meta_title=f"Search: {q} • MovieZone")
 
 @app.route("/movie/<slug>")
 def movie_details(slug):
-    movies_col, users_col = get_db()
     movie = movies_col.find_one({"slug": slug})
-    if not movie: abort(404)
+    if not movie:
+        abort(404)
+    # increment views
     movies_col.update_one({"_id": movie["_id"]}, {"$inc": {"views": 1}})
+    g0 = (movie.get("genres") or [None])[0]
+    related = []
+    if g0:
+        try:
+            related = list(movies_col.find({"genres": g0}, sort=[("views", -1)], limit=10))
+        except Exception:
+            related = [m for m in movies_col.find() if g0 in (m.get("genres") or [])]
     user = session.get("user")
-    in_watchlist = False
+    in_watch = False
     if user:
-        user_data = users_col.find_one({"username": user["username"]})
-        if user_data and slug in user_data.get("watchlist", []): in_watchlist = True
-    return render_template_string(DETAILS_TEMPLATE, movie=movie, in_watchlist=in_watchlist)
+        ud = users_col.find_one({"username": user["username"]})
+        if ud and slug in ud.get("watchlist", []):
+            in_watch = True
+    return render_template_string(DETAILS_TEMPLATE, movie=movie, related=[r for r in related if r.get("slug") != slug][:10], in_watchlist=in_watch, meta_title=f"{movie['title']} • MovieZone", meta_desc=(movie.get("description") or "")[:150])
+
+@app.route("/play/<slug>/<int:idx>")
+def play(slug, idx):
+    movie = movies_col.find_one({"slug": slug})
+    if not movie:
+        abort(404)
+    links = movie.get("stream_links") or []
+    if not (0 <= idx < len(links)):
+        abort(404)
+    return redirect(links[idx]["url"])
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    _, users_col = get_db()
+    next_url = request.args.get("next") or url_for("home")
     if request.method == "POST":
-        username, password = request.form["username"].strip(), request.form["password"]
-        user = users_col.find_one({"username": username})
-        if user and user["password_hash"] == hashlib.sha256(password.encode()).hexdigest():
-            session["user"] = {"username": user["username"], "role": user.get("role", "user")}
-            return redirect(request.args.get("next") or url_for("home"))
-        return render_template_string(AUTH_TEMPLATE, mode="login", error="Invalid credentials.")
+        username = request.form.get("username","").strip()
+        password = request.form.get("password","")
+        u = users_col.find_one({"username": username})
+        if u and u.get("password_hash") == hashlib.sha256(password.encode()).hexdigest():
+            session["user"] = {"username": u["username"], "role": u.get("role","user")}
+            return redirect(next_url)
+        return render_template_string(AUTH_TEMPLATE, mode="login", error="Invalid credentials")
     return render_template_string(AUTH_TEMPLATE, mode="login")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    _, users_col = get_db()
     if request.method == "POST":
-        username, password = request.form["username"].strip(), request.form["password"]
+        username = request.form.get("username","").strip()
+        password = request.form.get("password","")
+        if not (4 <= len(username) <= 20 and re.match(r"^[a-zA-Z0-9_]+$", username)):
+            return render_template_string(AUTH_TEMPLATE, mode="register", error="Username must be 4-20 chars and alphanumeric.")
+        if len(password) < 6:
+            return render_template_string(AUTH_TEMPLATE, mode="register", error="Password must be at least 6 characters.")
         if users_col.find_one({"username": username}):
-            return render_template_string(AUTH_TEMPLATE, mode="register", error="Username exists.")
+            return render_template_string(AUTH_TEMPLATE, mode="register", error="Username already exists.")
         users_col.insert_one({"username": username, "password_hash": hashlib.sha256(password.encode()).hexdigest(), "role": "user", "watchlist": []})
         session["user"] = {"username": username, "role": "user"}
         return redirect(url_for("home"))
@@ -181,68 +488,134 @@ def register():
 
 @app.route("/logout")
 def logout():
-    session.pop("user", None); return redirect(url_for("home"))
+    session.pop("user", None)
+    return redirect(url_for("home"))
 
 @app.route("/watchlist")
 @require_login()
 def watchlist():
-    movies_col, users_col = get_db()
-    user_data = users_col.find_one({"username": session["user"]["username"]})
-    slugs = user_data.get("watchlist", [])
-    movies = [m for s in slugs if (m := movies_col.find_one({"slug": s}))]
-    return render_template_string(HOME_TEMPLATE, movies=movies, page_title="My Watchlist")
+    u = users_col.find_one({"username": session["user"]["username"]})
+    slugs = u.get("watchlist", [])
+    movies = []
+    for s in slugs:
+        m = movies_col.find_one({"slug": s})
+        if m:
+            movies.append(m)
+    return render_template_string(WATCHLIST_TEMPLATE, items=movies, meta_title="My Watchlist")
 
 @app.route("/watchlist/toggle/<slug>", methods=["POST"])
 @require_login()
 def toggle_watchlist(slug):
-    _, users_col = get_db()
-    user_data = users_col.find_one({"username": session["user"]["username"]})
-    watchlist = set(user_data.get("watchlist", []))
-    if slug in watchlist: watchlist.remove(slug)
-    else: watchlist.add(slug)
-    users_col.update_one({"_id": user_data["_id"]}, {"$set": {"watchlist": list(watchlist)}})
+    u = users_col.find_one({"username": session["user"]["username"]})
+    wl = set(u.get("watchlist", []))
+    if slug in wl:
+        wl.remove(slug)
+    else:
+        wl.add(slug)
+    users_col.update_one({"_id": u["_id"]}, {"$set": {"watchlist": list(wl)}})
     return redirect(url_for("movie_details", slug=slug))
 
 @app.route("/admin")
 @require_login("admin")
 def admin():
-    return render_template_string(ADMIN_TEMPLATE, tmdb_enabled=bool(requests and os.getenv("TMDB_API_KEY")))
+    try:
+        items = list(movies_col.find({}, sort=[("_id", -1)], limit=24))
+    except Exception:
+        items = list(movies_col.find())
+    tmdb_enabled = bool(requests and os.getenv("TMDB_API_KEY"))
+    return render_template_string(ADMIN_TEMPLATE, movies=items, tmdb_enabled=tmdb_enabled)
 
 @app.route("/admin/add", methods=["POST"])
 @require_login("admin")
 def admin_add():
-    movies_col, _ = get_db()
     form = request.form
+    stream_links = form.get("stream_links", "").strip()
+    try:
+        stream_links = json.loads(stream_links) if stream_links else []
+    except Exception:
+        stream_links = []
     doc = {
-        "title": form.get("title").strip(),
-        "year": int(form.get("year")) if form.get("year").isdigit() else None,
-        "genres": [g.strip() for g in form.get("genres", "").split(",") if g.strip()],
-        "poster_url": form.get("poster_url"), "description": form.get("description")
+        "title": form.get("title", "Untitled").strip(),
+        "year": int(form.get("year")) if (form.get("year") and form.get("year").isdigit()) else None,
+        "language": form.get("language","").strip() or None,
+        "genres": [g.strip() for g in (form.get("genres","").split(",") if form.get("genres") else []) if g.strip()],
+        "poster_url": form.get("poster_url","").strip(),
+        "trailer_url": form.get("trailer_url","").strip(),
+        "description": form.get("description","").strip(),
+        "stream_links": stream_links,
     }
-    slug = slugify(f"{doc['title']} {doc.get('year') or ''}")
-    existing = movies_col.find_one({"slug": slug})
-    if existing: movies_col.update_one({"slug": slug}, {"$set": doc})
-    else: doc["slug"] = slug; doc["views"] = 0; movies_col.insert_one(doc)
+    upsert_movie(doc)
     return redirect(url_for("admin"))
 
 @app.route("/admin/tmdb", methods=["POST"])
 @require_login("admin")
 def admin_tmdb():
-    movies_col, _ = get_db()
-    api_key, tmdb_id = os.getenv("TMDB_API_KEY"), request.form.get("tmdb_id")
-    if not (api_key and requests and tmdb_id): abort(400)
+    if not requests:
+        return "requests lib not available", 500
+    api_key = os.getenv("TMDB_API_KEY")
+    if not api_key:
+        return "TMDB_API_KEY not set", 400
+    tmdb_id = request.form.get("tmdb_id")
     try:
-        res = requests.get(f"https://api.themoviedb.org/3/movie/{tmdb_id}?api_key={api_key}").json()
-        year = (res.get("release_date") or "")[:4]
+        r = requests.get(f"https://api.themoviedb.org/3/movie/{tmdb_id}", params={"api_key": api_key, "language": "en-US"}, timeout=10)
+        r.raise_for_status()
+        mv = r.json()
+        title = mv.get("title") or mv.get("name")
+        year = (mv.get("release_date") or "")[:4]
+        poster = mv.get("poster_path")
+        poster_url = f"https://image.tmdb.org/t/p/w500{poster}" if poster else ""
+        genres = [g.get("name") for g in (mv.get("genres") or [])]
         doc = {
-            "title": res.get("title"), "year": int(year) if year.isdigit() else None,
-            "genres": [g["name"] for g in res.get("genres", [])],
-            "poster_url": f"https://image.tmdb.org/t/p/w500{res.get('poster_path')}" if res.get('poster_path') else "",
-            "description": res.get("overview"), "rating": res.get("vote_average")
+            "title": title,
+            "year": int(year) if year.isdigit() else None,
+            "language": (mv.get("original_language") or "").upper(),
+            "genres": genres,
+            "poster_url": poster_url,
+            "trailer_url": "",
+            "description": mv.get("overview") or "",
+            "stream_links": [],
+            "rating": mv.get("vote_average"),
         }
-        slug = slugify(f"{doc['title']} {doc.get('year') or ''}")
-        doc["slug"] = slug
-        if movies_col.find_one({"slug": slug}): movies_col.update_one({"slug": slug}, {"$set": doc})
-        else: doc["views"] = 0; movies_col.insert_one(doc)
-    except Exception as e: print(f"TMDB Import Error: {e}")
+        upsert_movie(doc)
+    except Exception as e:
+        print("TMDB import failed:", e)
     return redirect(url_for("admin"))
+
+# simple error handlers
+@app.errorhandler(404)
+def not_found(e):
+    return render_template_string("""{% extends base %}{% block content %}
+      <div class='bg-white border rounded-2xl p-8 text-center'>
+        <div class='text-6xl'>🧐</div>
+        <h1 class='text-2xl font-semibold mt-3'>Page not found</h1>
+        <a href='{{ url_for('home') }}' class='inline-block mt-4 px-4 py-2 rounded-xl border'>Go Home</a>
+      </div>{% endblock %}"""), 404
+
+@app.errorhandler(403)
+def forbidden(e):
+    return "<h1>403 - Forbidden</h1>", 403
+
+# --------------------------
+# Seed sample data (if memory and empty)
+# --------------------------
+if not USE_MONGO:
+    try:
+        has_any = bool(list(movies_col.find()))
+    except Exception:
+        has_any = False
+    if not has_any:
+        sample = [
+            {"title": "Inception", "year": 2010, "language": "EN", "genres": ["Sci-Fi","Thriller"], "description": "A thief who steals corporate secrets through dream-sharing technology…", "poster_url": "https://image.tmdb.org/t/p/w500/qmDpIHrmpJINaRKAfWQfftjCdyi.jpg", "trailer_url": "https://www.youtube.com/watch?v=YoHD9XEInc0", "stream_links":[{"label":"720p","url":"https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"}], "rating":8.8},
+            {"title": "Interstellar", "year": 2014, "language": "EN", "genres": ["Sci-Fi","Adventure"], "description": "A team travels through a wormhole...", "poster_url": "https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg", "trailer_url": "https://www.youtube.com/watch?v=zSWdZVtXT7E", "rating":8.6},
+            {"title": "The Dark Knight", "year": 2008, "language": "EN", "genres": ["Action","Crime"], "description": "Batman vs Joker...", "poster_url": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg", "rating":9.0},
+        ]
+        for m in sample:
+            upsert_movie(m)
+
+# Entrypoint for local dev
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "5000"))
+    print(f"Starting locally at http://127.0.0.1:{port}  (admin: {ADMIN_USERNAME})")
+    app.run(host="0.0.0.0", port=port, debug=True)
+
+# `app` is exported for Vercel / other serverless imports
