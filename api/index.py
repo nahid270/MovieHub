@@ -45,6 +45,7 @@ try:
     client = MongoClient(MONGO_URI)
     db = client["movie_db"]
     movies = db["movies"]
+    settings = db["settings"] # New collection for ads and other settings
     print("SUCCESS: Successfully connected to MongoDB!")
 except Exception as e:
     print(f"FATAL: Error connecting to MongoDB: {e}.")
@@ -53,10 +54,15 @@ except Exception as e:
 
 @app.context_processor
 def inject_globals():
-    return dict(website_name=WEBSITE_NAME)
+    """Injects global variables into all templates."""
+    ad_settings = settings.find_one({"_id": "ad_config"})
+    return dict(
+        website_name=WEBSITE_NAME,
+        ad_settings=ad_settings or {} # Pass ad settings to all templates
+    )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Admin Panel Completely Rebuilt) ===========================
+# === [START] HTML TEMPLATES (Updated with Ad and Language Features) ====================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -104,11 +110,12 @@ index_html = """
   .category-title { font-size: 1.8rem; font-weight: 600; }
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; }
   .movie-carousel .swiper-slide { width: auto; }
-  .movie-card { display: block; }
+  .movie-card { display: block; position: relative; }
   .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
   .movie-card:hover .movie-poster { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
   .card-title { font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
+  .language-tag { position: absolute; top: 10px; left: 10px; background-color: var(--primary-color); color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
   .full-page-grid-container { padding: 120px 40px 50px; }
   .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; }
@@ -139,6 +146,7 @@ index_html = """
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+      {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
       <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
       <h4 class="card-title">{{ m.title }}</h4>
       <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
@@ -248,6 +256,7 @@ detail_html = """
   .episode-list { display: flex; flex-direction: column; gap: 10px; }
   .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
   .episode-name { font-weight: 500; }
+  .ad-container { margin: 20px 0; text-align: center; }
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -271,6 +280,7 @@ detail_html = """
             <div class="detail-meta">
                 {% if movie.vote_average %}<div class="meta-item rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</div>{% endif %}
                 {% if movie.release_date %}<div class="meta-item"><i class="fas fa-calendar-alt"></i> {{ movie.release_date.split('-')[0] }}</div>{% endif %}
+                {% if movie.language %}<div class="meta-item"><i class="fas fa-language"></i> {{ movie.language }}</div>{% endif %}
                 {% if movie.genres %}<div class="meta-item"><i class="fas fa-tag"></i> {{ movie.genres | join(' / ') }}</div>{% endif %}
             </div>
             <p class="detail-overview">{{ movie.overview }}</p>
@@ -289,13 +299,20 @@ detail_html = """
         </nav>
         <div class="tabs-content">
             <div class="tab-pane active" id="downloads">
-            {% if movie.type == 'movie' %}
-                {% if movie.links %}<div class="link-group"><h3><i class="fas fa-download"></i> Direct Download</h3><div class="link-buttons">
-                    {% for link_item in movie.links %}<a href="{{ link_item.url }}" target="_blank" class="action-btn btn-primary">Download {{ link_item.quality }}</a>{% endfor %}
-                </div></div>{% endif %}
-                {% if not movie.links %}<p>No download links available yet.</p>{% endif %}
-            {% elif movie.type == 'series' %}<p>Please select a season tab to view episode links.</p>
-            {% else %}<p>No download links available.</p>{% endif %}
+                {# ADVERTISEMENT PLACEMENT #}
+                {% if ad_settings.ad_code_1 %}
+                <div class="ad-container">
+                    {{ ad_settings.ad_code_1 | safe }}
+                </div>
+                {% endif %}
+            
+                {% if movie.type == 'movie' %}
+                    {% if movie.links %}<div class="link-group"><h3><i class="fas fa-download"></i> Direct Download</h3><div class="link-buttons">
+                        {% for link_item in movie.links %}<a href="{{ link_item.url }}" target="_blank" class="action-btn btn-primary">Download {{ link_item.quality }}</a>{% endfor %}
+                    </div></div>{% endif %}
+                    {% if not movie.links %}<p>No download links available yet.</p>{% endif %}
+                {% elif movie.type == 'series' %}<p>Please select a season tab to view episode links.</p>
+                {% else %}<p>No download links available.</p>{% endif %}
             </div>
             {% if movie.type == 'series' and movie.episodes %}
                 {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
@@ -374,6 +391,21 @@ admin_html = """
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
     
+    <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
+    <form method="post">
+        <input type="hidden" name="form_action" value="update_ads">
+        <fieldset>
+            <legend>Ad Placement 1 (Details Page)</legend>
+            <div class="form-group">
+                <label for="ad_code_1">Ad Code (HTML/JS):</label>
+                <textarea id="ad_code_1" name="ad_code_1" rows="6" placeholder="Paste your ad code here...">{{ ad_settings.ad_code_1 or '' }}</textarea>
+            </div>
+        </fieldset>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
+    </form>
+    
+    <hr>
+    
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     
     <fieldset>
@@ -388,6 +420,7 @@ admin_html = """
     </fieldset>
     
     <form method="post">
+        <input type="hidden" name="form_action" value="add_content">
         <input type="hidden" name="tmdb_id" id="tmdb_id">
         
         <fieldset>
@@ -396,6 +429,7 @@ admin_html = """
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL (Slider Image):</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
+            <div class="form-group"><label>Language (for poster tag):</label><input type="text" name="language" id="language" placeholder="e.g., Hindi, English"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
         </fieldset>
@@ -572,6 +606,7 @@ edit_html = """
         <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
         <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
+        <div class="form-group"><label>Language (for poster tag):</label><input type="text" name="language" value="{{ movie.language or '' }}" placeholder="e.g., Hindi, English"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
     </fieldset>
@@ -680,50 +715,59 @@ def movies_by_category(cat_name):
 @requires_auth
 def admin():
     if request.method == "POST":
-        content_type = request.form.get("content_type", "movie")
-        
-        # Collect data from form
-        movie_data = {
-            "title": request.form.get("title").strip(),
-            "type": content_type,
-            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-            "backdrop": request.form.get("backdrop").strip() or None,
-            "overview": request.form.get("overview").strip(),
-            "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "episodes": [], 
-            "links": []
-        }
-        
-        # If tmdb_id is present, it means data was fetched, let's get the full details again for accuracy
-        tmdb_id = request.form.get("tmdb_id")
-        if tmdb_id:
-            media_type = "tv" if content_type == "series" else "movie"
-            tmdb_details = get_tmdb_details(tmdb_id, media_type)
-            if tmdb_details:
-                # Merge details, prioritizing fetched data for fields that are auto-filled
-                movie_data.update({
-                    'release_date': tmdb_details.get('release_date'),
-                    'vote_average': tmdb_details.get('vote_average')
-                })
+        form_action = request.form.get("form_action")
 
-        # Process links based on content type
-        if content_type == "movie":
-            movie_data["links"] = [{"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()]
-        else: # Series
-            seasons = request.form.getlist('episode_season[]')
-            numbers = request.form.getlist('episode_number[]')
-            titles = request.form.getlist('episode_title[]')
-            links = request.form.getlist('episode_watch_link[]')
-            for i in range(len(seasons)):
-                if seasons[i] and numbers[i] and links[i]:
-                    movie_data['episodes'].append({
-                        "season": int(seasons[i]), 
-                        "episode_number": int(numbers[i]), 
-                        "title": titles[i].strip(), 
-                        "watch_link": links[i].strip()
+        if form_action == "update_ads":
+            ad_code_1 = request.form.get("ad_code_1")
+            # Use upsert=True to create the document if it doesn't exist
+            settings.update_one(
+                {"_id": "ad_config"},
+                {"$set": {"ad_code_1": ad_code_1}},
+                upsert=True
+            )
+        
+        elif form_action == "add_content":
+            content_type = request.form.get("content_type", "movie")
+            
+            movie_data = {
+                "title": request.form.get("title").strip(),
+                "type": content_type,
+                "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+                "backdrop": request.form.get("backdrop").strip() or None,
+                "overview": request.form.get("overview").strip(),
+                "language": request.form.get("language").strip() or None, # New language field
+                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
+                "episodes": [], 
+                "links": []
+            }
+            
+            tmdb_id = request.form.get("tmdb_id")
+            if tmdb_id:
+                media_type = "tv" if content_type == "series" else "movie"
+                tmdb_details = get_tmdb_details(tmdb_id, media_type)
+                if tmdb_details:
+                    movie_data.update({
+                        'release_date': tmdb_details.get('release_date'),
+                        'vote_average': tmdb_details.get('vote_average')
                     })
 
-        movies.insert_one(movie_data)
+            if content_type == "movie":
+                movie_data["links"] = [{"quality": q, "url": u} for q, u in [("480p", request.form.get("link_480p")), ("720p", request.form.get("link_720p")), ("1080p", request.form.get("link_1080p"))] if u and u.strip()]
+            else: # Series
+                seasons = request.form.getlist('episode_season[]')
+                numbers = request.form.getlist('episode_number[]')
+                titles = request.form.getlist('episode_title[]')
+                links = request.form.getlist('episode_watch_link[]')
+                for i in range(len(seasons)):
+                    if seasons[i] and numbers[i] and links[i]:
+                        movie_data['episodes'].append({
+                            "season": int(seasons[i]), 
+                            "episode_number": int(numbers[i]), 
+                            "title": titles[i].strip(), 
+                            "watch_link": links[i].strip()
+                        })
+            movies.insert_one(movie_data)
+            
         return redirect(url_for('admin'))
 
     content_list = list(movies.find().sort('_id', -1))
@@ -732,10 +776,8 @@ def admin():
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    try:
-        obj_id = ObjectId(movie_id)
-    except:
-        return "Invalid ID", 400
+    try: obj_id = ObjectId(movie_id)
+    except: return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
     if not movie_obj: return "Movie not found", 404
 
@@ -746,6 +788,7 @@ def edit_movie(movie_id):
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
             "overview": request.form.get("overview").strip(),
+            "language": request.form.get("language").strip() or None, # New language field
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
         }
         
@@ -763,10 +806,8 @@ def edit_movie(movie_id):
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
-    try:
-        movies.delete_one({"_id": ObjectId(movie_id)})
-    except:
-        return "Invalid ID", 400
+    try: movies.delete_one({"_id": ObjectId(movie_id)})
+    except: return "Invalid ID", 400
     return redirect(url_for('admin'))
 
 # --- API Routes for Admin Panel ---
@@ -780,10 +821,8 @@ def api_search_tmdb():
         res = requests.get(search_url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        
         results = []
         for item in data.get('results', []):
-            # Filter out items without a poster
             if item.get('media_type') in ['movie', 'tv'] and item.get('poster_path'):
                 results.append({
                     "id": item.get('id'),
@@ -793,23 +832,16 @@ def api_search_tmdb():
                     "media_type": item.get('media_type')
                 })
         return jsonify(results)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route('/admin/api/details')
 @requires_auth
 def api_get_details():
-    tmdb_id = request.args.get('id')
-    media_type = request.args.get('type') # 'movie' or 'tv'
-    if not tmdb_id or not media_type:
-        return jsonify({"error": "ID and type parameters are required"}), 400
-    
+    tmdb_id, media_type = request.args.get('id'), request.args.get('type')
+    if not tmdb_id or not media_type: return jsonify({"error": "ID and type parameters are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
-    
-    if details:
-        return jsonify(details)
-    else:
-        return jsonify({"error": "Details not found on TMDb"}), 404
+    if details: return jsonify(details)
+    else: return jsonify({"error": "Details not found on TMDb"}), 404
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
