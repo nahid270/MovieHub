@@ -223,239 +223,133 @@ index_html = """
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>{{ website_name }} - Your Entertainment Hub</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.css"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PmwBD - Your Entertainment Hub</title>
+<!-- [NEW] Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- [NEW] Swiper.js CDN -->
+<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-  
-  /* [MODIFIED] Disney+ Inspired Color Palette */
-  :root { 
-    --primary-bg: #040714;
-    --secondary-bg: #131520;
-    --accent-color: #0072d2;
-    --accent-hover: #0082f0;
-    --text-light: #f9f9f9; 
-    --text-dark: #a8a9ae; 
-    --nav-height: 70px; 
-    --card-border: rgba(249, 249, 249, 0.1);
+  :root {
+    --primary-color: #E50914;
+    --bg-color: #0c0c0c;
+    --card-bg: #1a1a1a;
+    --text-light: #ffffff;
+    --text-dark: #a0a0a0;
+    --nav-height: 70px;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { 
-    font-family: 'Roboto', sans-serif; 
-    background-color: var(--primary-bg);
-    background-image: linear-gradient(to bottom, #040714, #0c1122);
-    color: var(--text-light); 
-    overflow-x: hidden; 
+  body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-light);
+    overflow-x: hidden;
   }
   a { text-decoration: none; color: inherit; }
-  ::-webkit-scrollbar { width: 8px; } 
-  ::-webkit-scrollbar-track { background: var(--secondary-bg); } 
-  ::-webkit-scrollbar-thumb { background: #333; } 
-  ::-webkit-scrollbar-thumb:hover { background: var(--accent-color); }
-  
-  .main-nav { 
-    position: fixed; top: 0; left: 0; width: 100%; 
-    padding: 0 36px; height: var(--nav-height); 
-    display: flex; justify-content: space-between; align-items: center; 
-    z-index: 1000; transition: background-color 0.3s ease;
-    background: linear-gradient(to bottom, rgba(4,7,20,0.8) 10%, rgba(4,7,20,0));
-  }
-  .main-nav.scrolled { background-color: var(--primary-bg); }
-  .nav-left, .nav-right { display: flex; align-items: center; gap: 20px; }
-  
-  .logo { 
-    font-family: 'Roboto', sans-serif; font-size: 28px; color: var(--text-light); 
-    font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  }
+  img { max-width: 100%; display: block; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #222; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: var(--primary-color); }
 
-  .menu-toggle { font-size: 24px; cursor: pointer; color: var(--text-light); z-index: 1002;}
+  /* Header */
+  .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
+  .main-header.scrolled { background-color: var(--bg-color); }
+  .header-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+  .logo { font-size: 2rem; font-weight: 700; color: var(--primary-color); }
+  .nav-links { display: flex; gap: 30px; }
+  .nav-links a { font-weight: 500; transition: color 0.2s ease; }
+  .nav-links a:hover, .nav-links a.active { color: var(--primary-color); }
+  .search-form { display: flex; align-items: center; background-color: rgba(255,255,255,0.1); border-radius: 50px; padding: 5px; }
+  .search-input { background: transparent; border: none; color: var(--text-light); padding: 5px 10px; width: 220px; font-size: 0.9rem; }
+  .search-input:focus { outline: none; }
+  .search-btn { background: var(--primary-color); border: none; color: var(--text-light); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display:grid; place-items:center; }
+  .menu-toggle { display: none; font-size: 1.5rem; cursor: pointer; }
   
-  .drawer-menu { 
-    position: fixed; top: 0; left: -280px; width: 280px; height: 100%; 
-    background-color: var(--secondary-bg); z-index: 1001; 
-    transition: left 0.3s ease; padding-top: 80px;
-    border-right: 1px solid var(--card-border);
-  }
-  .drawer-menu.open { left: 0; }
-  .drawer-menu a { display: block; padding: 15px 25px; color: var(--text-light); font-size: 1.1rem; font-weight: 500; border-bottom: 1px solid var(--card-border); }
-  .drawer-menu a:hover { background-color: var(--accent-color); }
-  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease; }
-  .overlay.open { opacity: 1; visibility: visible; }
-  
-  .search-container { position: relative; }
-  .search-input { 
-    background-color: rgba(0,0,0,0.3); border: 1px solid var(--text-dark); 
-    color: var(--text-light); padding: 8px 15px; border-radius: 20px; 
-    transition: all 0.3s ease; width: 250px; 
-  }
-  .search-input::placeholder { color: var(--text-dark); }
-  .search-input:focus { background-color: var(--secondary-bg); border-color: var(--accent-color); outline: none; }
-  
-  .search-results { 
-    position: absolute; top: 110%; right: 0; width: 300px; 
-    background-color: var(--secondary-bg); border-radius: 8px; 
-    max-height: 400px; overflow-y: auto; z-index: 1100; display: none; 
-    border: 1px solid var(--card-border);
-  }
-  .search-results a { display: flex; align-items: center; padding: 10px; text-decoration: none; color: var(--text-light); border-bottom: 1px solid var(--card-border); }
-  .search-results a:last-child { border-bottom: none; }
-  .search-results a:hover { background-color: var(--accent-color); }
-  .search-results img { width: 40px; height: 60px; object-fit: cover; margin-right: 10px; border-radius: 4px; }
-  .search-results .result-info h5 { margin: 0; font-size: 0.9rem; }
-  .search-results .result-info p { margin: 0; font-size: 0.8rem; color: var(--text-dark); }
-  
-  .hero-slider-container { margin-top: var(--nav-height); position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; margin-bottom: 40px; }
-  .hero-swiper { width: 100%; height: 100%; }
-  .hero-swiper .swiper-slide { position: relative; background-size: cover; background-position: center; display: flex; align-items: flex-end; color: white; text-decoration: none; }
-  .hero-swiper .swiper-slide::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 70%; background: linear-gradient(to top, var(--primary-bg) 10%, transparent 100%); z-index: 1; }
-  .hero-slide-content { position: relative; z-index: 2; padding: 40px; width: 100%; }
-  .hero-slide-title { font-size: 2.8rem; font-weight: 700; margin: 0 0 10px 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); }
-  .hero-slide-meta { font-size: 1rem; color: #ccc; display: flex; align-items: center; gap: 15px; }
-  .hero-slide-badge { background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); padding: 4px 12px; border-radius: 5px; font-size: 0.9rem; font-weight: bold; }
-  .hero-swiper .swiper-pagination-bullet { background-color: rgba(255, 255, 255, 0.5); width: 10px; height: 10px; opacity: 1; transition: all 0.3s ease; }
-  .hero-swiper .swiper-pagination-bullet-active { background-color: var(--accent-color); transform: scale(1.2); }
-  
-  main { padding: 0 50px; }
+  /* Hero Slider */
+  .hero-slider { height: 75vh; width: 100%; margin-top: var(--nav-height); }
+  .hero-slide { position: relative; display: flex; align-items: center; }
+  .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .hero-slide::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, var(--bg-color) 0%, rgba(12,12,12,0.8) 30%, rgba(12,12,12,0.2) 60%, transparent 100%), linear-gradient(to top, var(--bg-color) 0%, transparent 20%); }
+  .hero-content { position: relative; z-index: 2; padding: 0 40px; max-width: 50%; }
+  .hero-title { font-size: 3.5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.1; }
+  .hero-meta { display: flex; align-items: center; gap: 15px; margin-bottom: 1rem; color: var(--text-dark); }
+  .hero-meta .rating { color: #f5c518; font-weight: 600; }
+  .hero-overview { font-size: 1rem; color: var(--text-dark); line-height: 1.6; margin-bottom: 2rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hero-btn { background-color: var(--primary-color); padding: 12px 28px; border-radius: 50px; font-weight: 600; transition: transform 0.2s ease; }
+  .hero-btn:hover { transform: scale(1.05); }
+  .swiper-pagination-bullet-active { background: var(--primary-color); }
 
-  .category-buttons { padding: 20px 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; }
-  .cat-btn { 
-    padding: 10px 25px; background-color: var(--secondary-bg); 
-    border: 1px solid var(--card-border); color: var(--text-light); 
-    border-radius: 50px; font-size: 1rem; font-weight: 500; 
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
-  }
-  .cat-btn:hover { 
-    background-color: var(--accent-color); border-color: var(--accent-hover);
-    transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0, 114, 210, 0.4); 
-  }
+  /* Category Carousel */
+  .category-section { margin: 50px 0; }
+  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .category-title { font-size: 1.8rem; font-weight: 600; }
+  .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; }
+  .movie-carousel .swiper-slide { width: auto; }
+  .movie-card { display: block; }
+  .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  .movie-card:hover .movie-poster { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+  .card-title { font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { font-size: 0.8rem; color: var(--text-dark); }
+  .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
 
-  /* [MODIFIED] Disney+ Inspired Card Style */
-  .movie-card { 
-    display: block; cursor: pointer; border-radius: 8px; 
-    overflow: hidden; position: relative;
-    border: 3px solid transparent;
-    box-shadow: 0 10px 20px -10px rgba(0,0,0,0.75);
-    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  .movie-card:hover {
-    transform: scale(1.05);
-    border-color: var(--accent-color);
-    box-shadow: 0 15px 30px -10px rgba(0, 114, 210, 0.5);
-  }
-  .poster-wrapper { position: relative; width: 100%; border-radius: 5px; overflow: hidden; background-color: #222; display: flex; flex-direction: column; }
-  .movie-poster-container { position: relative; overflow: hidden; width:100%; flex-grow:1; aspect-ratio: 2 / 3; }
-  .movie-poster { width: 100%; height: 100%; object-fit: cover; display: block; }
-  
-  .poster-badge, .rating-badge { position: absolute; z-index: 4; }
-  .poster-badge { top: 10px; left: 10px; background-color: var(--accent-color); color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; }
-  .rating-badge { bottom: 10px; right: 10px; background-color: rgba(0,0,0,0.6); color: white; padding: 5px 8px; border-radius: 3px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 5px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
-  .rating-badge .fa-star { color: #f5c518; }
-  
-  .full-page-grid-container { padding-top: calc(var(--nav-height) + 30px); padding-bottom: 50px; }
+  /* Full Page Grid */
+  .full-page-grid-container { padding: 120px 40px 50px; }
   .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; }
-  .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 25px 20px; }
-  
-  .category-section { margin: 40px 0; overflow: hidden; }
-  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-  .category-title { font-weight: 700; font-size: 1.8rem; margin: 0; }
-  .see-all-link { color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
-  .see-all-link:hover { color: var(--accent-color); }
-  
-  .category-slider { overflow: visible; }
-  .swiper-button-next, .swiper-button-prev { color: var(--text-light); background-color: rgba(20, 20, 20, 0.5); border-radius: 50%; width: 40px; height: 40px; }
-  .swiper-button-next:after, .swiper-button-prev:after { font-size: 18px; font-weight: bold; }
-  .swiper-button-next:hover, .swiper-button-prev:hover { background-color: var(--accent-color); }
-  
-  /* [NEW] Mobile Bottom Navigation Bar */
-  .bottom-nav { 
-    display: none; position: fixed; bottom: 0; left: 0; right: 0; 
-    height: 65px; background-color: var(--secondary-bg); 
-    border-top: 1px solid var(--card-border); 
-    justify-content: space-around; align-items: center; z-index: 1000; 
-  }
-  .nav-item { 
-    display: flex; flex-direction: column; align-items: center; 
-    color: var(--text-dark); font-size: 11px; flex-grow: 1; 
-    padding: 8px 0; transition: color 0.2s ease; 
-  }
-  .nav-item i { font-size: 22px; margin-bottom: 5px; } 
-  .nav-item.active, .nav-item:hover { color: var(--text-light); } 
-  .nav-item.active i { color: var(--accent-color); }
+  .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
+  .full-page-grid .movie-poster { width: 100%; }
 
-  .ad-container { margin: 40px 0; display: flex; justify-content: center; align-items: center; }
-  .telegram-join-section { background-color: var(--secondary-bg); padding: 40px 20px; text-align: center; margin: 50px -50px 0 -50px; border-top: 1px solid var(--card-border); }
-  .telegram-join-section .telegram-icon { font-size: 4rem; color: #2AABEE; margin-bottom: 15px; } 
-  .telegram-join-section h2 { font-size: 2.5rem; color: var(--text-light); margin-bottom: 10px; }
-  .telegram-join-section p { font-size: 1.1rem; color: var(--text-dark); max-width: 600px; margin: 0 auto 25px auto; }
-  .telegram-join-button { display: inline-flex; align-items: center; gap: 10px; background-color: #2AABEE; color: white; padding: 12px 30px; border-radius: 50px; font-size: 1.1rem; font-weight: 700; transition: all 0.2s ease; }
-  .telegram-join-button:hover { transform: scale(1.05); background-color: #1e96d1; } .telegram-join-button i { font-size: 1.3rem; }
+  /* Footer */
+  .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
+  .main-footer a { color: var(--primary-color); }
   
-  .main-footer { padding: 20px 50px; text-align: center; background-color: var(--primary-bg); color: var(--text-dark); font-size: 0.9rem; }
-  .main-footer a { color: var(--text-dark); transition: color 0.2s ease; } 
-  .main-footer a:hover { color: var(--accent-color); }
-  
-  @media (max-width: 992px) { 
-      .swiper-button-next, .swiper-button-prev { display: none; } 
-      .main-nav .nav-right .search-container { display: none; }
+  /* Responsive */
+  @media (max-width: 992px) {
+    .nav-links, .search-form { display: none; }
+    .menu-toggle { display: block; }
+    .hero-content { max-width: 80%; }
+    .hero-title { font-size: 2.5rem; }
   }
   @media (max-width: 768px) {
-      body { padding-bottom: 65px; /* Space for bottom nav */ } 
-      .main-nav { padding: 0 15px; } 
-      .main-nav .nav-left { display: none; /* Hide hamburger, search is in bottom nav now */ }
-      main { padding: 0 15px; } .logo { font-size: 24px; margin: 0; }
-      .hero-slider-container { margin: var(--nav-height) -15px 20px -15px; }
-      .hero-slide-title { font-size: 1.8rem; } .hero-slide-meta { font-size: 0.9rem; } .hero-slide-content { padding: 20px; }
-      .category-section { margin: 25px 0; } .category-title { font-size: 1.4rem; }
-      .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px 10px; }
-      .full-page-grid-container { padding-top: 80px; } .full-page-grid-title { font-size: 1.8rem; }
-      .bottom-nav { display: flex; } .ad-container { margin: 25px 0; }
-      .telegram-join-section { margin: 50px -15px 0 -15px; }
-      .telegram-join-section h2 { font-size: 2rem; } .telegram-join-section p { font-size: 1rem; }
-      .main-footer { padding: 20px 15px; }
+    .container, .full-page-grid-container { padding: 0 20px; }
+    .full-page-grid-container { padding-top: 100px; padding-bottom: 40px; }
+    .logo { font-size: 1.5rem; }
+    .hero-slider { height: 60vh; }
+    .hero-content { padding: 0 20px; max-width: 100%; text-align: center; }
+    .hero-meta { justify-content: center; }
+    .hero-overview { display: none; }
+    .category-title { font-size: 1.4rem; }
+    .movie-poster { width: 160px; }
+    .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   }
 </style>
 </head>
 <body>
 
-<header class="main-nav">
-    <div class="nav-left">
+<header class="main-header">
+    <div class="container header-content">
+        <a href="{{ url_for('home') }}" class="logo">PmwBD</a>
+        <nav class="nav-links">
+            <a href="{{ url_for('home') }}" class="active">Home</a>
+            <a href="{{ url_for('movies_by_category', cat_name='Latest Movie') }}">Movies</a>
+            <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}">Series</a>
+            <a href="{{ url_for('genres_page') }}">Genres</a>
+        </nav>
+        <form method="GET" action="/" class="search-form">
+            <input type="search" name="q" class="search-input" placeholder="Search for movies, series..." value="{{ query|default('') }}">
+            <button class="search-btn" type="submit"><i class="fas fa-search"></i></button>
+        </form>
         <div class="menu-toggle"><i class="fas fa-bars"></i></div>
     </div>
-    <a href="{{ url_for('home') }}" class="logo">{{ website_name }}</a>
-    <div class="nav-right">
-        <div class="search-container">
-            <form method="GET" action="/" class="search-form">
-                <input type="search" name="q" id="searchInput" class="search-input" placeholder="Search..." value="{{ query|default('') }}" autocomplete="off" />
-            </form>
-            <div class="search-results" id="searchResults"></div>
-        </div>
-    </div>
 </header>
-
-<div class="overlay"></div>
-<nav class="drawer-menu">
-    <a href="{{ url_for('home') }}">Home</a>
-    <a href="{{ url_for('all_movies') }}">Movies</a>
-    <a href="{{ url_for('all_series') }}">Web Series</a>
-    <a href="{{ url_for('genres_page') }}">Genres</a>
-    <a href="{{ url_for('contact') }}">Request/Contact</a>
-    <a href="{{ url_for('disclaimer') }}">Disclaimer</a>
-    <a href="{{ url_for('dmca') }}">DMCA</a>
-</nav>
 
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-      <div class="poster-wrapper">
-        <div class="movie-poster-container">
-           <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-           {% if m.poster_badge %}<div class="poster-badge">{{ m.poster_badge }}</div>{% endif %}
-           {% if m.vote_average and m.vote_average > 0 %}<div class="rating-badge"><i class="fas fa-star"></i> {{ "%.1f"|format(m.vote_average) }}</div>{% endif %}
-        </div>
-      </div>
+      <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+      <h4 class="card-title">{{ m.title }}</h4>
+      <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
     </a>
   {% endmacro %}
 
@@ -463,7 +357,7 @@ index_html = """
     <div class="full-page-grid-container">
         <h2 class="full-page-grid-title">{{ query }}</h2>
         {% if movies|length == 0 %}
-            <p style="text-align:center; color: var(--text-dark); margin-top: 40px;">No content found.</p>
+            <p>No content found.</p>
         {% else %}
             <div class="full-page-grid">
                 {% for m in movies %}
@@ -473,170 +367,97 @@ index_html = """
         {% endif %}
     </div>
   {% else %}
-    {% if recently_added %}
-    <div class="hero-slider-container">
-        <div class="swiper hero-swiper">
-            <div class="swiper-wrapper">
-                {% for m in recently_added %}
-                    {% if m.backdrop or m.poster %}
-                    <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="swiper-slide" style="background-image: url('{{ m.backdrop or m.poster }}');">
-                        <div class="hero-slide-content">
-                            <h2 class="hero-slide-title">{{ m.title }}</h2>
-                            <div class="hero-slide-meta">
-                                {% if m.release_date %}
-                                <span>{{ m.release_date.split('-')[0] }}</span>
-                                {% endif %}
-                                {% if m.type == 'series' %}
-                                <span class="hero-slide-badge">TV</span>
-                                {% else %}
-                                 <span class="hero-slide-badge">Movie</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </a>
-                    {% endif %}
-                {% endfor %}
+    <!-- Hero Slider -->
+    <div class="swiper hero-slider">
+        <div class="swiper-wrapper">
+        {% for movie in recently_added %}
+            <div class="swiper-slide hero-slide">
+                <img src="{{ movie.poster or '' }}" alt="" class="hero-bg-img">
+                <div class="container hero-content">
+                    <h1 class="hero-title">{{ movie.title }}</h1>
+                    <div class="hero-meta">
+                        {% if movie.vote_average %}<span class="rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</span>{% endif %}
+                        {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
+                        {% if movie.genres %}<span>{{ movie.genres|first }}</span>{% endif %}
+                    </div>
+                    <p class="hero-overview">{{ movie.overview }}</p>
+                    <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="hero-btn">Watch Now <i class="fas fa-play"></i></a>
+                </div>
             </div>
-            <div class="swiper-pagination"></div>
+        {% endfor %}
         </div>
-    </div>
-    {% endif %}
-    
-    <div class="category-buttons">
-        <a href="{{ url_for('movies_by_category', cat_name='Hindi') }}" class="cat-btn">Hindi</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Bengali') }}" class="cat-btn">Bengali</a>
-        <a href="{{ url_for('movies_by_category', cat_name='Latest Series') }}" class="cat-btn">Web Series</a>
-        <a href="{{ url_for('movies_by_category', cat_name='English') }}" class="cat-btn">English & Hollywood</a>
+        <div class="swiper-pagination"></div>
     </div>
 
-    {% macro render_grid_section(title, movies_list, endpoint, cat_name) %}
+    <div class="container">
+    {% macro render_carousel_section(title, movies_list, endpoint, cat_name) %}
         {% if movies_list %}
-        <div class="category-section">
+        <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for(endpoint, cat_name=cat_name) }}" class="see-all-link">See All ></a>
+                <a href="{{ url_for(endpoint, cat_name=cat_name) }}" class="view-all-link">View All</a>
             </div>
-            <div class="swiper category-slider">
+            <div class="swiper movie-carousel">
                 <div class="swiper-wrapper">
                     {% for m in movies_list %}
-                        <div class="swiper-slide">
-                            {{ render_movie_card(m) }}
-                        </div>
+                    <div class="swiper-slide">{{ render_movie_card(m) }}</div>
                     {% endfor %}
                 </div>
                 <div class="swiper-button-next"></div>
                 <div class="swiper-button-prev"></div>
             </div>
-        </div>
+        </section>
         {% endif %}
     {% endmacro %}
-    
-    {{ render_grid_section('Trending Now', trending_movies, 'movies_by_category', 'Trending') }}
-    {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
-    {{ render_grid_section('Latest Movies', latest_movies, 'movies_by_category', 'Latest Movie') }}
-    {{ render_grid_section('Web Series', latest_series, 'movies_by_category', 'Latest Series') }}
-    {% if ad_settings.native_banner_code %}<div class="ad-container">{{ ad_settings.native_banner_code|safe }}</div>{% endif %}
-    {{ render_grid_section('Hindi', hindi_movies, 'movies_by_category', 'Hindi') }}
-    {{ render_grid_section('Bengali', bengali_movies, 'movies_by_category', 'Bengali') }}
-    {{ render_grid_section('English & Hollywood', english_movies, 'movies_by_category', 'English') }}
-    {{ render_grid_section('Coming Soon', coming_soon_movies, 'coming_soon', '') }}
-    
-    <div class="telegram-join-section">
-        <i class="fa-brands fa-telegram telegram-icon"></i>
-        <h2>Join Our Telegram Channel</h2>
-        <p>Get the latest movie updates, news, and direct download links right on your phone!</p>
-        <a href="{{ main_channel_link or '#' }}" target="_blank" class="telegram-join-button"><i class="fa-brands fa-telegram"></i> Join Main Channel</a>
+
+    <!-- Category Sections -->
+    {{ render_carousel_section('Trending Now', trending_movies, 'movies_by_category', 'Trending') }}
+    {{ render_carousel_section('Latest Movies', latest_movies, 'movies_by_category', 'Latest Movie') }}
+    {{ render_carousel_section('Web Series', latest_series, 'movies_by_category', 'Latest Series') }}
+    {{ render_carousel_section('Hindi', hindi_movies, 'movies_by_category', 'Hindi') }}
+    {{ render_carousel_section('Bengali', bengali_movies, 'movies_by_category', 'Bengali') }}
+    {{ render_carousel_section('English & Hollywood', english_movies, 'movies_by_category', 'English') }}
+    {{ render_carousel_section('Coming Soon', coming_soon_movies, 'coming_soon', '') }}
     </div>
+    
   {% endif %}
 </main>
-<!-- [NEW] Bottom navigation for mobile -->
-<nav class="bottom-nav">
-    <a href="{{ url_for('home') }}" class="nav-item {% if request.endpoint == 'home' %}active{% endif %}">
-        <i class="fas fa-home"></i><span>Home</span>
-    </a>
-    <a href="{{ url_for('all_movies') }}" class="nav-item {% if request.endpoint == 'all_movies' %}active{% endif %}">
-        <i class="fas fa-film"></i><span>Movies</span>
-    </a>
-    <a href="{{ url_for('all_series') }}" class="nav-item {% if request.endpoint == 'all_series' %}active{% endif %}">
-        <i class="fas fa-tv"></i><span>Series</span>
-    </a>
-    <a href="{{ url_for('genres_page') }}" class="nav-item {% if request.endpoint == 'genres_page' %}active{% endif %}">
-        <i class="fas fa-layer-group"></i><span>Genres</span>
-    </a>
-    <a href="{{ url_for('contact') }}" class="nav-item {% if request.endpoint == 'contact' %}active{% endif %}">
-        <i class="fas fa-envelope"></i><span>Request</span>
-    </a>
-</nav>
 
 <footer class="main-footer">
-    <a href="https://t.me/PrimeCineZone" target="_blank" rel="noopener">&copy; ALL RIGHTS RESERVED {{ website_name.upper() }}</a>
+    <p>&copy; 2024 PmwBD. All Rights Reserved. For educational purposes only.</p>
+    <p><a href="{{ url_for('disclaimer') }}">Disclaimer</a> | <a href="{{ url_for('dmca') }}">DMCA</a> | <a href="{{ url_for('contact') }}">Contact Us</a></p>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.js"></script>
+<!-- [NEW] Swiper.js -->
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
-    const nav = document.querySelector('.main-nav');
-    window.addEventListener('scroll', () => { window.scrollY > 50 ? nav.classList.add('scrolled') : nav.classList.remove('scrolled'); });
+    // Sticky Header
+    const header = document.querySelector('.main-header');
+    window.addEventListener('scroll', () => {
+        window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled');
+    });
 
-    document.addEventListener('DOMContentLoaded', function() { 
-        new Swiper('.hero-swiper', {
-            loop: true,
-            autoplay: { delay: 4000, disableOnInteraction: false },
-            pagination: { el: '.swiper-pagination', clickable: true },
-            effect: 'fade',
-            fadeEffect: { crossFade: true },
-        });
-        
-        const menuToggle = document.querySelector('.menu-toggle');
-        const drawerMenu = document.querySelector('.drawer-menu');
-        const overlay = document.querySelector('.overlay');
-        const toggleMenu = () => { drawerMenu.classList.toggle('open'); overlay.classList.toggle('open'); };
-        if (menuToggle) menuToggle.addEventListener('click', toggleMenu);
-        if (overlay) overlay.addEventListener('click', toggleMenu);
+    // Hero Slider
+    new Swiper('.hero-slider', {
+        loop: true,
+        autoplay: { delay: 5000 },
+        pagination: { el: '.swiper-pagination', clickable: true },
+    });
 
-        const sliders = document.querySelectorAll('.category-slider');
-        sliders.forEach(slider => {
-            new Swiper(slider, {
-                slidesPerView: 2.2, spaceBetween: 10,
-                navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
-                breakpoints: {
-                    576: { slidesPerView: 3, spaceBetween: 15 },
-                    768: { slidesPerView: 4, spaceBetween: 15 },
-                    992: { slidesPerView: 5, spaceBetween: 20 },
-                    1200: { slidesPerView: 6, spaceBetween: 20 },
-                },
-            });
-        });
-
-        const searchInput = document.getElementById('searchInput');
-        const searchResults = document.getElementById('searchResults');
-        let debounceTimer;
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value;
-            clearTimeout(debounceTimer);
-            if (query.length < 3) { searchResults.style.display = 'none'; return; }
-            debounceTimer = setTimeout(() => {
-                fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        searchResults.innerHTML = '';
-                        if (data.length > 0) {
-                            data.slice(0, 5).forEach(item => {
-                                const link = document.createElement('a');
-                                link.href = `/movie/${item._id}`;
-                                link.innerHTML = `<img src="${item.poster || ''}" alt="${item.title}"><div class="result-info"><h5>${item.title}</h5><p>${item.release_date ? item.release_date.split('-')[0] : ''}</p></div>`;
-                                searchResults.appendChild(link);
-                            });
-                            searchResults.style.display = 'block';
-                        } else { searchResults.style.display = 'none'; }
-                    })
-                    .catch(error => console.error('Search error:', error));
-            }, 300);
-        });
-        document.addEventListener('click', (e) => { if (e.target !== searchInput) { searchResults.style.display = 'none'; } });
+    // Movie Carousels
+    new Swiper('.movie-carousel', {
+        slidesPerView: 'auto',
+        spaceBetween: 20,
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+        breakpoints: {
+            320: { spaceBetween: 15 },
+            768: { spaceBetween: 20 },
+        }
     });
 </script>
-{% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-{% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
 </body>
 </html>
 """
@@ -646,211 +467,209 @@ detail_html = """
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{ movie.title if movie else "Content Not Found" }} - PmwBD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-  /* [MODIFIED] Disney+ Inspired Color Palette */
-  :root { 
-    --primary-bg: #040714;
-    --secondary-bg: #131520;
-    --accent-color: #0072d2;
-    --accent-hover: #0082f0;
-    --text-light: #f9f9f9; 
-    --text-dark: #a8a9ae; 
-    --card-border: rgba(249, 249, 249, 0.1);
+  :root {
+    --primary-color: #E50914;
+    --bg-color: #0c0c0c;
+    --card-bg: #1a1a1a;
+    --text-light: #ffffff;
+    --text-dark: #a0a0a0;
+    --nav-height: 70px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { 
-      font-family: 'Roboto', sans-serif; 
-      background: var(--primary-bg);
-      background-image: linear-gradient(to bottom, #040714, #0c1122);
-      color: var(--text-light); 
-  }
-  .detail-header { position: absolute; top: 0; left: 0; right: 0; padding: 20px 50px; z-index: 100; }
-  .back-button { color: var(--text-light); font-size: 1.2rem; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 10px; transition: color 0.3s ease; }
-  .back-button:hover { color: var(--accent-color); }
-  .detail-hero { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; padding: 100px 0; }
-  .detail-hero-background { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-size: cover; background-position: center; filter: blur(20px) brightness(0.4); transform: scale(1.1); }
-  .detail-hero::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, var(--primary-bg) 0%, rgba(4,7,20,0.6) 50%, var(--primary-bg) 100%); }
-  .detail-content-wrapper { position: relative; z-index: 2; display: flex; gap: 40px; max-width: 1200px; padding: 0 50px; width: 100%; }
-  .detail-poster { width: 300px; height: 450px; flex-shrink: 0; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: cover; }
-  .detail-info { flex-grow: 1; max-width: 65%; }
-  .detail-title { font-family: 'Roboto', sans-serif; font-size: 3.5rem; font-weight: 700; line-height: 1.1; margin-bottom: 20px; }
-  .detail-meta { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 25px; font-size: 1rem; color: var(--text-dark); }
-  .detail-meta span { font-weight: 700; color: var(--text-light); }
-  .detail-meta span i { margin-right: 5px; color: var(--text-dark); }
-  .detail-overview { font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px; }
-  .action-btn { background-color: var(--accent-color); color: white; padding: 15px 30px; font-size: 1.2rem; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; margin-bottom: 15px; transition: all 0.2s ease; }
-  .action-btn:hover { transform: scale(1.05); background-color: var(--accent-hover); }
-  .section-title { font-size: 1.5rem; font-weight: 700; margin: 30px 0 20px 0; padding-bottom: 5px; border-bottom: 3px solid var(--accent-color); display: inline-block; }
-  .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; background: #000; border-radius: 8px; }
-  .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); }
+  a { text-decoration: none; color: inherit; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+
+  /* Detail Hero */
+  .detail-hero { position: relative; padding: 120px 0 60px; min-height: 80vh; display: flex; align-items: center; }
+  .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(15px) brightness(0.3); transform: scale(1.1); }
+  .detail-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, var(--bg-color) 0%, rgba(12,12,12,0.7) 40%, transparent 100%); }
+  .detail-content { position: relative; z-index: 2; display: flex; gap: 40px; }
+  .detail-poster { width: 300px; height: 450px; flex-shrink: 0; border-radius: 12px; object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  .detail-info { max-width: 700px; }
+  .detail-title { font-size: 3rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; }
+  .meta-item { display: flex; align-items: center; gap: 8px; }
+  .meta-item.rating { color: #f5c518; font-weight: 600; }
+  .detail-overview { font-size: 1rem; line-height: 1.7; color: var(--text-dark); margin-bottom: 30px; }
   
-  .links-wrapper { margin-top: 10px; }
-  .links-container { display: flex; gap: 40px; align-items: flex-start; }
-  .link-section { flex: 1; min-width: 250px; }
-  .download-button, .episode-button { display: block; width: 100%; padding: 12px 20px; color: white; text-decoration: none; border-radius: 8px; font-weight: 700; transition: background-color 0.3s ease; margin-bottom: 10px; text-align: center; }
-  .download-button { background-color: var(--accent-color); }
-  .download-button:hover { background-color: var(--accent-hover); }
+  /* Buttons and Links */
+  .section-title { font-size: 1.8rem; font-weight: 600; margin: 40px 0 20px; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; display: inline-block; }
+  .action-buttons { display: flex; flex-wrap: wrap; gap: 15px; }
+  .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 25px; border-radius: 50px; font-weight: 600; transition: all 0.2s ease; text-align: center; }
+  .btn-primary { background-color: var(--primary-color); }
+  .btn-primary:hover { transform: scale(1.05); }
+  .btn-secondary { background-color: rgba(255,255,255,0.1); border: 1px solid var(--text-dark); }
+  .btn-secondary:hover { background-color: rgba(255,255,255,0.2); }
+  .links-container { margin-top: 30px; }
+  .link-group { margin-bottom: 30px; }
+  .link-group h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 15px; }
+  .link-buttons { display: flex; flex-wrap: wrap; gap: 15px; }
   
-  .episode-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 15px; border-radius: 8px; background-color: var(--secondary-bg); border-left: 4px solid var(--accent-color); }
-  .episode-title { font-size: 1.1rem; font-weight: 500; color: #fff; }
-  .ad-container { margin: 30px 0; text-align: center; }
-  .related-section-container { padding: 40px 0; background-color: var(--secondary-bg); }
-  .related-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px 15px; padding: 0 50px; }
-  .movie-card { 
-    display: block; cursor: pointer; border-radius: 8px; 
-    overflow: hidden; position: relative;
-    border: 3px solid transparent;
-    box-shadow: 0 10px 20px -10px rgba(0,0,0,0.75);
-    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  .movie-card:hover {
-    transform: scale(1.05);
-    border-color: var(--accent-color);
-    box-shadow: 0 15px 30px -10px rgba(0, 114, 210, 0.5);
-  }
-  .poster-wrapper { position: relative; width: 100%; border-radius: 5px; overflow: hidden; background-color: #222; }
-  .movie-poster-container { position: relative; overflow: hidden; width:100%; aspect-ratio: 2 / 3; }
-  .movie-poster { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .poster-badge { position: absolute; top: 10px; left: 10px; background-color: var(--accent-color); color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; z-index: 4; }
-  .rating-badge { position: absolute; bottom: 10px; right: 10px; background-color: rgba(0,0,0,0.6); color: white; padding: 5px 8px; border-radius: 3px; font-size: 0.8rem; font-weight: 700; z-index: 3; display: flex; align-items: center; gap: 5px; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
-  .rating-badge .fa-star { color: #f5c518; }
-  .main-footer { padding: 20px 50px; text-align: center; background-color: var(--primary-bg); color: var(--text-dark); font-size: 0.9rem; }
-  .main-footer a { color: var(--text-dark); transition: color 0.2s ease; } .main-footer a:hover { color: var(--accent-color); }
-  
-  @media (max-width: 992px) { 
-    .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; } 
-    .detail-info { max-width: 100%; } .detail-title { font-size: 3rem; } 
-  }
-  @media (max-width: 768px) { 
-    body { padding-bottom: 65px; /* Space for bottom nav */ }
-    .detail-header { padding: 20px; } .detail-hero { padding: 80px 20px 40px; } .detail-poster { width: 60%; max-width: 220px; height: auto; } .detail-title { font-size: 2.2rem; }
-    .action-btn, .download-button { display: block; width: 100%; max-width: 320px; margin: 0 auto 10px auto; }
-    .episode-item { flex-direction: column; align-items: flex-start; gap: 10px; } .episode-button { width: 100%; }
-    .section-title { margin-left: 15px !important; } .related-section-container { padding: 20px 0; }
-    .related-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 15px 10px; padding: 0 15px; }
-    .links-container { flex-direction: column; gap: 20px; }
-    .main-footer { padding: 20px 15px; }
+  /* Related Section */
+  .related-section { padding-bottom: 50px; }
+  .movie-carousel .swiper-slide { width: auto; }
+  .movie-card { display: block; }
+  .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease; }
+  .movie-card:hover .movie-poster { transform: scale(1.05); }
+  .card-title { font-size: 1rem; font-weight: 500; }
+  .card-meta { font-size: 0.8rem; color: var(--text-dark); }
+  .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
+
+  /* Trailer */
+  .trailer-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; border-radius: 8px; }
+  .trailer-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+  @media (max-width: 768px) {
+    .container { padding: 0 20px; }
+    .detail-hero { padding: 100px 0 40px; }
+    .detail-content { flex-direction: column; align-items: center; text-align: center; }
+    .detail-poster { width: 60%; max-width: 250px; height: auto; }
+    .detail-title { font-size: 2rem; }
+    .detail-meta { justify-content: center; }
+    .action-buttons { justify-content: center; }
+    .movie-poster { width: 160px; }
   }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
-{% macro render_movie_card(m) %}
-  <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-    <div class="poster-wrapper">
-      <div class="movie-poster-container">
-        <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-        {% if m.poster_badge %}<div class="poster-badge">{{ m.poster_badge }}</div>{% endif %}
-        {% if m.vote_average and m.vote_average > 0 %}<div class="rating-badge"><i class="fas fa-star"></i> {{ "%.1f"|format(m.vote_average) }}</div>{% endif %}
-      </div>
-    </div>
-  </a>
-{% endmacro %}
-<header class="detail-header"><a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a></header>
+
 {% if movie %}
-<div class="detail-hero" style="min-height: auto; padding-bottom: 60px;">
-  <div class="detail-hero-background" style="background-image: url('{{ movie.backdrop or movie.poster }}');"></div>
-  <div class="detail-content-wrapper"><img class="detail-poster" src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
-    <div class="detail-info">
-      <h1 class="detail-title">{{ movie.title }}</h1>
-      <div class="detail-meta">
-        {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
-        {% if movie.vote_average %}<span><i class="fas fa-star" style="color:#f5c518;"></i> {{ "%.1f"|format(movie.vote_average) }}</span>{% endif %}
-        {% if movie.languages %}<span><i class="fas fa-language"></i> {{ movie.languages | join(' • ') }}</span>{% endif %}
-        {% if movie.genres %}<span>{{ movie.genres | join(' • ') }}</span>{% endif %}
-      </div>
-      <p class="detail-overview">{{ movie.overview }}</p>
-      {% if movie.type == 'movie' and movie.watch_link %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="action-btn"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
-      
-      {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
-      
-      {% if trailer_embed_key %}
-      <div class="trailer-section">
-          <h3 class="section-title">Watch Trailer</h3>
-          <div class="video-container">
-              <iframe src="https://www.youtube.com/embed/{{ trailer_embed_key }}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-          </div>
-      </div>
-      {% endif %}
+<div class="detail-hero">
+    <img src="{{ movie.poster }}" class="hero-background" alt="">
+    <div class="container detail-content">
+        <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
+        <div class="detail-info">
+            <h1 class="detail-title">{{ movie.title }}</h1>
+            <div class="detail-meta">
+                {% if movie.vote_average %}<div class="meta-item rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</div>{% endif %}
+                {% if movie.release_date %}<div class="meta-item">{{ movie.release_date.split('-')[0] }}</div>{% endif %}
+                {% if movie.genres %}<div class="meta-item">{{ movie.genres | join(' / ') }}</div>{% endif %}
+            </div>
+            <p class="detail-overview">{{ movie.overview }}</p>
+            <div class="action-buttons">
+                {% if movie.type == 'movie' and movie.watch_link %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="action-btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
+                {% if trailer_embed_key %}<a href="#trailer" class="action-btn btn-secondary"><i class="fas fa-film"></i> Watch Trailer</a>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 
-      <div style="margin: 20px 0;"><a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="action-btn" style="background-color:#5a5a5a; text-align:center; width: 100%;"><i class="fas fa-flag"></i> Report a Problem</a></div>
-      
-      {% if movie.is_coming_soon %}<h3 class="section-title">Coming Soon</h3>
-      {% elif movie.type == 'movie' %}
-        <div class="links-wrapper">
-            <div class="links-container">
+<div class="container">
+    {% if not movie.is_coming_soon %}
+    <section id="download-links">
+        <h2 class="section-title">Download & Watch</h2>
+        <div class="links-container">
+            {% if movie.type == 'movie' %}
                 {% if movie.streaming_links %}
-                <div class="link-section">
-                    <h3 class="section-title" style="margin-top:0;">Streaming Links</h3>
+                <div class="link-group">
+                    <h3><i class="fas fa-stream"></i> Stream Online</h3>
+                    <div class="link-buttons">
                     {% for link_item in movie.streaming_links %}
-                        <a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener" style="background-color: #007bff;">
-                            <i class="fas fa-play-circle"></i> Stream and Watch online in {{ link_item.name }}
-                        </a>
+                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-secondary">Stream in {{ link_item.name }}</a>
                     {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
-                
                 {% if movie.links %}
-                <div class="link-section">
-                    <h3 class="section-title" style="margin-top:0;">Download Links</h3>
+                <div class="link-group">
+                    <h3><i class="fas fa-download"></i> Direct Download</h3>
+                    <div class="link-buttons">
                     {% for link_item in movie.links %}
-                        <a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener">
-                            <i class="fas fa-download"></i> Download the file in {{ link_item.quality }}
-                        </a>
+                        <a href="{{ link_item.url }}" target="_blank" class="action-btn btn-secondary">Download {{ link_item.quality }}</a>
                     {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
-            </div>
-
-            {% if movie.files %}
-            <div class="link-section" style="margin-top: 30px;">
-                <h3 class="section-title">Get from Telegram</h3>
-                {% for file in movie.files | sort(attribute='quality') %}
-                    <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ file.quality }}" class="action-btn" style="background-color: #2AABEE; display: block; text-align:center; margin-top:10px; margin-bottom: 0;">
-                        <i class="fa-brands fa-telegram"></i> Get {{ file.quality }}
-                    </a>
-                {% endfor %}
-            </div>
+                {% if movie.files %}
+                 <div class="link-group">
+                    <h3><i class="fab fa-telegram-plane"></i> Get from Telegram</h3>
+                    <div class="link-buttons">
+                    {% for file in movie.files | sort(attribute='quality') %}
+                        <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ file.quality }}" class="action-btn btn-primary" style="background-color: #2AABEE;">Get {{ file.quality }}</a>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% elif movie.type == 'series' %}
+                {% if movie.season_packs %}
+                 <div class="link-group">
+                    <h3><i class="fas fa-box-open"></i> Complete Season Packs</h3>
+                    <div class="link-buttons">
+                    {% for pack in movie.season_packs | sort(attribute='quality') | sort(attribute='season') %}
+                        <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_S{{ pack.season }}_{{ pack.quality }}" class="action-btn btn-primary">S{{ pack.season }} Pack ({{ pack.quality }})</a>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if movie.episodes %}
+                 <div class="link-group">
+                    <h3><i class="fas fa-tv"></i> Individual Episodes</h3>
+                    <div class="link-buttons">
+                    {% for ep in movie.episodes | sort(attribute='episode_number') | sort(attribute='season') %}
+                        <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ ep.season }}_{{ ep.episode_number }}" class="action-btn btn-secondary" style="background-color: #2AABEE;">S{{ ep.season }} E{{ ep.episode_number }}</a>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             {% endif %}
         </div>
-      {% elif movie.type == 'series' %}
-        <div class="episode-section">
-          <h3 class="section-title">Episodes & Seasons</h3>
-          {% if movie.season_packs %}
-            {% for pack in movie.season_packs | sort(attribute='quality') | sort(attribute='season') %}
-              <div class="episode-item" style="background-color: #3e1a1a;">
-                <span class="episode-title">Complete Season {{ pack.season }} Pack ({{ pack.quality }})</span>
-                <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_S{{ pack.season }}_{{ pack.quality }}" class="episode-button" style="background-color: var(--accent-color);"><i class="fas fa-box-open"></i> Get Season Pack</a>
-              </div>
-            {% endfor %}
-          {% endif %}
-          {% if movie.episodes %}
-            {% for ep in movie.episodes | sort(attribute='episode_number') | sort(attribute='season') %}
-              <div class="episode-item">
-                <span class="episode-title">Season {{ ep.season }} - Episode {{ ep.episode_number }}</span>
-                <a href="https://t.me/{{ bot_username }}?start={{ movie._id }}_{{ ep.season }}_{{ ep.episode_number }}" class="episode-button" style="background-color: #2AABEE;"><i class="fa-brands fa-telegram"></i> Get Episode</a>
-              </div>
-            {% endfor %}
-          {% endif %}
-          {% if not movie.episodes and not movie.season_packs %}
-             <p>No episodes or season packs available yet.</p>
-          {% endif %}
-        </div>
-      {% endif %}
-    </div>
-  </div>
-</div>
-{% if related_movies %}<div class="related-section-container"><h3 class="section-title" style="margin-left: 50px; color: white;">You Might Also Like</h3><div class="related-grid">{% for m in related_movies %}{{ render_movie_card(m) }}{% endfor %}</div></div>{% endif %}
-{% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
+    </section>
+    {% endif %}
 
-<footer class="main-footer">
-    <a href="https://t.me/PrimeCineZone" target="_blank" rel="noopener">&copy; ALL RIGHTS RESERVED {{ website_name.upper() }}</a>
-</footer>
-{% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-{% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
+    {% if trailer_embed_key %}
+    <section id="trailer">
+        <h2 class="section-title">Official Trailer</h2>
+        <div class="trailer-container">
+            <iframe src="https://www.youtube.com/embed/{{ trailer_embed_key }}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if related_movies %}
+    <section class="related-section">
+        <h2 class="section-title">You May Also Like</h2>
+        <div class="swiper movie-carousel">
+            <div class="swiper-wrapper">
+                {% for m in related_movies %}
+                <div class="swiper-slide">
+                    <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+                      <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+                      <h4 class="card-title">{{ m.title }}</h4>
+                      <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="swiper-button-next"></div>
+            <div class="swiper-button-prev"></div>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% else %}
+<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>
+{% endif %}
+
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+<script>
+    new Swiper('.movie-carousel', {
+        slidesPerView: 'auto',
+        spaceBetween: 20,
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+    });
+</script>
 </body>
 </html>
 """
