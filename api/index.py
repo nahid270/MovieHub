@@ -126,24 +126,8 @@ index_html = """
   .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
-  
-  /* === [FIX] AD CONTAINER STYLING START === */
-  .ad-container {
-    margin: 20px auto;
-    width: 100%;
-    max-width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Prevents large ads from breaking layout */
-    min-height: 50px;
-    text-align: center;
-  }
-  .ad-container > * {
-    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-  }
-  /* === [FIX] AD CONTAINER STYLING END === */
-
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
   .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
   .mobile-nav-menu.active {transform: translateX(0);}
   .mobile-nav-menu .close-btn {position: absolute;top: 20px;right: 20px;font-size: 2.5rem;color: white;background: none;border: none;cursor: pointer;}
@@ -383,24 +367,8 @@ detail_html = """
   .episode-list { display: flex; flex-direction: column; gap: 10px; }
   .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
   .episode-name { font-weight: 500; }
-
-  /* === [FIX] AD CONTAINER STYLING START === */
-  .ad-container {
-    margin: 20px auto;
-    width: 100%;
-    max-width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Prevents large ads from breaking layout */
-    min-height: 50px;
-    text-align: center;
-  }
-  .ad-container > * {
-    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-  }
-  /* === [FIX] AD CONTAINER STYLING END === */
-
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -445,10 +413,11 @@ detail_html = """
         <div class="tabs-content">
             <div class="tab-pane active" id="downloads">
                 {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
-                {% if movie.type == 'movie' %}
-                    {% if movie.links %}
+                
+                {# === [MODIFIED] Logic to show complete season links for series OR movie links === #}
+                {% if movie.links %}
                     <div class="link-group">
-                        <h3>Watch & Download Links</h3>
+                        <h3>Watch & Download Links {% if movie.type == 'series' %}(Complete Season){% endif %}</h3>
                         {% for link_item in movie.links %}
                         <div class="quality-group">
                             <h4>{{ link_item.quality }}</h4>
@@ -459,11 +428,12 @@ detail_html = """
                         </div>
                         {% endfor %}
                     </div>
-                    {% else %}<p style="text-align:center;">No links available yet.</p>
-                    {% endif %}
-                {% elif movie.type == 'series' %}<p style="text-align:center;">Please select a season tab to view episode links.</p>
-                {% else %}<p style="text-align:center;">No links available.</p>
+                {% elif movie.type == 'series' and movie.episodes %}
+                    <p style="text-align:center;">Please select a season tab to view episode links.</p>
+                {% else %}
+                    <p style="text-align:center;">No links available yet.</p>
                 {% endif %}
+
             </div>
             {% if movie.type == 'series' and movie.episodes %}
                 {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
@@ -513,23 +483,8 @@ wait_page_html = """
         .timer { font-size: 2.5rem; font-weight: 700; color: var(--text-light); margin-bottom: 30px; }
         .get-link-btn { display: inline-block; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: #555; transition: background-color 0.2s; }
         .get-link-btn.ready { background-color: var(--primary-color); }
-        
-        /* === [FIX] AD CONTAINER STYLING START === */
-        .ad-container {
-            margin: 30px auto 0;
-            width: 100%;
-            max-width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden; /* Prevents large ads from breaking layout */
-            min-height: 50px;
-            text-align: center;
-        }
-        .ad-container > * {
-            max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-        }
-        /* === [FIX] AD CONTAINER STYLING END === */
+        .ad-container { margin: 30px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+        .ad-container > * { max-width: 100% !important; }
     </style>
 </head>
 <body>
@@ -657,7 +612,13 @@ admin_html = """
             </fieldset>
         </div>
         <div id="episode_fields" style="display: none;">
-            <fieldset><legend>Series Episodes</legend><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
+            {# === [NEW] Complete Season Links section for Series === #}
+            <fieldset><legend>Complete Season Links (Optional)</legend>
+                <div class="link-pair"><label>480p Watch Link:<input type="url" name="series_watch_link_480p"></label><label>480p Download Link:<input type="url" name="series_download_link_480p"></label></div>
+                <div class="link-pair"><label>720p Watch Link:<input type="url" name="series_watch_link_720p"></label><label>720p Download Link:<input type="url" name="series_download_link_720p"></label></div>
+                <div class="link-pair"><label>1080p Watch Link:<input type="url" name="series_watch_link_1080p"></label><label>1080p Download Link:<input type="url" name="series_download_link_1080p"></label></div>
+            </fieldset>
+            <fieldset><legend>Individual Episodes</legend><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
         </div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
@@ -760,17 +721,24 @@ edit_html = """
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in predefined_categories %}<label><input type="checkbox" name="categories" value="{{ cat }}" {% if movie.categories and cat in movie.categories %}checked{% endif %}> {{ cat }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
     </fieldset>
+    {# === [MODIFIED] Helper variables for all qualities === #}
+    {% set links_480p = movie.links|selectattr('quality', 'equalto', '480p')|first if movie.links else None %}
+    {% set links_720p = movie.links|selectattr('quality', 'equalto', '720p')|first if movie.links else None %}
+    {% set links_1080p = movie.links|selectattr('quality', 'equalto', '1080p')|first if movie.links else None %}
     <div id="movie_fields">
         <fieldset><legend>Movie Links</legend>
-            {% set links_480p = movie.links|selectattr('quality', 'equalto', '480p')|first if movie.links else None %}
-            {% set links_720p = movie.links|selectattr('quality', 'equalto', '720p')|first if movie.links else None %}
-            {% set links_1080p = movie.links|selectattr('quality', 'equalto', '1080p')|first if movie.links else None %}
             <div class="link-pair"><label>480p Watch Link:<input type="url" name="watch_link_480p" value="{{ links_480p.watch_url if links_480p else '' }}"></label><label>480p Download Link:<input type="url" name="download_link_480p" value="{{ links_480p.download_url if links_480p else '' }}"></label></div>
             <div class="link-pair"><label>720p Watch Link:<input type="url" name="watch_link_720p" value="{{ links_720p.watch_url if links_720p else '' }}"></label><label>720p Download Link:<input type="url" name="download_link_720p" value="{{ links_720p.download_url if links_720p else '' }}"></label></div>
             <div class="link-pair"><label>1080p Watch Link:<input type="url" name="watch_link_1080p" value="{{ links_1080p.watch_url if links_1080p else '' }}"></label><label>1080p Download Link:<input type="url" name="download_link_1080p" value="{{ links_1080p.download_url if links_1080p else '' }}"></label></div>
         </fieldset>
     </div>
     <div id="episode_fields" style="display: none;">
+      {# === [NEW] Complete Season Links section for Series Edit Page === #}
+      <fieldset><legend>Complete Season Links (Optional)</legend>
+          <div class="link-pair"><label>480p Watch Link:<input type="url" name="series_watch_link_480p" value="{{ links_480p.watch_url if links_480p else '' }}"></label><label>480p Download Link:<input type="url" name="series_download_link_480p" value="{{ links_480p.download_url if links_480p else '' }}"></label></div>
+          <div class="link-pair"><label>720p Watch Link:<input type="url" name="series_watch_link_720p" value="{{ links_720p.watch_url if links_720p else '' }}"></label><label>720p Download Link:<input type="url" name="series_download_link_720p" value="{{ links_720p.download_url if links_720p else '' }}"></label></div>
+          <div class="link-pair"><label>1080p Watch Link:<input type="url" name="series_watch_link_1080p" value="{{ links_1080p.watch_url if links_1080p else '' }}"></label><label>1080p Download Link:<input type="url" name="series_download_link_1080p" value="{{ links_1080p.download_url if links_1080p else '' }}"></label></div>
+      </fieldset>
       <fieldset><legend>Episodes</legend><div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}
         <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
@@ -938,11 +906,22 @@ def admin():
                     if watch_url or download_url:
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
-            else:
+            else: # Series
+                # === [NEW] Process complete season links for series ===
+                series_links = []
+                for quality in ["480p", "720p", "1080p"]:
+                    watch_url = request.form.get(f"series_watch_link_{quality}")
+                    download_url = request.form.get(f"series_download_link_{quality}")
+                    if watch_url or download_url:
+                        series_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+                movie_data["links"] = series_links
+                
+                # Process individual episodes
                 seasons, numbers, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 for i in range(len(seasons)):
                     if seasons[i] and numbers[i] and links[i]:
                         movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+            
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     content_list = list(movies.find().sort('_id', -1))
@@ -976,10 +955,24 @@ def edit_movie(movie_id):
                 if watch_url or download_url:
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
+            # When switching to movie, remove episodes
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": ""}})
-        else:
+        else: # Series
+            # === [MODIFIED] Process complete season links for series as well ===
+            series_links = []
+            for quality in ["480p", "720p", "1080p"]:
+                watch_url = request.form.get(f"series_watch_link_{quality}")
+                download_url = request.form.get(f"series_download_link_{quality}")
+                if watch_url or download_url:
+                    series_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+            update_data["links"] = series_links
+
+            # Process individual episodes
             update_data["episodes"] = [{"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()} for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')) if s and e and w]
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
+            
+            # Update data, but DO NOT unset links anymore
+            movies.update_one({"_id": obj_id}, {"$set": update_data})
+
         return redirect(url_for('admin'))
     return render_template_string(edit_html, movie=movie_obj)
 
