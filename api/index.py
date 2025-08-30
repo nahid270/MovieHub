@@ -403,7 +403,7 @@ detail_html = """
 <div class="container">
     <div class="tabs-container">
         <nav class="tabs-nav">
-            {# === [FIXED] Combine seasons from both episodes and season_packs to generate tabs === #}
+            {# Combine seasons from both episodes and season_packs to generate tabs #}
             {% set all_seasons = (((movie.episodes or []) | map(attribute='season')) + ((movie.season_packs or []) | map(attribute='season_number'))) | unique | sort %}
             
             <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Links</div>
@@ -912,9 +912,11 @@ def home():
 def movie_detail(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie: return "Content not found", 404
+        if not movie: 
+            return "Content not found", 404
         return render_template_string(detail_html, movie=movie)
-    except Exception: return "Content not found", 404
+    except Exception: 
+        return "Content not found", 404
 
 @app.route('/movies')
 def all_movies():
@@ -1060,7 +1062,8 @@ def edit_movie(movie_id):
             "categories": request.form.getlist("categories")
         }
         
-        # Prepare the update query with $set and $unset
+        # Prepare the update query with $set and $unset operators
+        # This is safer than replacing the whole document, as it preserves the _id
         update_query = {"$set": update_data, "$unset": {}}
 
         if content_type == "movie":
@@ -1073,7 +1076,7 @@ def edit_movie(movie_id):
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
             
-            # If it's a movie, we must remove series-specific fields
+            # If it's a movie, we must remove series-specific fields to keep the database clean
             update_query["$unset"]["episodes"] = ""
             update_query["$unset"]["season_packs"] = ""
         
@@ -1081,22 +1084,15 @@ def edit_movie(movie_id):
             # Process season packs for the series
             season_packs = []
             pack_numbers = request.form.getlist('season_pack_number[]')
-            pack_watch_480p = request.form.getlist('season_pack_watch_480p[]')
-            pack_dl_480p = request.form.getlist('season_pack_download_480p[]')
-            pack_watch_720p = request.form.getlist('season_pack_watch_720p[]')
-            pack_dl_720p = request.form.getlist('season_pack_download_720p[]')
-            pack_watch_1080p = request.form.getlist('season_pack_watch_1080p[]')
-            pack_dl_1080p = request.form.getlist('season_pack_download_1080p[]')
+            pack_watch_480p, pack_dl_480p = request.form.getlist('season_pack_watch_480p[]'), request.form.getlist('season_pack_download_480p[]')
+            pack_watch_720p, pack_dl_720p = request.form.getlist('season_pack_watch_720p[]'), request.form.getlist('season_pack_download_720p[]')
+            pack_watch_1080p, pack_dl_1080p = request.form.getlist('season_pack_watch_1080p[]'), request.form.getlist('season_pack_download_1080p[]')
             
             for i in range(len(pack_numbers)):
                 pack_links = []
-                if pack_watch_480p[i] or pack_dl_480p[i]:
-                    pack_links.append({"quality": "480p", "watch_url": pack_watch_480p[i], "download_url": pack_dl_480p[i]})
-                if pack_watch_720p[i] or pack_dl_720p[i]:
-                    pack_links.append({"quality": "720p", "watch_url": pack_watch_720p[i], "download_url": pack_dl_720p[i]})
-                if pack_watch_1080p[i] or pack_dl_1080p[i]:
-                    pack_links.append({"quality": "1080p", "watch_url": pack_watch_1080p[i], "download_url": pack_dl_1080p[i]})
-                
+                if pack_watch_480p[i] or pack_dl_480p[i]: pack_links.append({"quality": "480p", "watch_url": pack_watch_480p[i], "download_url": pack_dl_480p[i]})
+                if pack_watch_720p[i] or pack_dl_720p[i]: pack_links.append({"quality": "720p", "watch_url": pack_watch_720p[i], "download_url": pack_dl_720p[i]})
+                if pack_watch_1080p[i] or pack_dl_1080p[i]: pack_links.append({"quality": "1080p", "watch_url": pack_watch_1080p[i], "download_url": pack_dl_1080p[i]})
                 if pack_numbers[i] and pack_links:
                     season_packs.append({"season_number": int(pack_numbers[i]), "links": pack_links})
             update_data["season_packs"] = season_packs
@@ -1110,10 +1106,8 @@ def edit_movie(movie_id):
             for i in range(len(seasons)):
                 if seasons[i] and numbers[i] and watch_links[i]:
                     episodes.append({
-                        "season": int(seasons[i]),
-                        "episode_number": int(numbers[i]),
-                        "title": titles[i].strip(),
-                        "watch_link": watch_links[i].strip()
+                        "season": int(seasons[i]), "episode_number": int(numbers[i]),
+                        "title": titles[i].strip(), "watch_link": watch_links[i].strip()
                     })
             update_data["episodes"] = episodes
             
@@ -1130,8 +1124,11 @@ def edit_movie(movie_id):
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
-    try: movies.delete_one({"_id": ObjectId(movie_id)})
-    except: return "Invalid ID", 400
+    try: 
+        movies.delete_one({"_id": ObjectId(movie_id)})
+    except Exception as e:
+        print(f"Error deleting movie: {e}")
+        return "Invalid ID or error during deletion", 400
     return redirect(url_for('admin'))
 
 # --- API Routes for Admin Panel ---
