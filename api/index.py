@@ -403,10 +403,14 @@ detail_html = """
 <div class="container">
     <div class="tabs-container">
         <nav class="tabs-nav">
+            {# === [FIXED] Combine seasons from both episodes and season_packs to generate tabs === #}
+            {% set all_seasons = (((movie.episodes or []) | map(attribute='season')) + ((movie.season_packs or []) | map(attribute='season_number'))) | unique | sort %}
+            
             <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Links</div>
-            {% if movie.type == 'series' and movie.episodes %}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
-                <div class="tab-link" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
+            
+            {% if movie.type == 'series' and all_seasons %}
+                {% for season_num in all_seasons %}
+                    <div class="tab-link" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
                 {% endfor %}
             {% endif %}
         </nav>
@@ -434,12 +438,11 @@ detail_html = """
                 {% endif %}
             </div>
             {% if movie.type == 'series' %}
-                {# Get all unique season numbers from episodes to create tabs #}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+                {% for season_num in all_seasons %}
                 <div class="tab-pane" id="season-{{ season_num }}">
                     
-                    {# === [NEW] Find and Display the Season Pack for this season number === #}
-                    {% set season_pack = movie.season_packs|selectattr('season_number', 'equalto', season_num)|first if movie.season_packs else None %}
+                    {# Find and Display the Season Pack for this season number #}
+                    {% set season_pack = (movie.season_packs or [])|selectattr('season_number', 'equalto', season_num)|first %}
                     {% if season_pack and season_pack.links %}
                         <div class="link-group">
                             <h3>Download Complete Season {{ season_num }}</h3>
@@ -456,7 +459,7 @@ detail_html = """
                     {% endif %}
 
                     {# Display individual episodes for this season #}
-                    {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
+                    {% set episodes_for_season = (movie.episodes or []) | selectattr('season', 'equalto', season_num) | list %}
                     {% if episodes_for_season %}
                         <div class="episode-list">
                             {% for ep in episodes_for_season | sort(attribute='episode_number') %}
@@ -595,7 +598,6 @@ admin_html = """
         .result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; border: 2px solid transparent; transition: all 0.2s; }
         .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
         .result-item p { font-size: 0.9rem; }
-        .season-pack-item .form-group { width: 15%; } /* Adjust width for season number input */
     </style>
 </head>
 <body>
@@ -639,7 +641,6 @@ admin_html = """
             </fieldset>
         </div>
         <div id="episode_fields" style="display: none;">
-            {# === [NEW] Dynamic Season Pack Section === #}
             <fieldset><legend>Complete Season Packs</legend>
                 <div id="season_packs_container"></div>
                 <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Season Pack</button>
@@ -664,7 +665,6 @@ admin_html = """
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     
-    // === [NEW] JavaScript function to add Season Pack fields dynamically ===
     function addSeasonPackField() {
         const container = document.getElementById('season_packs_container');
         const newItem = document.createElement('div');
@@ -789,7 +789,6 @@ edit_html = """
     </div>
     
     <div id="episode_fields" style="display: none;">
-      {# === [MODIFIED] Dynamic Season Pack Section for Edit Page === #}
       <fieldset><legend>Complete Season Packs</legend>
         <div id="season_packs_container">
         {% if movie.type == 'series' and movie.season_packs %}
@@ -834,7 +833,6 @@ edit_html = """
     function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title (Optional):</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     
-    // === [NEW] JavaScript function to add Season Pack fields dynamically ===
     function addSeasonPackField() {
         const container = document.getElementById('season_packs_container');
         const newItem = document.createElement('div');
@@ -1006,15 +1004,12 @@ def admin():
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
             else: # Series
-                # === [MODIFIED] Process dynamic season packs ===
+                # Process dynamic season packs
                 season_packs = []
                 pack_numbers = request.form.getlist('season_pack_number[]')
-                pack_watch_480p = request.form.getlist('season_pack_watch_480p[]')
-                pack_dl_480p = request.form.getlist('season_pack_download_480p[]')
-                pack_watch_720p = request.form.getlist('season_pack_watch_720p[]')
-                pack_dl_720p = request.form.getlist('season_pack_download_720p[]')
-                pack_watch_1080p = request.form.getlist('season_pack_watch_1080p[]')
-                pack_dl_1080p = request.form.getlist('season_pack_download_1080p[]')
+                pack_watch_480p, pack_dl_480p = request.form.getlist('season_pack_watch_480p[]'), request.form.getlist('season_pack_download_480p[]')
+                pack_watch_720p, pack_dl_720p = request.form.getlist('season_pack_watch_720p[]'), request.form.getlist('season_pack_download_720p[]')
+                pack_watch_1080p, pack_dl_1080p = request.form.getlist('season_pack_watch_1080p[]'), request.form.getlist('season_pack_download_1080p[]')
                 
                 for i in range(len(pack_numbers)):
                     pack_links = []
@@ -1041,15 +1036,22 @@ def admin():
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    try: obj_id = ObjectId(movie_id)
-    except: return "Invalid ID", 400
+    try:
+        obj_id = ObjectId(movie_id)
+    except:
+        return "Invalid ID", 400
+    
     movie_obj = movies.find_one({"_id": obj_id})
-    if not movie_obj: return "Movie not found", 404
+    if not movie_obj:
+        return "Movie not found", 404
 
     if request.method == "POST":
         content_type = request.form.get("content_type")
+        
+        # Start with the core data that is common for both movies and series
         update_data = {
-            "title": request.form.get("title").strip(), "type": content_type,
+            "title": request.form.get("title").strip(),
+            "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
             "overview": request.form.get("overview").strip(),
@@ -1058,7 +1060,11 @@ def edit_movie(movie_id):
             "categories": request.form.getlist("categories")
         }
         
+        # Prepare the update query with $set and $unset
+        update_query = {"$set": update_data, "$unset": {}}
+
         if content_type == "movie":
+            # Process links for the movie
             movie_links = []
             for quality in ["480p", "720p", "1080p"]:
                 watch_url = request.form.get(f"watch_link_{quality}")
@@ -1066,30 +1072,59 @@ def edit_movie(movie_id):
                 if watch_url or download_url:
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
-        else: # Series
-            # === [MODIFIED] Process dynamic season packs for edit ===
+            
+            # If it's a movie, we must remove series-specific fields
+            update_query["$unset"]["episodes"] = ""
+            update_query["$unset"]["season_packs"] = ""
+        
+        else:  # This means content_type is "series"
+            # Process season packs for the series
             season_packs = []
             pack_numbers = request.form.getlist('season_pack_number[]')
-            pack_watch_480p, pack_dl_480p = request.form.getlist('season_pack_watch_480p[]'), request.form.getlist('season_pack_download_480p[]')
-            pack_watch_720p, pack_dl_720p = request.form.getlist('season_pack_watch_720p[]'), request.form.getlist('season_pack_download_720p[]')
-            pack_watch_1080p, pack_dl_1080p = request.form.getlist('season_pack_watch_1080p[]'), request.form.getlist('season_pack_download_1080p[]')
+            pack_watch_480p = request.form.getlist('season_pack_watch_480p[]')
+            pack_dl_480p = request.form.getlist('season_pack_download_480p[]')
+            pack_watch_720p = request.form.getlist('season_pack_watch_720p[]')
+            pack_dl_720p = request.form.getlist('season_pack_download_720p[]')
+            pack_watch_1080p = request.form.getlist('season_pack_watch_1080p[]')
+            pack_dl_1080p = request.form.getlist('season_pack_download_1080p[]')
             
             for i in range(len(pack_numbers)):
                 pack_links = []
-                if pack_watch_480p[i] or pack_dl_480p[i]: pack_links.append({"quality": "480p", "watch_url": pack_watch_480p[i], "download_url": pack_dl_480p[i]})
-                if pack_watch_720p[i] or pack_dl_720p[i]: pack_links.append({"quality": "720p", "watch_url": pack_watch_720p[i], "download_url": pack_dl_720p[i]})
-                if pack_watch_1080p[i] or pack_dl_1080p[i]: pack_links.append({"quality": "1080p", "watch_url": pack_watch_1080p[i], "download_url": pack_dl_1080p[i]})
+                if pack_watch_480p[i] or pack_dl_480p[i]:
+                    pack_links.append({"quality": "480p", "watch_url": pack_watch_480p[i], "download_url": pack_dl_480p[i]})
+                if pack_watch_720p[i] or pack_dl_720p[i]:
+                    pack_links.append({"quality": "720p", "watch_url": pack_watch_720p[i], "download_url": pack_dl_720p[i]})
+                if pack_watch_1080p[i] or pack_dl_1080p[i]:
+                    pack_links.append({"quality": "1080p", "watch_url": pack_watch_1080p[i], "download_url": pack_dl_1080p[i]})
+                
                 if pack_numbers[i] and pack_links:
                     season_packs.append({"season_number": int(pack_numbers[i]), "links": pack_links})
             update_data["season_packs"] = season_packs
 
-            # Process individual episodes
-            update_data["episodes"] = [{"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()} for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')) if s and e and w]
+            # Process individual episodes for the series
+            episodes = []
+            seasons = request.form.getlist('episode_season[]')
+            numbers = request.form.getlist('episode_number[]')
+            titles = request.form.getlist('episode_title[]')
+            watch_links = request.form.getlist('episode_watch_link[]')
+            for i in range(len(seasons)):
+                if seasons[i] and numbers[i] and watch_links[i]:
+                    episodes.append({
+                        "season": int(seasons[i]),
+                        "episode_number": int(numbers[i]),
+                        "title": titles[i].strip(),
+                        "watch_link": watch_links[i].strip()
+                    })
+            update_data["episodes"] = episodes
             
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
+            # If it's a series, we must remove the movie-specific field
+            update_query["$unset"]["links"] = ""
 
+        # Execute the final update query on the database
+        movies.update_one({"_id": obj_id}, update_query)
+        
         return redirect(url_for('admin'))
+        
     return render_template_string(edit_html, movie=movie_obj)
 
 @app.route('/delete_movie/<movie_id>')
