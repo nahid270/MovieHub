@@ -59,7 +59,10 @@ def inject_globals():
     return dict(
         website_name=WEBSITE_NAME,
         ad_settings=ad_settings or {},
-        predefined_categories=PREDEFINED_CATEGORIES
+        predefined_categories=PREDEFINED_CATEGORIES,
+        # [FIXED] The 'quote' function is needed by the detail_html template.
+        # This was accidentally removed in the previous version.
+        quote=quote
     )
 
 # =========================================================================================
@@ -186,7 +189,7 @@ index_html = """
         <a href="{{ url_for('all_movies') }}">All Movies</a>
         <a href="{{ url_for('all_series') }}">All Series</a>
         <hr>
-        <!-- [FIXED] Changed to use query parameter `name` -->
+        <!-- [FIXED] Changed to use query parameter `name` for robust linking -->
         {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', name=cat) }}">{{ cat }}</a>{% endfor %}
     </div>
 </div>
@@ -230,7 +233,7 @@ index_html = """
         <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
-                <!-- [FIXED] Changed to use query parameter `name` -->
+                <!-- [FIXED] Changed to use query parameter `name` for robust linking -->
                 <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All</a>
             </div>
             <div class="swiper movie-carousel">
@@ -740,9 +743,6 @@ edit_html = """
 </script>
 </body></html>
 """
-# =======================================================================================
-# === [END] HTML TEMPLATES ============================================================
-# =======================================================================================
 
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
@@ -789,9 +789,13 @@ def home():
 def movie_detail(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie: return "Content not found", 404
+        if not movie: 
+            return "Content not found", 404
         return render_template_string(detail_html, movie=movie)
-    except Exception: return "Content not found", 404
+    except Exception as e:
+        # For debugging, it's helpful to see the actual error in the server logs
+        print(f"Error rendering detail page for ID {movie_id}: {e}")
+        return "Content not found", 404
 
 @app.route('/movies')
 def all_movies():
@@ -813,11 +817,12 @@ def all_series():
         is_full_page_list=True
     )
 
-# === [FINAL, ROBUST FIX] Using query parameter `name` instead of path variable ===
+# === [FINAL, ROBUST FIX] Using query parameter `name` which is safer for special characters ===
 @app.route('/category')
 def movies_by_category():
     title = request.args.get('name')
     if not title:
+        # If no category name is provided, redirect to home
         return redirect(url_for('home'))
 
     # Special handling for "Latest Movies" and "Latest Series" virtual categories
@@ -826,7 +831,7 @@ def movies_by_category():
     if title == "Latest Series":
         return redirect(url_for('all_series'))
         
-    # Standard query for all other real categories like "18+ Adult Zone"
+    # Standard query for all other real categories like "18+ Adult Zone", "Bengali", etc.
     query = {"categories": title}
     content_list = list(movies.find(query).sort('_id', -1))
     
