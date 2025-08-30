@@ -840,7 +840,7 @@ def movie_detail(movie_id):
         return render_template_string(detail_html, movie=movie)
     except Exception: return "Content not found", 404
 
-# === [NEW] Route for all movies ===
+# === Route for all movies ===
 @app.route('/movies')
 def all_movies():
     """Fetches and displays all content marked as 'movie'."""
@@ -852,7 +852,7 @@ def all_movies():
         is_full_page_list=True
     )
 
-# === [NEW] Route for all series ===
+# === Route for all series ===
 @app.route('/series')
 def all_series():
     """Fetches and displays all content marked as 'series'."""
@@ -864,11 +864,12 @@ def all_series():
         is_full_page_list=True
     )
 
-# === [MODIFIED] Route for specific categories like Bengali, Hindi etc. ===
+# === [FIXED] Route for specific categories like Bengali, Hindi etc. ===
 @app.route('/category/<cat_name>')
 def movies_by_category(cat_name):
     """Fetches and displays content by a specific category."""
-    title = unquote(cat_name).replace("_", " ").title()
+    # FIX: Removed .replace() and .title() to use the exact category name from the URL
+    title = unquote(cat_name)
     
     # Special handling for "Latest Movie" and "Latest Series" for carousel "View All" links
     if title == "Latest Movie":
