@@ -126,24 +126,8 @@ index_html = """
   .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
-  
-  /* === [FIX] AD CONTAINER STYLING START === */
-  .ad-container {
-    margin: 20px auto;
-    width: 100%;
-    max-width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Prevents large ads from breaking layout */
-    min-height: 50px;
-    text-align: center;
-  }
-  .ad-container > * {
-    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-  }
-  /* === [FIX] AD CONTAINER STYLING END === */
-
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
   .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
   .mobile-nav-menu.active {transform: translateX(0);}
   .mobile-nav-menu .close-btn {position: absolute;top: 20px;right: 20px;font-size: 2.5rem;color: white;background: none;border: none;cursor: pointer;}
@@ -258,7 +242,8 @@ index_html = """
         {% endif %}
     {% endmacro %}
     {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-    {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movie') }}
+    <!-- [FIX] Changed cat_name to 'Latest Movies' and 'Latest Series' for consistency -->
+    {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movies') }}
     {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
     {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
     {% for cat_name, movies_list in categorized_content.items() %}
@@ -383,24 +368,8 @@ detail_html = """
   .episode-list { display: flex; flex-direction: column; gap: 10px; }
   .episode-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 15px; border-radius: 8px; }
   .episode-name { font-weight: 500; }
-
-  /* === [FIX] AD CONTAINER STYLING START === */
-  .ad-container {
-    margin: 20px auto;
-    width: 100%;
-    max-width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Prevents large ads from breaking layout */
-    min-height: 50px;
-    text-align: center;
-  }
-  .ad-container > * {
-    max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-  }
-  /* === [FIX] AD CONTAINER STYLING END === */
-
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -513,23 +482,8 @@ wait_page_html = """
         .timer { font-size: 2.5rem; font-weight: 700; color: var(--text-light); margin-bottom: 30px; }
         .get-link-btn { display: inline-block; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: #555; transition: background-color 0.2s; }
         .get-link-btn.ready { background-color: var(--primary-color); }
-        
-        /* === [FIX] AD CONTAINER STYLING START === */
-        .ad-container {
-            margin: 30px auto 0;
-            width: 100%;
-            max-width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden; /* Prevents large ads from breaking layout */
-            min-height: 50px;
-            text-align: center;
-        }
-        .ad-container > * {
-            max-width: 100% !important; /* Forces ad content (iframe/img) to be responsive */
-        }
-        /* === [FIX] AD CONTAINER STYLING END === */
+        .ad-container { margin: 30px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+        .ad-container > * { max-width: 100% !important; }
     </style>
 </head>
 <body>
@@ -819,7 +773,6 @@ def home():
     for category in PREDEFINED_CATEGORIES:
         categorized_content[category] = list(movies.find({"categories": category}).sort('_id', -1).limit(12))
 
-    # For homepage carousels, we still need latest movies and series separately
     latest_movies_for_carousel = list(movies.find({"type": "movie"}).sort('_id', -1).limit(12))
     latest_series_for_carousel = list(movies.find({"type": "series"}).sort('_id', -1).limit(12))
 
@@ -840,10 +793,8 @@ def movie_detail(movie_id):
         return render_template_string(detail_html, movie=movie)
     except Exception: return "Content not found", 404
 
-# === Route for all movies ===
 @app.route('/movies')
 def all_movies():
-    """Fetches and displays all content marked as 'movie'."""
     all_movie_content = list(movies.find({"type": "movie"}).sort('_id', -1))
     return render_template_string(
         index_html, 
@@ -852,10 +803,8 @@ def all_movies():
         is_full_page_list=True
     )
 
-# === Route for all series ===
 @app.route('/series')
 def all_series():
-    """Fetches and displays all content marked as 'series'."""
     all_series_content = list(movies.find({"type": "series"}).sort('_id', -1))
     return render_template_string(
         index_html, 
@@ -864,19 +813,18 @@ def all_series():
         is_full_page_list=True
     )
 
-# === [FIXED] Route for specific categories like Bengali, Hindi etc. ===
+# === [FIXED] This function now correctly handles all category types ===
 @app.route('/category/<cat_name>')
 def movies_by_category(cat_name):
-    """Fetches and displays content by a specific category."""
-    # FIX: Removed .replace() and .title() to use the exact category name from the URL
     title = unquote(cat_name)
     
-    # Special handling for "Latest Movie" and "Latest Series" for carousel "View All" links
-    if title == "Latest Movie":
+    # Special handling for "Latest Movies" and "Latest Series" virtual categories
+    if title == "Latest Movies":
         return redirect(url_for('all_movies'))
     if title == "Latest Series":
         return redirect(url_for('all_series'))
         
+    # Standard query for all other real categories like "18+ Adult Zone"
     query = {"categories": title}
     content_list = list(movies.find(query).sort('_id', -1))
     return render_template_string(
@@ -902,7 +850,7 @@ def admin():
         form_action = request.form.get("form_action")
 
         if form_action == "update_ads":
-            ad_settings = {
+            ad_settings_data = {
                 "ad_header": request.form.get("ad_header"),
                 "ad_body_top": request.form.get("ad_body_top"),
                 "ad_footer": request.form.get("ad_footer"),
@@ -910,7 +858,7 @@ def admin():
                 "ad_detail_page": request.form.get("ad_detail_page"),
                 "ad_wait_page": request.form.get("ad_wait_page"),
             }
-            settings.update_one({"_id": "ad_config"}, {"$set": ad_settings}, upsert=True)
+            settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
@@ -939,13 +887,17 @@ def admin():
                     if watch_url or download_url:
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
-            else:
-                seasons, numbers, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
+            else: # Series
+                seasons = request.form.getlist('episode_season[]')
+                numbers = request.form.getlist('episode_number[]')
+                titles = request.form.getlist('episode_title[]')
+                links = request.form.getlist('episode_watch_link[]')
                 for i in range(len(seasons)):
                     if seasons[i] and numbers[i] and links[i]:
                         movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
+    
     content_list = list(movies.find().sort('_id', -1))
     return render_template_string(admin_html, content_list=content_list)
 
@@ -978,8 +930,15 @@ def edit_movie(movie_id):
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": ""}})
-        else:
-            update_data["episodes"] = [{"season": int(s), "episode_number": int(e), "title": t.strip(), "watch_link": w.strip()} for s, e, t, w in zip(request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')) if s and e and w]
+        else: # Series
+            update_data["episodes"] = []
+            seasons = request.form.getlist('episode_season[]')
+            numbers = request.form.getlist('episode_number[]')
+            titles = request.form.getlist('episode_title[]')
+            links = request.form.getlist('episode_watch_link[]')
+            for i in range(len(seasons)):
+                if seasons[i] and numbers[i] and links[i]:
+                     update_data["episodes"].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
     return render_template_string(edit_html, movie=movie_obj)
@@ -998,7 +957,7 @@ def api_search_tmdb():
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
-        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={query}"
+        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}"
         res = requests.get(search_url, timeout=10)
         res.raise_for_status()
         data = res.json()
