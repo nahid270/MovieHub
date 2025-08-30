@@ -242,7 +242,7 @@ index_html = """
         {% endif %}
     {% endmacro %}
     {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-    <!-- [FIX] Changed cat_name to 'Latest Movies' and 'Latest Series' for consistency -->
+    <!-- [FIXED] Changed cat_name to match the condition in the Python route -->
     {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movies') }}
     {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
     {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
@@ -320,6 +320,17 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+# --- The rest of the HTML templates (detail, wait, admin, edit) remain unchanged ---
+detail_html = """ ... """
+wait_page_html = """ ... """
+admin_html = """ ... """
+edit_html = """ ... """
+# NOTE: To keep the response concise, I'm omitting the other templates as they don't need changes. 
+# The full code block will include them.
+# =======================================================================================
+# === [END] HTML TEMPLATES (In full code, all templates will be here) ===================
+# =======================================================================================
+# --- Re-pasting the unchanged HTML templates for a complete, runnable file ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -740,9 +751,6 @@ edit_html = """
 </script>
 </body></html>
 """
-# =======================================================================================
-# === [END] HTML TEMPLATES ============================================================
-# =======================================================================================
 
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
@@ -813,8 +821,8 @@ def all_series():
         is_full_page_list=True
     )
 
-# === [FIXED] This function now correctly handles all category types ===
-@app.route('/category/<cat_name>')
+# === [FINAL FIX] This function now uses <path:> converter for robustness ===
+@app.route('/category/<path:cat_name>')
 def movies_by_category(cat_name):
     title = unquote(cat_name)
     
@@ -827,6 +835,7 @@ def movies_by_category(cat_name):
     # Standard query for all other real categories like "18+ Adult Zone"
     query = {"categories": title}
     content_list = list(movies.find(query).sort('_id', -1))
+    
     return render_template_string(
         index_html, 
         movies=content_list, 
