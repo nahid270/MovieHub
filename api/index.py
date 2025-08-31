@@ -414,16 +414,21 @@ detail_html = """
             <div class="tab-pane active" id="downloads">
                 {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
                 
-                <!-- START: Complete Series Download Button -->
-                {% if movie.type == 'series' and movie.complete_series_link %}
+                <!-- START: [MODIFIED] Complete Series Watch/Download Buttons -->
+                {% if movie.type == 'series' and (movie.complete_watch_link or movie.complete_download_link) %}
                 <div class="link-group">
-                    <h3>Download Complete Series</h3>
+                    <h3>Complete Series Links</h3>
                     <div class="link-buttons">
-                        <a href="{{ url_for('wait_page', target=quote(movie.complete_series_link)) }}" class="action-btn btn-download"><i class="fas fa-archive"></i> Download All Episodes (ZIP)</a>
+                        {% if movie.complete_watch_link %}
+                            <a href="{{ url_for('wait_page', target=quote(movie.complete_watch_link)) }}" class="action-btn btn-watch"><i class="fas fa-play"></i> Watch Complete Series</a>
+                        {% endif %}
+                        {% if movie.complete_download_link %}
+                            <a href="{{ url_for('wait_page', target=quote(movie.complete_download_link)) }}" class="action-btn btn-download"><i class="fas fa-download"></i> Download Complete Series</a>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
-                <!-- END: Complete Series Download Button -->
+                <!-- END: [MODIFIED] -->
                 
                 {% if movie.type == 'movie' %}
                     {% if movie.links %}
@@ -622,16 +627,17 @@ admin_html = """
             </fieldset>
         </div>
         <div id="episode_fields" style="display: none;">
-            <fieldset><legend>Series Episodes</legend>
-                <!-- START: New field for Complete Series Download Link -->
-                <div class="form-group">
-                    <label>Complete Series Download Link (Optional):</label>
-                    <input type="url" name="complete_series_link" placeholder="Direct link for the complete ZIP/RAR file">
+            <fieldset><legend>Series Links</legend>
+                <!-- START: [MODIFIED] New fields for Complete Series Watch/Download Links -->
+                <div class="link-pair">
+                    <label>Complete Series Watch Link (Optional):<input type="url" name="complete_watch_link"></label>
+                    <label>Complete Series Download Link (Optional):<input type="url" name="complete_download_link"></label>
                 </div>
-                <!-- END: New field -->
+                <!-- END: [MODIFIED] -->
                 <hr style="margin: 20px 0;">
+                <label>Individual Episodes:</label>
                 <div id="episodes_container"></div>
-                <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Individual Episode</button>
+                <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
             </fieldset>
         </div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
@@ -746,14 +752,15 @@ edit_html = """
         </fieldset>
     </div>
     <div id="episode_fields" style="display: none;">
-      <fieldset><legend>Episodes</legend>
-        <!-- START: New field for Complete Series Download Link -->
-        <div class="form-group">
-            <label>Complete Series Download Link (Optional):</label>
-            <input type="url" name="complete_series_link" value="{{ movie.complete_series_link or '' }}" placeholder="Direct link for the complete ZIP/RAR file">
+      <fieldset><legend>Series Links</legend>
+        <!-- START: [MODIFIED] New fields for Complete Series Watch/Download Links -->
+        <div class="link-pair">
+            <label>Complete Series Watch Link:<input type="url" name="complete_watch_link" value="{{ movie.complete_watch_link or '' }}"></label>
+            <label>Complete Series Download Link:<input type="url" name="complete_download_link" value="{{ movie.complete_download_link or '' }}"></label>
         </div>
-        <!-- END: New field -->
+        <!-- END: [MODIFIED] -->
         <hr style="margin: 20px 0;">
+        <label>Individual Episodes:</label>
         <div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}
         <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
@@ -779,7 +786,7 @@ def get_tmdb_details(tmdb_id, media_type):
         res = requests.get(detail_url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        details = {"tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None,"backdrop": f"https://image.tmdb.org/t/p/w1200{data.get('backdrop_path')}" if data.get('backdrop_path') else None,"overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie"}
+        details = {"tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None,"backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None,"overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie"}
         return details
     except requests.RequestException as e:
         print(f"ERROR: TMDb API request failed for ID {tmdb_id}. Reason: {e}")
@@ -917,9 +924,10 @@ def admin():
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
             else: # Series
-                # START: Save complete series link
-                movie_data["complete_series_link"] = request.form.get("complete_series_link").strip() or None
-                # END: Save complete series link
+                # START: [MODIFIED] Save complete series watch/download links
+                movie_data["complete_watch_link"] = request.form.get("complete_watch_link").strip() or None
+                movie_data["complete_download_link"] = request.form.get("complete_download_link").strip() or None
+                # END: [MODIFIED]
                 seasons = request.form.getlist('episode_season[]')
                 numbers = request.form.getlist('episode_number[]')
                 titles = request.form.getlist('episode_title[]')
@@ -961,11 +969,14 @@ def edit_movie(movie_id):
                 if watch_url or download_url:
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "complete_series_link": ""}})
+            # START: [MODIFIED] Unset series-specific fields when changing to movie
+            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "complete_watch_link": "", "complete_download_link": ""}})
+            # END: [MODIFIED]
         else: # Series
-            # START: Update complete series link
-            update_data["complete_series_link"] = request.form.get("complete_series_link").strip() or None
-            # END: Update complete series link
+            # START: [MODIFIED] Update complete series watch/download links
+            update_data["complete_watch_link"] = request.form.get("complete_watch_link").strip() or None
+            update_data["complete_download_link"] = request.form.get("complete_download_link").strip() or None
+            # END: [MODIFIED]
             update_data["episodes"] = []
             seasons = request.form.getlist('episode_season[]')
             numbers = request.form.getlist('episode_number[]')
