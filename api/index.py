@@ -404,12 +404,16 @@ detail_html = """
 </div>
 <div class="container">
     <div class="tabs-container">
+        {# [FIXED] Robust logic to find all available seasons from both episodes and season packs #}
+        {% set episode_seasons = movie.episodes | map(attribute='season') | list if movie.episodes else [] %}
+        {% set pack_seasons = movie.season_packs | map(attribute='season_number') | list if movie.season_packs else [] %}
+        {% set all_seasons = (episode_seasons + pack_seasons) | unique | sort %}
+
         <nav class="tabs-nav">
-            {# [FIXED] Simplified and corrected tab generation logic #}
             {% if movie.type == 'movie' %}
                 <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Download Links</div>
-            {% elif movie.type == 'series' and movie.episodes %}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+            {% elif all_seasons %}
+                {% for season_num in all_seasons %}
                     <div class="tab-link {% if loop.first %}active{% endif %}" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
                 {% endfor %}
             {% else %}
@@ -435,9 +439,8 @@ detail_html = """
                 </div>
                 {% else %}<p style="text-align:center;">No links available yet.</p>{% endif %}
             </div>
-            {% elif movie.type == 'series' %}
-                {# [FIXED] Simplified and corrected tab content rendering #}
-                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+            {% elif all_seasons %}
+                {% for season_num in all_seasons %}
                 <div class="tab-pane {% if loop.first %}active{% endif %}" id="season-{{ season_num }}">
                     {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
                     {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
@@ -453,20 +456,24 @@ detail_html = """
                         </div>
                     </div>
                     {% endif %}
+                    
+                    {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
+                    {% if episodes_for_season %}
                     <div class="episode-list">
-                        {% for ep in movie.episodes | selectattr('season', 'equalto', season_num) | sort(attribute='episode_number') %}
+                        {% for ep in episodes_for_season | sort(attribute='episode_number') %}
                         <div class="episode-item">
                             <span class="episode-name"><i class="fas fa-play-circle"></i> Episode {{ ep.episode_number }} {% if ep.title %}- {{ep.title}}{% endif %}</span>
                             {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn btn-download">Download / Watch</a>{% endif %}
                         </div>
-                        {% else %}
-                        <p style="text-align:center;">No individual episodes added for this season.</p>
                         {% endfor %}
                     </div>
+                    {% elif not season_pack %}
+                        <p style="text-align:center;">No links or episodes available for this season yet.</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="tab-pane active" id="no-links"><p style="text-align:center;">No links or episodes available yet.</p></div>
                 {% endfor %}
+            {% else %}
+                <div class="tab-pane active" id="no-links"><p style="text-align:center;">No links or episodes available yet.</p></div>
             {% endif %}
         </div>
     </div>
@@ -976,7 +983,7 @@ def admin():
                 season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
                 season_pack_download_links = request.form.getlist('season_pack_download_link[]')
                 for i in range(len(season_pack_numbers)):
-                    if season_pack_numbers[i] and (season_pack_watch_links[i] or season_pack_download_links[i]):
+                    if season_pack_numbers[i] and (season_pack_watch_links[i].strip() or season_pack_download_links[i].strip()):
                         movie_data['season_packs'].append({
                             "season_number": int(season_pack_numbers[i]),
                             "watch_link": season_pack_watch_links[i].strip() or None,
@@ -1031,7 +1038,7 @@ def edit_movie(movie_id):
             season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
             season_pack_download_links = request.form.getlist('season_pack_download_link[]')
             for i in range(len(season_pack_numbers)):
-                 if season_pack_numbers[i] and (season_pack_watch_links[i] or season_pack_download_links[i]):
+                 if season_pack_numbers[i] and (season_pack_watch_links[i].strip() or season_pack_download_links[i].strip()):
                     update_data['season_packs'].append({
                         "season_number": int(season_pack_numbers[i]),
                         "watch_link": season_pack_watch_links[i].strip() or None,
