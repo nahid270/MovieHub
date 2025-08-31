@@ -319,6 +319,7 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+# START: [FIXED] detail_html template
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -360,6 +361,7 @@ detail_html = """
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
   .link-group { margin-bottom: 30px; text-align: center; border-bottom: 1px solid #222; padding-bottom: 30px;}
+  .link-group:last-child { border-bottom: none; }
   .link-group h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 20px; }
   .link-buttons { display: inline-flex; flex-wrap: wrap; gap: 15px; justify-content: center;}
   .quality-group { margin-bottom: 20px; }
@@ -403,13 +405,15 @@ detail_html = """
 <div class="container">
     <div class="tabs-container">
         <nav class="tabs-nav">
+            {# [FIXED] Simplified and corrected tab generation logic #}
             {% if movie.type == 'movie' %}
                 <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Download Links</div>
-            {% else %}
-                <div class="tab-link active" data-tab="season-{{ (movie.episodes | map(attribute='season') | unique | sort)[0] if movie.episodes else '1' }}">Season {{ (movie.episodes | map(attribute='season') | unique | sort)[0] if movie.episodes else '1' }}</div>
-                {% for season_num in (movie.episodes | map(attribute='season') | unique | sort)[1:] %}
-                    <div class="tab-link" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
+            {% elif movie.type == 'series' and movie.episodes %}
+                {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
+                    <div class="tab-link {% if loop.first %}active{% endif %}" data-tab="season-{{ season_num }}">Season {{ season_num }}</div>
                 {% endfor %}
+            {% else %}
+                 <div class="tab-link active" data-tab="no-links">Links</div>
             {% endif %}
         </nav>
         <div class="tabs-content">
@@ -432,10 +436,9 @@ detail_html = """
                 {% else %}<p style="text-align:center;">No links available yet.</p>{% endif %}
             </div>
             {% elif movie.type == 'series' %}
+                {# [FIXED] Simplified and corrected tab content rendering #}
                 {% for season_num in movie.episodes | map(attribute='season') | unique | sort %}
                 <div class="tab-pane {% if loop.first %}active{% endif %}" id="season-{{ season_num }}">
-                    
-                    <!-- START: [NEW] Complete Season Pack Links -->
                     {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
                     {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
                     <div class="link-group">
@@ -450,8 +453,6 @@ detail_html = """
                         </div>
                     </div>
                     {% endif %}
-                    <!-- END: [NEW] Complete Season Pack Links -->
-
                     <div class="episode-list">
                         {% for ep in movie.episodes | selectattr('season', 'equalto', season_num) | sort(attribute='episode_number') %}
                         <div class="episode-item">
@@ -459,10 +460,12 @@ detail_html = """
                             {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn btn-download">Download / Watch</a>{% endif %}
                         </div>
                         {% else %}
-                        <p style="text-align:center;">No episodes found for this season.</p>
+                        <p style="text-align:center;">No individual episodes added for this season.</p>
                         {% endfor %}
                     </div>
                 </div>
+                {% else %}
+                <div class="tab-pane active" id="no-links"><p style="text-align:center;">No links or episodes available yet.</p></div>
                 {% endfor %}
             {% endif %}
         </div>
@@ -483,6 +486,8 @@ detail_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+# END: [FIXED] detail_html template
+
 wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -588,7 +593,7 @@ admin_html = """
         .result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; border: 2px solid transparent; transition: all 0.2s; }
         .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
         .result-item p { font-size: 0.9rem; }
-        .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; }
+        .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
     </style>
 </head>
 <body>
@@ -633,14 +638,12 @@ admin_html = """
         </div>
         <div id="episode_fields" style="display: none;">
             <fieldset><legend>Series Links</legend>
-                <!-- START: [NEW] Complete Season Pack Section -->
-                <label>Complete Season Packs (Optional):</label>
+                <label style="font-size: 1.1rem;">Complete Season Packs (Optional):</label>
                 <div id="season_packs_container"></div>
-                <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Season Pack</button>
+                <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Complete Season Pack</button>
                 <hr style="margin: 20px 0;">
-                <!-- END: [NEW] Complete Season Pack Section -->
                 
-                <label>Individual Episodes:</label>
+                <label style="font-size: 1.1rem;">Individual Episodes:</label>
                 <div id="episodes_container"></div>
                 <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
             </fieldset>
@@ -663,7 +666,6 @@ admin_html = """
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     
-    // START: [NEW] JavaScript function to add season pack fields
     function addSeasonPackField() {
         const container = document.getElementById('season_packs_container');
         const newItem = document.createElement('div');
@@ -677,7 +679,6 @@ admin_html = """
             </div>`;
         container.appendChild(newItem);
     }
-    // END: [NEW] JavaScript function
 
     function openModal() { modal.style.display = 'flex'; }
     function closeModal() { modal.style.display = 'none'; }
@@ -746,7 +747,7 @@ edit_html = """
         .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; }
         .checkbox-group input { width: auto; }
         .link-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; }
+        .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
     </style>
 </head>
 <body>
@@ -776,8 +777,7 @@ edit_html = """
     </div>
     <div id="episode_fields" style="display: none;">
       <fieldset><legend>Series Links</legend>
-        <!-- START: [NEW] Complete Season Pack Section -->
-        <label>Complete Season Packs (Optional):</label>
+        <label style="font-size: 1.1rem;">Complete Season Packs (Optional):</label>
         <div id="season_packs_container">
         {% if movie.type == 'series' and movie.season_packs %}
             {% for pack in movie.season_packs|sort(attribute='season_number') %}
@@ -792,11 +792,10 @@ edit_html = """
             {% endfor %}
         {% endif %}
         </div>
-        <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Season Pack</button>
+        <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Complete Season Pack</button>
         <hr style="margin: 20px 0;">
-        <!-- END: [NEW] Complete Season Pack Section -->
 
-        <label>Individual Episodes:</label>
+        <label style="font-size: 1.1rem;">Individual Episodes:</label>
         <div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}
         <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
@@ -808,7 +807,6 @@ edit_html = """
 <script>
     function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title (Optional):</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    // START: [NEW] JavaScript function to add season pack fields
     function addSeasonPackField() {
         const container = document.getElementById('season_packs_container');
         const newItem = document.createElement('div');
@@ -822,7 +820,6 @@ edit_html = """
             </div>`;
         container.appendChild(newItem);
     }
-    // END: [NEW] JavaScript function
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
@@ -975,18 +972,16 @@ def admin():
                         movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
             else: # Series
-                # START: [NEW] Process and save season packs
                 season_pack_numbers = request.form.getlist('season_pack_number[]')
                 season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
                 season_pack_download_links = request.form.getlist('season_pack_download_link[]')
                 for i in range(len(season_pack_numbers)):
-                    if season_pack_numbers[i]:
+                    if season_pack_numbers[i] and (season_pack_watch_links[i] or season_pack_download_links[i]):
                         movie_data['season_packs'].append({
                             "season_number": int(season_pack_numbers[i]),
                             "watch_link": season_pack_watch_links[i].strip() or None,
                             "download_link": season_pack_download_links[i].strip() or None
                         })
-                # END: [NEW]
                 
                 seasons = request.form.getlist('episode_season[]')
                 numbers = request.form.getlist('episode_number[]')
@@ -1029,22 +1024,19 @@ def edit_movie(movie_id):
                 if watch_url or download_url:
                     movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
-            # Unset series-specific fields
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
         else: # Series
-            # START: [NEW] Process and save season packs for edit
             update_data["season_packs"] = []
             season_pack_numbers = request.form.getlist('season_pack_number[]')
             season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
             season_pack_download_links = request.form.getlist('season_pack_download_link[]')
             for i in range(len(season_pack_numbers)):
-                 if season_pack_numbers[i]:
+                 if season_pack_numbers[i] and (season_pack_watch_links[i] or season_pack_download_links[i]):
                     update_data['season_packs'].append({
                         "season_number": int(season_pack_numbers[i]),
                         "watch_link": season_pack_watch_links[i].strip() or None,
                         "download_link": season_pack_download_links[i].strip() or None
                     })
-            # END: [NEW]
 
             update_data["episodes"] = []
             seasons = request.form.getlist('episode_season[]')
@@ -1054,7 +1046,6 @@ def edit_movie(movie_id):
             for i in range(len(seasons)):
                 if seasons[i] and numbers[i] and links[i]:
                      update_data["episodes"].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
-            # Unset movie-specific field
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
     return render_template_string(edit_html, movie=movie_obj)
