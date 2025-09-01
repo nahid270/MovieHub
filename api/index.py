@@ -22,7 +22,7 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
-PREDEFINED_CATEGORIES = ["Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
+PREDEFINED_CATEGORIES = ["Coming Soon", "Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
 app = Flask(__name__)
 
 # --- Authentication ---
