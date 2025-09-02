@@ -157,10 +157,11 @@ index_html = """
   .card-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cyan-accent); margin: 4px 0 0 0; }
   .card-meta { font-size: 0.75rem; color: #f0f0f0; display: flex; align-items: center; gap: 5px; }
   .card-meta i { color: var(--cyan-accent); }
-  .type-tag, .trending-tag { position: absolute; color: white; padding: 3px 10px; font-size: 0.7rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
-  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); border-radius: 4px; }
-  .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; }
-  
+  .type-tag, .trending-tag, .language-tag { position: absolute; color: white; padding: 3px 10px; font-size: 0.7rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;}
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
+  .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
+  .language-tag { top: 8px; right: 8px; background-color: var(--primary-color); }
+
   .full-page-grid-container { padding: 80px 10px 80px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
   .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
@@ -222,6 +223,7 @@ index_html = """
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
       {% if m.categories and 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
+      {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
       <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
       <div class="card-info">
         <p class="card-meta"><i class="fas fa-clock"></i> {{ m._id | time_ago }}</p>
@@ -239,8 +241,6 @@ index_html = """
     </div>
   {% else %}
     <div style="height: var(--nav-height);"></div>
-    
-    <!-- Hero Slider Section -->
     {% if slider_content %}
     <section class="hero-slider-section container">
         <div class="swiper hero-slider">
@@ -296,14 +296,12 @@ index_html = """
 <footer class="main-footer">
     <p>&copy; 2024 {{ website_name }}. All Rights Reserved.</p>
 </footer>
-
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
   <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-layer-group"></i><span>Movie & Series</span></a>
   <a href="https://t.me/Movie_Request_Group_23" target="_blank" class="nav-item"><i class="fas fa-plus-circle"></i><span>Request</span></a>
   <button id="live-search-btn" class="nav-item"><i class="fas fa-search"></i><span>Search</span></button>
 </nav>
-
 <div id="search-overlay" class="search-overlay">
   <button id="close-search-btn" class="close-search-btn">&times;</button>
   <div class="search-container">
@@ -311,12 +309,10 @@ index_html = """
     <div id="search-results-live"><p style="color: #555; text-align: center;">Start typing to see results</p></div>
   </div>
 </div>
-
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 10 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
-        
     const menuToggle = document.querySelector('.menu-toggle');
     const mobileMenu = document.querySelector('.mobile-nav-menu');
     const closeBtn = document.querySelector('.close-btn');
@@ -339,26 +335,20 @@ index_html = """
             const query = searchInputLive.value.trim();
             if (query.length > 1) {
                 searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Searching...</p>';
-                fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        let html = '';
-                        if (data.length > 0) {
-                            data.forEach(item => { html += `<a href="/movie/${item._id}" class="search-result-item"><img src="${item.poster}" alt="${item.title}"><span>${item.title}</span></a>`; });
-                        } else { html = '<p style="color: #555; text-align: center;">No results found.</p>'; }
-                        searchResultsLive.innerHTML = html;
-                    });
+                fetch(`/api/search?q=${encodeURIComponent(query)}`).then(response => response.json()).then(data => {
+                    let html = '';
+                    if (data.length > 0) {
+                        data.forEach(item => { html += `<a href="/movie/${item._id}" class="search-result-item"><img src="${item.poster}" alt="${item.title}"><span>${item.title}</span></a>`; });
+                    } else { html = '<p style="color: #555; text-align: center;">No results found.</p>'; }
+                    searchResultsLive.innerHTML = html;
+                });
             } else { searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Start typing to see results</p>'; }
         }, 300);
     });
-
-    // Hero Slider Initialization
-    const heroSlider = new Swiper('.hero-slider', {
-        loop: true,
-        autoplay: { delay: 5000, disableOnInteraction: false },
+    new Swiper('.hero-slider', {
+        loop: true, autoplay: { delay: 5000, disableOnInteraction: false },
         pagination: { el: '.swiper-pagination', clickable: true },
-        effect: 'fade',
-        fadeEffect: { crossFade: true },
+        effect: 'fade', fadeEffect: { crossFade: true },
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -931,6 +921,7 @@ edit_html = """
 </script>
 </body></html>
 """
+
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
@@ -940,7 +931,14 @@ def get_tmdb_details(tmdb_id, media_type):
         res = requests.get(detail_url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        details = {"tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None,"backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None,"overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie"}
+        details = {
+            "tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), 
+            "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None,
+            "backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None,
+            "overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"),
+            "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"),
+            "type": "series" if search_type == "tv" else "movie"
+        }
         return details
     except requests.RequestException as e:
         print(f"ERROR: TMDb API request failed for ID {tmdb_id}. Reason: {e}")
@@ -956,21 +954,14 @@ def home():
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
-    # --- Data for Hero Slider: Fetch latest 8 items ---
     slider_content = list(movies.find({}).sort('_id', -1).limit(8))
-    
-    categorized_content = {}
-    for category in PREDEFINED_CATEGORIES:
-        categorized_content[category] = list(movies.find({"categories": category}).sort('_id', -1).limit(10))
-
-    latest_movies_for_carousel = list(movies.find({"type": "movie"}).sort('_id', -1).limit(10))
-    latest_series_for_carousel = list(movies.find({"type": "series"}).sort('_id', -1).limit(10))
+    categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in PREDEFINED_CATEGORIES}
+    latest_movies = list(movies.find({"type": "movie"}).sort('_id', -1).limit(10))
+    latest_series = list(movies.find({"type": "series"}).sort('_id', -1).limit(10))
 
     context = {
-        "slider_content": slider_content,
-        "latest_movies": latest_movies_for_carousel,
-        "latest_series": latest_series_for_carousel,
-        "categorized_content": categorized_content,
+        "slider_content": slider_content, "latest_movies": latest_movies,
+        "latest_series": latest_series, "categorized_content": categorized_content,
         "is_full_page_list": False
     }
     return render_template_string(index_html, **context)
@@ -979,20 +970,13 @@ def home():
 def movie_detail(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie: 
-            return "Content not found", 404
+        if not movie: return "Content not found", 404
         
         related_content = []
         if movie.get('type'):
-            related_content = list(movies.find({
-                "type": movie['type'], 
-                "_id": {"$ne": movie['_id']}
-            }).sort('_id', -1).limit(10))
-
+            related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('_id', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
-    except Exception as e:
-        print(f"Error rendering detail page for ID {movie_id}: {e}")
-        return "Content not found", 404
+    except: return "Content not found", 404
 
 @app.route('/movies')
 def all_movies():
@@ -1044,29 +1028,17 @@ def admin():
             if content_type == "movie":
                 movie_links = []
                 for quality in ["480p", "720p", "1080p"]:
-                    watch_url, download_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
-                    if watch_url or download_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+                    watch_url, dl_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
+                    if watch_url or dl_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": dl_url})
                 movie_data["links"] = movie_links
             else:
-                season_packs = []
                 sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-                for i in range(len(sp_nums)):
-                    if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip()):
-                        season_packs.append({"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None})
-                movie_data['season_packs'] = season_packs
-                episodes = []
-                seasons, nums, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
-                for i in range(len(seasons)):
-                    if seasons[i] and nums[i] and links[i]:
-                        episodes.append({"season": int(seasons[i]), "episode_number": int(nums[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
-                movie_data['episodes'] = episodes
+                movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip())]
+                s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
+                movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             
-            manual_links = []
-            link_names, link_urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
-            for i in range(len(link_names)):
-                if link_names[i].strip() and link_urls[i].strip():
-                    manual_links.append({"name": link_names[i].strip(), "url": link_urls[i].strip()})
-            movie_data["manual_links"] = manual_links
+            names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
+            movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i].strip() and urls[i].strip()]
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
@@ -1087,32 +1059,20 @@ def edit_movie(movie_id):
             "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories")
         }
-        manual_links = []
-        link_names, link_urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
-        for i in range(len(link_names)):
-            if link_names[i].strip() and link_urls[i].strip():
-                manual_links.append({"name": link_names[i].strip(), "url": link_urls[i].strip()})
-        update_data["manual_links"] = manual_links
+        names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
+        update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i].strip() and urls[i].strip()]
         if content_type == "movie":
             movie_links = []
             for quality in ["480p", "720p", "1080p"]:
-                watch_url, download_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
-                if watch_url or download_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+                watch_url, dl_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
+                if watch_url or dl_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": dl_url})
             update_data["links"] = movie_links
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
         else:
-            season_packs = []
             sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-            for i in range(len(sp_nums)):
-                if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip()):
-                    season_packs.append({"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None})
-            update_data['season_packs'] = season_packs
-            episodes = []
-            seasons, nums, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
-            for i in range(len(seasons)):
-                if seasons[i] and nums[i] and links[i]:
-                    episodes.append({"season": int(seasons[i]), "episode_number": int(nums[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
-            update_data["episodes"] = episodes
+            update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip())]
+            s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
+            update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
     return render_template_string(edit_html, movie=movie_obj)
@@ -1124,7 +1084,7 @@ def delete_movie(movie_id):
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
 
-# --- API Routes for Admin Panel ---
+# --- API Routes ---
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
@@ -1151,16 +1111,12 @@ def api_get_details():
     if details: return jsonify(details)
     else: return jsonify({"error": "Details not found on TMDb"}), 404
 
-# --- API Route for Live Search ---
 @app.route('/api/search')
 def api_search():
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
-        results = list(movies.find(
-            {"title": {"$regex": query, "$options": "i"}},
-            {"_id": 1, "title": 1, "poster": 1}
-        ).limit(10))
+        results = list(movies.find({"title": {"$regex": query, "$options": "i"}}, {"_id": 1, "title": 1, "poster": 1}).limit(10))
         for item in results: item['_id'] = str(item['_id'])
         return jsonify(results)
     except Exception as e:
