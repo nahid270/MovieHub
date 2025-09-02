@@ -113,9 +113,13 @@ index_html = """
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.8rem; font-weight: 600; }
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; }
-  .movie-carousel .swiper-slide { width: auto; }
+  
+  /* --- START: HOMEPAGE GRID STYLE (INSTEAD OF CAROUSEL) --- */
+  .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
+  /* --- END: HOMEPAGE GRID STYLE --- */
+
   .movie-card { display: block; position: relative; }
-  .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
   .movie-card:hover .movie-poster { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
   .card-title { font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
@@ -153,15 +157,21 @@ index_html = """
     .main-header .search-form, .main-header .nav-links { display: none; }
     .bottom-nav { display: flex; }
     .full-page-grid-container{padding-top:100px; padding-left: 15px; padding-right: 15px; padding-bottom:40px;} 
-    /* START: Grid Layout Update for "View All" page */
+
+    /* --- START: "VIEW ALL" PAGE MOBILE LAYOUT FIX --- */
     .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 20px 15px; }
     .full-page-grid-title { font-size: 1.8rem; }
-    /* END: Grid Layout Update */
+    /* --- END: "VIEW ALL" PAGE MOBILE LAYOUT FIX --- */
+    
+    /* --- START: HOMEPAGE GRID MOBILE LAYOUT --- */
+    .category-grid { grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    /* --- END: HOMEPAGE GRID MOBILE LAYOUT --- */
+
     .logo { font-size: 1.5rem; } 
     .hero-slider { margin-top: calc(var(--nav-height) + 10px); aspect-ratio: 16 / 10; }
     .hero-content { padding: 15px 20px; } .hero-title { font-size: 1.5rem; } .hero-meta { font-size: 0.8rem; }
     .slide-type-tag { font-size: 0.7rem; padding: 4px 10px; top: 15px; right: 15px; }
-    .category-title { font-size: 1.4rem; } .movie-poster { width: 160px; } 
+    .category-title { font-size: 1.4rem; } 
   }
   @media (min-width: 769px) { .bottom-nav { display: none; } }
 </style>
@@ -228,28 +238,31 @@ index_html = """
       </div>
     </div>
     <div class="container">
-    {% macro render_carousel_section(title, movies_list, cat_name) %}
+    
+    {# --- START: MODIFIED MACRO TO RENDER GRID INSTEAD OF CAROUSEL --- #}
+    {% macro render_grid_section(title, movies_list, cat_name) %}
         {% if movies_list %}
         <section class="category-section">
             <div class="category-header">
                 <h2 class="category-title">{{ title }}</h2>
                 <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All</a>
             </div>
-            <div class="swiper movie-carousel">
-                <div class="swiper-wrapper">
-                    {% for m in movies_list %}<div class="swiper-slide">{{ render_movie_card(m) }}</div>{% endfor %}
-                </div>
-                <div class="swiper-button-next"></div><div class="swiper-button-prev"></div>
+            <div class="category-grid">
+                {% for m in movies_list %}
+                    {{ render_movie_card(m) }}
+                {% endfor %}
             </div>
         </section>
         {% endif %}
     {% endmacro %}
-    {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-    {{ render_carousel_section('Latest Movies', latest_movies, 'Latest Movies') }}
-    {{ render_carousel_section('Latest Series', latest_series, 'Latest Series') }}
+    {# --- END: MODIFIED MACRO --- #}
+
+    {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
+    {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
+    {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
     {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
     {% for cat_name, movies_list in categorized_content.items() %}
-        {% if cat_name != 'Trending' %}{{ render_carousel_section(cat_name, movies_list, cat_name) }}{% endif %}
+        {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
     {% endfor %}
     </div>
   {% endif %}
@@ -275,8 +288,12 @@ index_html = """
 <script>
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
+    
+    // Hero slider remains
     new Swiper('.hero-slider', { loop: true, autoplay: { delay: 4000 }, pagination: { el: '.swiper-pagination', clickable: true }, });
-    new Swiper('.movie-carousel', { slidesPerView: 'auto', spaceBetween: 20, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev', }, breakpoints: { 320: { spaceBetween: 15 }, 768: { spaceBetween: 20 }, } });
+    
+    // --- REMOVED: Movie carousel Swiper initialization, as it is no longer used ---
+
     const menuToggle = document.querySelector('.menu-toggle');
     const mobileMenu = document.querySelector('.mobile-nav-menu');
     const closeBtn = document.querySelector('.close-btn');
