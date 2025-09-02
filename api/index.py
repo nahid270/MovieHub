@@ -121,9 +121,9 @@ index_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .language-tag { position: absolute; top: 10px; left: 10px; background-color: var(--primary-color); color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
-  .full-page-grid-container { padding: 120px 40px 50px; }
-  .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; }
-  .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
+  .full-page-grid-container { padding: 120px 20px 50px; }
+  .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; text-align: center; }
+  .full-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 30px 20px; }
   .full-page-grid .movie-poster { width: 100%; }
   .main-footer { background-color: #111; padding: 30px 40px; text-align: center; color: var(--text-dark); margin-top: 50px; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
@@ -152,13 +152,16 @@ index_html = """
     body { padding-bottom: 60px; }
     .main-header .search-form, .main-header .nav-links { display: none; }
     .bottom-nav { display: flex; }
-    .full-page-grid-container{padding-top:100px;padding-bottom:40px;} 
+    .full-page-grid-container{padding-top:100px; padding-left: 15px; padding-right: 15px; padding-bottom:40px;} 
+    /* START: Grid Layout Update for "View All" page */
+    .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 20px 15px; }
+    .full-page-grid-title { font-size: 1.8rem; }
+    /* END: Grid Layout Update */
     .logo { font-size: 1.5rem; } 
     .hero-slider { margin-top: calc(var(--nav-height) + 10px); aspect-ratio: 16 / 10; }
     .hero-content { padding: 15px 20px; } .hero-title { font-size: 1.5rem; } .hero-meta { font-size: 0.8rem; }
     .slide-type-tag { font-size: 0.7rem; padding: 4px 10px; top: 15px; right: 15px; }
     .category-title { font-size: 1.4rem; } .movie-poster { width: 160px; } 
-    .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } 
   }
   @media (min-width: 769px) { .bottom-nav { display: none; } }
 </style>
@@ -330,6 +333,9 @@ detail_html = """
 <meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+<!-- START: Added Swiper CSS for Related Content Carousel -->
+<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
+<!-- END: Added Swiper CSS -->
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
@@ -370,6 +376,21 @@ detail_html = """
   .episode-name { font-weight: 500; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
   .ad-container > * { max-width: 100% !important; }
+  
+  /* START: Styles for Related Content Carousel */
+  .category-section { margin: 50px 0; }
+  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .category-title { font-size: 1.8rem; font-weight: 600; }
+  .movie-carousel .swiper-slide { width: auto; }
+  .movie-card { display: block; position: relative; }
+  .movie-poster { width: 220px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  .movie-card:hover .movie-poster { transform: scale(1.05); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+  .card-title { font-size: 1rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .card-meta { font-size: 0.8rem; color: var(--text-dark); }
+  .language-tag { position: absolute; top: 10px; left: 10px; background-color: var(--primary-color); color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
+  .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
+  /* END: Styles for Related Content Carousel */
+  
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -379,6 +400,10 @@ detail_html = """
     .detail-meta { justify-content: center; }
     .tab-link { padding: 12px 15px; font-size: 0.9rem; }
     .episode-item { flex-direction: column; gap: 10px; align-items: flex-start; }
+    /* START: Mobile styles for related content */
+    .movie-poster { width: 160px; }
+    .card-title { max-width: 160px; }
+    /* END: Mobile styles for related content */
   }
 </style>
 </head>
@@ -438,7 +463,6 @@ detail_html = """
                 </div>
                 {% endif %}
 
-                <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS -->
                 {% if movie.manual_links %}
                 <div class="link-group">
                     <h3>Custom Download Links</h3>
@@ -449,7 +473,6 @@ detail_html = """
                     </div>
                 </div>
                 {% endif %}
-                <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS -->
 
                 {% if not movie.links and not movie.manual_links %}
                     <p style="text-align:center;">No links available yet.</p>
@@ -460,8 +483,7 @@ detail_html = """
                 <div class="tab-pane {% if loop.first %}active{% endif %}" id="season-{{ season_num }}">
                     {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
                     
-                    <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS (SERIES) -->
-                    {% if loop.first and movie.manual_links %} {# Shows only on the first season tab to avoid repetition #}
+                    {% if loop.first and movie.manual_links %}
                     <div class="link-group">
                         <h3>Custom Download Links</h3>
                         <div class="link-buttons">
@@ -471,7 +493,6 @@ detail_html = """
                         </div>
                     </div>
                     {% endif %}
-                    <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS (SERIES) -->
 
                     {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
                     <div class="link-group">
@@ -504,7 +525,6 @@ detail_html = """
                 {% endfor %}
             {% else %}
                 <div class="tab-pane active" id="no-links">
-                    <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS (fallback) -->
                     {% if movie.manual_links %}
                     <div class="link-group">
                         <h3>Custom Download Links</h3>
@@ -517,11 +537,36 @@ detail_html = """
                     {% else %}
                     <p style="text-align:center;">No links or episodes available yet.</p>
                     {% endif %}
-                    <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS (fallback) -->
                 </div>
             {% endif %}
         </div>
     </div>
+
+    <!-- START: Related Content Section -->
+    {% if related_content %}
+    <section class="category-section">
+        <div class="category-header">
+            <h2 class="category-title">You Might Also Like</h2>
+        </div>
+        <div class="swiper movie-carousel">
+            <div class="swiper-wrapper">
+                {% for m in related_content %}
+                <div class="swiper-slide">
+                    <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+                        {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
+                        <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+                        <h4 class="card-title">{{ m.title }}</h4>
+                        <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="swiper-button-next"></div><div class="swiper-button-prev"></div>
+        </div>
+    </section>
+    {% endif %}
+    <!-- END: Related Content Section -->
+
 </div>
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
 <script>
@@ -535,6 +580,23 @@ detail_html = """
         if(targetPane) targetPane.classList.add('active');
     }); });
 </script>
+<!-- START: Added Swiper JS for Related Content Carousel -->
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+<script>
+    new Swiper('.movie-carousel', {
+        slidesPerView: 'auto',
+        spaceBetween: 20,
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+        breakpoints: {
+            320: { spaceBetween: 15 },
+            768: { spaceBetween: 20 },
+        }
+    });
+</script>
+<!-- END: Added Swiper JS -->
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
@@ -698,19 +760,13 @@ admin_html = """
                 <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
             </fieldset>
         </div>
-
-        <!-- START: NEWLY ADDED MANUAL LINKS SECTION -->
         <fieldset>
             <legend>Manual Download Buttons (Custom)</legend>
-            <div id="manual_links_container">
-                <!-- Dynamic fields will be added here -->
-            </div>
+            <div id="manual_links_container"></div>
             <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;">
                 <i class="fas fa-plus"></i> Add Manual Button
             </button>
         </fieldset>
-        <!-- END: NEWLY ADDED MANUAL LINKS SECTION -->
-
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
     <hr>
@@ -742,8 +798,7 @@ admin_html = """
             </div>`;
         container.appendChild(newItem);
     }
-
-    /* START: NEWLY ADDED JAVASCRIPT FUNCTION */
+    
     function addManualLinkField() {
         const container = document.getElementById('manual_links_container');
         const newItem = document.createElement('div');
@@ -762,7 +817,6 @@ admin_html = """
             </div>`;
         container.appendChild(newItem);
     }
-    /* END: NEWLY ADDED JAVASCRIPT FUNCTION */
 
     function openModal() { modal.style.display = 'flex'; }
     function closeModal() { modal.style.display = 'none'; }
@@ -885,8 +939,6 @@ edit_html = """
         <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
         {% endfor %}{% endif %}</div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
     </div>
-    
-    <!-- START: NEWLY ADDED MANUAL LINKS SECTION FOR EDIT -->
     <fieldset>
         <legend>Manual Download Buttons (Custom)</legend>
         <div id="manual_links_container">
@@ -912,8 +964,6 @@ edit_html = """
             <i class="fas fa-plus"></i> Add Manual Button
         </button>
     </fieldset>
-    <!-- END: NEWLY ADDED MANUAL LINKS SECTION FOR EDIT -->
-
     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
   </form>
 </div>
@@ -933,8 +983,7 @@ edit_html = """
             </div>`;
         container.appendChild(newItem);
     }
-
-    /* START: NEWLY ADDED JAVASCRIPT FUNCTION */
+    
     function addManualLinkField() {
         const container = document.getElementById('manual_links_container');
         const newItem = document.createElement('div');
@@ -953,7 +1002,6 @@ edit_html = """
             </div>`;
         container.appendChild(newItem);
     }
-    /* END: NEWLY ADDED JAVASCRIPT FUNCTION */
     
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
@@ -1007,7 +1055,17 @@ def movie_detail(movie_id):
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie: 
             return "Content not found", 404
-        return render_template_string(detail_html, movie=movie)
+        
+        # START: Fetch related content
+        related_content = []
+        if movie.get('type'):
+            related_content = list(movies.find({
+                "type": movie['type'], 
+                "_id": {"$ne": movie['_id']}
+            }).sort('_id', -1).limit(12))
+        # END: Fetch related content
+
+        return render_template_string(detail_html, movie=movie, related_content=related_content)
     except Exception as e:
         print(f"Error rendering detail page for ID {movie_id}: {e}")
         return "Content not found", 404
@@ -1126,7 +1184,6 @@ def admin():
                     if seasons[i] and numbers[i] and links[i]:
                         movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
             
-            # START: NEWLY ADDED CODE TO PROCESS MANUAL LINKS
             manual_links_data = []
             link_names = request.form.getlist('manual_link_name[]')
             link_urls = request.form.getlist('manual_link_url[]')
@@ -1137,7 +1194,6 @@ def admin():
                         "url": link_urls[i].strip()
                     })
             movie_data["manual_links"] = manual_links_data
-            # END: NEWLY ADDED CODE TO PROCESS MANUAL LINKS
             
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
@@ -1165,7 +1221,6 @@ def edit_movie(movie_id):
             "categories": request.form.getlist("categories")
         }
         
-        # START: NEWLY ADDED CODE TO PROCESS MANUAL LINKS ON EDIT
         manual_links_data = []
         link_names = request.form.getlist('manual_link_name[]')
         link_urls = request.form.getlist('manual_link_url[]')
@@ -1176,7 +1231,6 @@ def edit_movie(movie_id):
                     "url": link_urls[i].strip()
                 })
         update_data["manual_links"] = manual_links_data
-        # END: NEWLY ADDED CODE TO PROCESS MANUAL LINKS ON EDIT
 
         if content_type == "movie":
             movie_links = []
