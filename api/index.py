@@ -319,7 +319,6 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-# START: [FIXED] detail_html template
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -404,7 +403,6 @@ detail_html = """
 </div>
 <div class="container">
     <div class="tabs-container">
-        {# [FIXED] Robust logic to find all available seasons from both episodes and season packs #}
         {% set episode_seasons = movie.episodes | map(attribute='season') | list if movie.episodes else [] %}
         {% set pack_seasons = movie.season_packs | map(attribute='season_number') | list if movie.season_packs else [] %}
         {% set all_seasons = (episode_seasons + pack_seasons) | unique | sort %}
@@ -424,8 +422,9 @@ detail_html = """
             {% if movie.type == 'movie' %}
             <div class="tab-pane active" id="downloads">
                 {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
+                
                 {% if movie.links %}
-                <div class="link-group" style="border:none;">
+                <div class="link-group">
                     <h3>Watch & Download Links</h3>
                     {% for link_item in movie.links %}
                     <div class="quality-group">
@@ -437,12 +436,43 @@ detail_html = """
                     </div>
                     {% endfor %}
                 </div>
-                {% else %}<p style="text-align:center;">No links available yet.</p>{% endif %}
+                {% endif %}
+
+                <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS -->
+                {% if movie.manual_links %}
+                <div class="link-group">
+                    <h3>Custom Download Links</h3>
+                    <div class="link-buttons">
+                        {% for link in movie.manual_links %}
+                            <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn btn-download">{{ link.name }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS -->
+
+                {% if not movie.links and not movie.manual_links %}
+                    <p style="text-align:center;">No links available yet.</p>
+                {% endif %}
             </div>
             {% elif all_seasons %}
                 {% for season_num in all_seasons %}
                 <div class="tab-pane {% if loop.first %}active{% endif %}" id="season-{{ season_num }}">
                     {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
+                    
+                    <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS (SERIES) -->
+                    {% if loop.first and movie.manual_links %} {# Shows only on the first season tab to avoid repetition #}
+                    <div class="link-group">
+                        <h3>Custom Download Links</h3>
+                        <div class="link-buttons">
+                            {% for link in movie.manual_links %}
+                                <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn btn-download">{{ link.name }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS (SERIES) -->
+
                     {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
                     <div class="link-group">
                         <h3>Complete Season {{ season_num }} Links</h3>
@@ -467,13 +497,28 @@ detail_html = """
                         </div>
                         {% endfor %}
                     </div>
-                    {% elif not season_pack %}
+                    {% elif not season_pack and not (loop.first and movie.manual_links) %}
                         <p style="text-align:center;">No links or episodes available for this season yet.</p>
                     {% endif %}
                 </div>
                 {% endfor %}
             {% else %}
-                <div class="tab-pane active" id="no-links"><p style="text-align:center;">No links or episodes available yet.</p></div>
+                <div class="tab-pane active" id="no-links">
+                    <!-- START: NEWLY ADDED CODE FOR MANUAL LINKS (fallback) -->
+                    {% if movie.manual_links %}
+                    <div class="link-group">
+                        <h3>Custom Download Links</h3>
+                        <div class="link-buttons">
+                            {% for link in movie.manual_links %}
+                                <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn btn-download">{{ link.name }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <p style="text-align:center;">No links or episodes available yet.</p>
+                    {% endif %}
+                    <!-- END: NEWLY ADDED CODE FOR MANUAL LINKS (fallback) -->
+                </div>
             {% endif %}
         </div>
     </div>
@@ -493,8 +538,6 @@ detail_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-# END: [FIXED] detail_html template
-
 wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -655,6 +698,19 @@ admin_html = """
                 <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
             </fieldset>
         </div>
+
+        <!-- START: NEWLY ADDED MANUAL LINKS SECTION -->
+        <fieldset>
+            <legend>Manual Download Buttons (Custom)</legend>
+            <div id="manual_links_container">
+                <!-- Dynamic fields will be added here -->
+            </div>
+            <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;">
+                <i class="fas fa-plus"></i> Add Manual Button
+            </button>
+        </fieldset>
+        <!-- END: NEWLY ADDED MANUAL LINKS SECTION -->
+
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
     <hr>
@@ -686,6 +742,27 @@ admin_html = """
             </div>`;
         container.appendChild(newItem);
     }
+
+    /* START: NEWLY ADDED JAVASCRIPT FUNCTION */
+    function addManualLinkField() {
+        const container = document.getElementById('manual_links_container');
+        const newItem = document.createElement('div');
+        newItem.className = 'dynamic-item';
+        newItem.innerHTML = `
+            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
+            <div class="link-pair">
+                <div class="form-group">
+                    <label>Button Name (e.g., 480p G-Drive)</label>
+                    <input type="text" name="manual_link_name[]" placeholder="Button Name" required>
+                </div>
+                <div class="form-group">
+                    <label>Link URL</label>
+                    <input type="url" name="manual_link_url[]" placeholder="https://..." required>
+                </div>
+            </div>`;
+        container.appendChild(newItem);
+    }
+    /* END: NEWLY ADDED JAVASCRIPT FUNCTION */
 
     function openModal() { modal.style.display = 'flex'; }
     function closeModal() { modal.style.display = 'none'; }
@@ -808,6 +885,35 @@ edit_html = """
         <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
         {% endfor %}{% endif %}</div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
     </div>
+    
+    <!-- START: NEWLY ADDED MANUAL LINKS SECTION FOR EDIT -->
+    <fieldset>
+        <legend>Manual Download Buttons (Custom)</legend>
+        <div id="manual_links_container">
+            {% if movie.manual_links %}
+                {% for link in movie.manual_links %}
+                <div class="dynamic-item">
+                    <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
+                    <div class="link-pair">
+                        <div class="form-group">
+                            <label>Button Name (e.g., 480p G-Drive)</label>
+                            <input type="text" name="manual_link_name[]" value="{{ link.name }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Link URL</label>
+                            <input type="url" name="manual_link_url[]" value="{{ link.url }}" required>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;">
+            <i class="fas fa-plus"></i> Add Manual Button
+        </button>
+    </fieldset>
+    <!-- END: NEWLY ADDED MANUAL LINKS SECTION FOR EDIT -->
+
     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
   </form>
 </div>
@@ -827,6 +933,28 @@ edit_html = """
             </div>`;
         container.appendChild(newItem);
     }
+
+    /* START: NEWLY ADDED JAVASCRIPT FUNCTION */
+    function addManualLinkField() {
+        const container = document.getElementById('manual_links_container');
+        const newItem = document.createElement('div');
+        newItem.className = 'dynamic-item';
+        newItem.innerHTML = `
+            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
+            <div class="link-pair">
+                <div class="form-group">
+                    <label>Button Name (e.g., 480p G-Drive)</label>
+                    <input type="text" name="manual_link_name[]" placeholder="Button Name" required>
+                </div>
+                <div class="form-group">
+                    <label>Link URL</label>
+                    <input type="url" name="manual_link_url[]" placeholder="https://..." required>
+                </div>
+            </div>`;
+        container.appendChild(newItem);
+    }
+    /* END: NEWLY ADDED JAVASCRIPT FUNCTION */
+    
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
@@ -961,7 +1089,7 @@ def admin():
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"),
-                "episodes": [], "links": [], "season_packs": []
+                "episodes": [], "links": [], "season_packs": [], "manual_links": []
             }
             
             tmdb_id = request.form.get("tmdb_id")
@@ -997,6 +1125,20 @@ def admin():
                 for i in range(len(seasons)):
                     if seasons[i] and numbers[i] and links[i]:
                         movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+            
+            # START: NEWLY ADDED CODE TO PROCESS MANUAL LINKS
+            manual_links_data = []
+            link_names = request.form.getlist('manual_link_name[]')
+            link_urls = request.form.getlist('manual_link_url[]')
+            for i in range(len(link_names)):
+                if link_names[i].strip() and link_urls[i].strip():
+                    manual_links_data.append({
+                        "name": link_names[i].strip(),
+                        "url": link_urls[i].strip()
+                    })
+            movie_data["manual_links"] = manual_links_data
+            # END: NEWLY ADDED CODE TO PROCESS MANUAL LINKS
+            
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
@@ -1023,6 +1165,19 @@ def edit_movie(movie_id):
             "categories": request.form.getlist("categories")
         }
         
+        # START: NEWLY ADDED CODE TO PROCESS MANUAL LINKS ON EDIT
+        manual_links_data = []
+        link_names = request.form.getlist('manual_link_name[]')
+        link_urls = request.form.getlist('manual_link_url[]')
+        for i in range(len(link_names)):
+            if link_names[i].strip() and link_urls[i].strip():
+                manual_links_data.append({
+                    "name": link_names[i].strip(),
+                    "url": link_urls[i].strip()
+                })
+        update_data["manual_links"] = manual_links_data
+        # END: NEWLY ADDED CODE TO PROCESS MANUAL LINKS ON EDIT
+
         if content_type == "movie":
             movie_links = []
             for quality in ["480p", "720p", "1080p"]:
