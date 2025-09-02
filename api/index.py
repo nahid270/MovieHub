@@ -49,6 +49,16 @@ try:
     movies = db["movies"]
     settings = db["settings"]
     print("SUCCESS: Successfully connected to MongoDB!")
+
+    # --- Create Indexes for Performance Improvement ---
+    try:
+        movies.create_index("title")
+        movies.create_index("type")
+        movies.create_index("categories")
+        print("SUCCESS: MongoDB indexes checked/created.")
+    except Exception as e:
+        print(f"WARNING: Could not create MongoDB indexes: {e}")
+
 except Exception as e:
     print(f"FATAL: Error connecting to MongoDB: {e}.")
     if os.environ.get('VERCEL') != '1':
@@ -58,16 +68,12 @@ except Exception as e:
 def time_ago(obj_id):
     if not obj_id:
         return ""
-    
-    # Extract timestamp from ObjectId
-    post_time = obj_id.generation_time.replace(tzinfo=None) # make naive
+    post_time = obj_id.generation_time.replace(tzinfo=None)
     now = datetime.utcnow()
     diff = now - post_time
-
     seconds = diff.total_seconds()
     
-    if seconds < 60:
-        return "just now"
+    if seconds < 60: return "just now"
     elif seconds < 3600:
         minutes = int(seconds / 60)
         return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
@@ -79,7 +85,6 @@ def time_ago(obj_id):
         return f"{days} day{'s' if days > 1 else ''} ago"
 
 app.jinja_env.filters['time_ago'] = time_ago
-
 
 @app.context_processor
 def inject_globals():
@@ -110,24 +115,14 @@ index_html = """
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {
-    --primary-color: #E50914;
-    --bg-color: #000000;
-    --card-bg: #1a1a1a;
-    --text-light: #ffffff;
-    --text-dark: #a0a0a0;
-    --nav-height: 60px;
-    --cyan-accent: #00FFFF;
-    --yellow-accent: #FFFF00;
-    --trending-color: #F83D61;
+    --primary-color: #E50914; --bg-color: #000000; --card-bg: #1a1a1a;
+    --text-light: #ffffff; --text-dark: #a0a0a0; --nav-height: 60px;
+    --cyan-accent: #00FFFF; --yellow-accent: #FFFF00; --trending-color: #F83D61;
     --type-color: #00E599;
   }
-  
-  html { box-sizing: border-box; }
-  *, *:before, *:after { box-sizing: inherit; }
-
-  body {font-family: 'Poppins', sans-serif;background-color: var(--bg-color);color: var(--text-light);overflow-x: hidden;}
-  a { text-decoration: none; color: inherit; }
-  img { max-width: 100%; display: block; }
+  html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
+  body {font-family: 'Poppins', sans-serif;background-color: var(--bg-color);color: var(--text-light);overflow-x: hidden; padding-bottom: 70px;}
+  a { text-decoration: none; color: inherit; } img { max-width: 100%; display: block; }
   .container { max-width: 1400px; margin: 0 auto; padding: 0 10px; }
   
   .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
@@ -135,82 +130,39 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
+  /* --- Hero Slider Styles --- */
+  .hero-slider-section { margin-bottom: 30px; border-radius: 12px; overflow: hidden; position: relative; }
+  .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); }
+  .hero-slider .swiper-slide { position: relative; display: block; }
+  .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+  .hero-slider .hero-slide-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 40%, transparent 70%); z-index: 2; }
+  .hero-slider .hero-slide-content { position: absolute; bottom: 0; left: 0; width: 100%; padding: 20px; z-index: 3; color: white; }
+  .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
+  .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
+  .hero-slider .hero-type-tag { position: absolute; bottom: 20px; right: 20px; background: linear-gradient(45deg, var(--cyan-accent), var(--yellow-accent)); color: black; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; z-index: 3; }
+  .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
+  .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
+  .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
+
   .category-section { margin: 30px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
   .category-title { font-size: 1.5rem; font-weight: 600; }
   .view-all-link { font-size: 0.8rem; color: var(--text-dark); font-weight: 500; }
-  
-  .category-grid, .full-page-grid { 
-      display: grid; 
-      grid-template-columns: repeat(2, 1fr); 
-      gap: 15px; 
-  }
-
-  .movie-card {
-    display: block;
-    position: relative;
-    border-radius: 8px;
-    overflow: hidden;
-    background-color: var(--card-bg);
-    border: 2px solid;
-  }
+  .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+  .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
   .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
   .movie-card:nth-child(4n+2), .movie-card:nth-child(4n+3) { border-color: var(--cyan-accent); }
-
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
-  .card-info {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7), transparent);
-    padding: 20px 8px 8px 8px;
-    color: white;
-  }
-  .card-title {
-    font-size: 0.9rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--cyan-accent);
-    margin: 4px 0 0 0;
-  }
-  .card-meta {
-    font-size: 0.75rem;
-    color: #f0f0f0;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
+  .card-info { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7), transparent); padding: 20px 8px 8px 8px; color: white; }
+  .card-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cyan-accent); margin: 4px 0 0 0; }
+  .card-meta { font-size: 0.75rem; color: #f0f0f0; display: flex; align-items: center; gap: 5px; }
   .card-meta i { color: var(--cyan-accent); }
-  
-  .type-tag, .trending-tag {
-    position: absolute;
-    color: white;
-    padding: 3px 10px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    z-index: 2;
-    text-transform: uppercase;
-  }
-  .type-tag {
-      bottom: 8px;
-      right: 8px;
-      background-color: var(--type-color);
-      border-radius: 4px;
-  }
-  .trending-tag {
-      top: 8px;
-      left: -1px;
-      background-color: var(--trending-color);
-      clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%);
-      padding-right: 15px;
-  }
+  .type-tag, .trending-tag { position: absolute; color: white; padding: 3px 10px; font-size: 0.7rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); border-radius: 4px; }
+  .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; }
   
   .full-page-grid-container { padding: 80px 10px 80px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
-
   .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
   .ad-container > * { max-width: 100% !important; }
@@ -223,32 +175,8 @@ index_html = """
   .mobile-links a:hover {color: var(--primary-color);}
   .mobile-links hr {width: 50%;border-color: #333;margin: 10px auto;}
   
-  body { padding-bottom: 70px; }
-  .bottom-nav {
-    display: flex; 
-    position: fixed; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
-    height: 65px; 
-    background-color: #181818; 
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.5); 
-    z-index: 1000; 
-    justify-content: space-around; 
-    align-items: center;
-    padding-top: 5px;
-  }
-  .bottom-nav .nav-item { 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center; 
-    color: var(--text-dark); 
-    background: none; border: none; 
-    font-size: 12px; 
-    flex-grow: 1;
-    font-weight: 500;
-  }
+  .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 65px; background-color: #181818; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); z-index: 1000; justify-content: space-around; align-items: center; padding-top: 5px; }
+  .bottom-nav .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dark); background: none; border: none; font-size: 12px; flex-grow: 1; font-weight: 500; }
   .bottom-nav .nav-item i { font-size: 22px; margin-bottom: 5px; }
   .bottom-nav .nav-item.active, .bottom-nav .nav-item:hover { color: var(--primary-color); }
   
@@ -261,12 +189,11 @@ index_html = """
   .search-result-item { color: white; text-align: center; }
   .search-result-item img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 5px; margin-bottom: 5px; }
 
-  /* Desktop Styles */
   @media (min-width: 769px) { 
-    .container { padding: 0 40px; }
-    .main-header { padding: 0 40px; }
-    body { padding-bottom: 0; }
-    .bottom-nav { display: none; }
+    .container { padding: 0 40px; } .main-header { padding: 0 40px; }
+    body { padding-bottom: 0; } .bottom-nav { display: none; }
+    .hero-slider .hero-title { font-size: 2.2rem; }
+    .hero-slider .hero-slide-content { padding: 40px; }
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     .full-page-grid-container { padding: 120px 40px 50px; }
@@ -311,33 +238,58 @@ index_html = """
         {% else %}<div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>{% endif %}
     </div>
   {% else %}
-    <div class="container">
+    <div style="height: var(--nav-height);"></div>
     
-    {% macro render_grid_section(title, movies_list, cat_name) %}
-        {% if movies_list %}
-        <section class="category-section">
-            <div class="category-header">
-                <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
-            </div>
-            <div class="category-grid">
-                {% for m in movies_list %}
-                    {{ render_movie_card(m) }}
+    <!-- Hero Slider Section -->
+    {% if slider_content %}
+    <section class="hero-slider-section container">
+        <div class="swiper hero-slider">
+            <div class="swiper-wrapper">
+                {% for item in slider_content %}
+                <div class="swiper-slide">
+                    <a href="{{ url_for('movie_detail', movie_id=item._id) }}">
+                        <img src="{{ item.backdrop or item.poster }}" class="hero-bg-img" alt="{{ item.title }}">
+                        <div class="hero-slide-overlay"></div>
+                        <div class="hero-slide-content">
+                            <h2 class="hero-title">{{ item.title }}</h2>
+                            <p class="hero-meta">
+                                {% if item.release_date %}{{ item.release_date.split('-')[0] }}{% endif %}
+                            </p>
+                            <span class="hero-type-tag">{{ item.type | title }}</span>
+                        </div>
+                    </a>
+                </div>
                 {% endfor %}
             </div>
-        </section>
-        {% endif %}
-    {% endmacro %}
-    
-    <div style="height: var(--nav-height);"></div>
+            <div class="swiper-pagination"></div>
+        </div>
+    </section>
+    {% endif %}
 
-    {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-    {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
-    {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
-    {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
-    {% for cat_name, movies_list in categorized_content.items() %}
-        {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
-    {% endfor %}
+    <div class="container">
+      {% macro render_grid_section(title, movies_list, cat_name) %}
+          {% if movies_list %}
+          <section class="category-section">
+              <div class="category-header">
+                  <h2 class="category-title">{{ title }}</h2>
+                  <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
+              </div>
+              <div class="category-grid">
+                  {% for m in movies_list %}
+                      {{ render_movie_card(m) }}
+                  {% endfor %}
+              </div>
+          </section>
+          {% endif %}
+      {% endmacro %}
+      
+      {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
+      {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
+      {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
+      {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
+      {% for cat_name, movies_list in categorized_content.items() %}
+          {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
+      {% endfor %}
     </div>
   {% endif %}
 </main>
@@ -360,6 +312,7 @@ index_html = """
   </div>
 </div>
 
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 10 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
@@ -370,8 +323,7 @@ index_html = """
     if (menuToggle && mobileMenu && closeBtn) {
         menuToggle.addEventListener('click', () => { mobileMenu.classList.add('active'); });
         closeBtn.addEventListener('click', () => { mobileMenu.classList.remove('active'); });
-        const mobileLinks = document.querySelectorAll('.mobile-links a');
-        mobileLinks.forEach(link => { link.addEventListener('click', () => { mobileMenu.classList.remove('active'); }); });
+        document.querySelectorAll('.mobile-links a').forEach(link => { link.addEventListener('click', () => { mobileMenu.classList.remove('active'); }); });
     }
     const liveSearchBtn = document.getElementById('live-search-btn');
     const searchOverlay = document.getElementById('search-overlay');
@@ -392,18 +344,21 @@ index_html = """
                     .then(data => {
                         let html = '';
                         if (data.length > 0) {
-                            data.forEach(item => {
-                                html += `<a href="/movie/${item._id}" class="search-result-item"><img src="${item.poster}" alt="${item.title}"><span>${item.title}</span></a>`;
-                            });
-                        } else {
-                            html = '<p style="color: #555; text-align: center;">No results found.</p>';
-                        }
+                            data.forEach(item => { html += `<a href="/movie/${item._id}" class="search-result-item"><img src="${item.poster}" alt="${item.title}"><span>${item.title}</span></a>`; });
+                        } else { html = '<p style="color: #555; text-align: center;">No results found.</p>'; }
                         searchResultsLive.innerHTML = html;
                     });
-            } else {
-                searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Start typing to see results</p>';
-            }
+            } else { searchResultsLive.innerHTML = '<p style="color: #555; text-align: center;">Start typing to see results</p>'; }
         }, 300);
+    });
+
+    // Hero Slider Initialization
+    const heroSlider = new Swiper('.hero-slider', {
+        loop: true,
+        autoplay: { delay: 5000, disableOnInteraction: false },
+        pagination: { el: '.swiper-pagination', clickable: true },
+        effect: 'fade',
+        fadeEffect: { crossFade: true },
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -425,8 +380,7 @@ detail_html = """
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #000000;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
-  html { box-sizing: border-box; }
-  *, *:before, *:after { box-sizing: inherit; }
+  html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden;}
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
@@ -637,6 +591,7 @@ detail_html = """
     {% endif %}
 </div>
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
     const tabLinks = document.querySelectorAll('.tab-link'), tabPanes = document.querySelectorAll('.tab-pane');
     tabLinks.forEach(link => { link.addEventListener('click', () => {
@@ -647,9 +602,7 @@ detail_html = """
         const targetPane = document.getElementById(tabId);
         if(targetPane) targetPane.classList.add('active');
     }); });
-</script>
-<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
-<script>
+
     new Swiper('.movie-carousel', {
         slidesPerView: 'auto',
         spaceBetween: 15,
@@ -817,7 +770,6 @@ admin_html = """
                 <div id="season_packs_container"></div>
                 <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Complete Season Pack</button>
                 <hr style="margin: 20px 0;">
-                
                 <label style="font-size: 1.1rem;">Individual Episodes:</label>
                 <div id="episodes_container"></div>
                 <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
@@ -847,48 +799,15 @@ admin_html = """
     const searchBtn = document.getElementById('tmdb_search_btn');
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    
-    function addSeasonPackField() {
-        const container = document.getElementById('season_packs_container');
-        const newItem = document.createElement('div');
-        newItem.className = 'dynamic-item';
-        newItem.innerHTML = `
-            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-            <div class="season-pack-item">
-                <div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div>
-                <div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div>
-                <div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div>
-            </div>`;
-        container.appendChild(newItem);
-    }
-    
-    function addManualLinkField() {
-        const container = document.getElementById('manual_links_container');
-        const newItem = document.createElement('div');
-        newItem.className = 'dynamic-item';
-        newItem.innerHTML = `
-            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-            <div class="link-pair">
-                <div class="form-group">
-                    <label>Button Name (e.g., 480p G-Drive)</label>
-                    <input type="text" name="manual_link_name[]" placeholder="Button Name" required>
-                </div>
-                <div class="form-group">
-                    <label>Link URL</label>
-                    <input type="url" name="manual_link_url[]" placeholder="https://..." required>
-                </div>
-            </div>`;
-        container.appendChild(newItem);
-    }
-
+    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
+    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     function openModal() { modal.style.display = 'flex'; }
     function closeModal() { modal.style.display = 'none'; }
     async function searchTmdb() {
         const query = document.getElementById('tmdb_search_query').value.trim();
         if (!query) return alert('Please enter a movie or series name.');
         searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...';
-        searchResultsContainer.innerHTML = '<p>Loading results...</p>';
-        openModal();
+        searchResultsContainer.innerHTML = '<p>Loading results...</p>'; openModal();
         try {
             const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query));
             const results = await response.json();
@@ -899,18 +818,14 @@ admin_html = """
         } catch (error) { searchResultsContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`; } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
     }
     async function selectResult(tmdbId, mediaType) {
-        closeModal();
-        searchBtn.disabled = true; searchBtn.innerHTML = 'Fetching...';
+        closeModal(); searchBtn.disabled = true; searchBtn.innerHTML = 'Fetching...';
         try {
             const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to fetch details');
-            document.getElementById('tmdb_id').value = data.tmdb_id || '';
-            document.getElementById('title').value = data.title || '';
-            document.getElementById('overview').value = data.overview || '';
-            document.getElementById('poster').value = data.poster || '';
-            document.getElementById('backdrop').value = data.backdrop || '';
-            document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
+            document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || '';
+            document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || '';
+            document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
             document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie';
             document.querySelectorAll('input[name="categories"]').forEach(checkbox => checkbox.checked = false);
             toggleFields();
@@ -945,6 +860,7 @@ edit_html = """
         .btn { display: inline-block; color: white; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; }
         .btn-primary { background: var(--netflix-red); } .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
         .dynamic-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; position: relative; }
+        .dynamic-item .btn-danger { position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; }
         .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; }
         .checkbox-group input { width: auto; }
         .link-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
@@ -982,20 +898,12 @@ edit_html = """
         <div id="season_packs_container">
         {% if movie.type == 'series' and movie.season_packs %}
             {% for pack in movie.season_packs|sort(attribute='season_number') %}
-            <div class="dynamic-item">
-                <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-                <div class="season-pack-item">
-                    <div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="{{ pack.season_number }}" required></div>
-                    <div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]" value="{{ pack.watch_link or '' }}"></div>
-                    <div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]" value="{{ pack.download_link or '' }}"></div>
-                </div>
-            </div>
+            <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="{{ pack.season_number }}" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]" value="{{ pack.watch_link or '' }}"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]" value="{{ pack.download_link or '' }}"></div></div></div>
             {% endfor %}
         {% endif %}
         </div>
-        <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Complete Season Pack</button>
+        <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Season</button>
         <hr style="margin: 20px 0;">
-
         <label style="font-size: 1.1rem;">Individual Episodes:</label>
         <div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}
@@ -1005,72 +913,24 @@ edit_html = """
     <fieldset>
         <legend>Manual Download Buttons (Custom)</legend>
         <div id="manual_links_container">
-            {% if movie.manual_links %}
-                {% for link in movie.manual_links %}
-                <div class="dynamic-item">
-                    <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-                    <div class="link-pair">
-                        <div class="form-group">
-                            <label>Button Name (e.g., 480p G-Drive)</label>
-                            <input type="text" name="manual_link_name[]" value="{{ link.name }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Link URL</label>
-                            <input type="url" name="manual_link_url[]" value="{{ link.url }}" required>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% endif %}
+            {% if movie.manual_links %}{% for link in movie.manual_links %}
+                <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" value="{{ link.name }}" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" value="{{ link.url }}" required></div></div></div>
+            {% endfor %}{% endif %}
         </div>
-        <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;">
-            <i class="fas fa-plus"></i> Add Manual Button
-        </button>
+        <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;"><i class="fas fa-plus"></i> Add Manual Button</button>
     </fieldset>
     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
   </form>
 </div>
 <script>
     function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title (Optional):</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    function addSeasonPackField() {
-        const container = document.getElementById('season_packs_container');
-        const newItem = document.createElement('div');
-        newItem.className = 'dynamic-item';
-        newItem.innerHTML = `
-            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-            <div class="season-pack-item">
-                <div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div>
-                <div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div>
-                <div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div>
-            </div>`;
-        container.appendChild(newItem);
-    }
-    
-    function addManualLinkField() {
-        const container = document.getElementById('manual_links_container');
-        const newItem = document.createElement('div');
-        newItem.className = 'dynamic-item';
-        newItem.innerHTML = `
-            <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button>
-            <div class="link-pair">
-                <div class="form-group">
-                    <label>Button Name (e.g., 480p G-Drive)</label>
-                    <input type="text" name="manual_link_name[]" placeholder="Button Name" required>
-                </div>
-                <div class="form-group">
-                    <label>Link URL</label>
-                    <input type="url" name="manual_link_url[]" placeholder="https://..." required>
-                </div>
-            </div>`;
-        container.appendChild(newItem);
-    }
-    
+    function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
+    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
+    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
 """
-
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
@@ -1096,6 +956,9 @@ def home():
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
+    # --- Data for Hero Slider: Fetch latest 8 items ---
+    slider_content = list(movies.find({}).sort('_id', -1).limit(8))
+    
     categorized_content = {}
     for category in PREDEFINED_CATEGORIES:
         categorized_content[category] = list(movies.find({"categories": category}).sort('_id', -1).limit(10))
@@ -1104,6 +967,7 @@ def home():
     latest_series_for_carousel = list(movies.find({"type": "series"}).sort('_id', -1).limit(10))
 
     context = {
+        "slider_content": slider_content,
         "latest_movies": latest_movies_for_carousel,
         "latest_series": latest_series_for_carousel,
         "categorized_content": categorized_content,
@@ -1133,128 +997,76 @@ def movie_detail(movie_id):
 @app.route('/movies')
 def all_movies():
     all_movie_content = list(movies.find({"type": "movie"}).sort('_id', -1))
-    return render_template_string(
-        index_html, 
-        movies=all_movie_content, 
-        query="All Movies", 
-        is_full_page_list=True
-    )
+    return render_template_string(index_html, movies=all_movie_content, query="All Movies", is_full_page_list=True)
 
 @app.route('/series')
 def all_series():
     all_series_content = list(movies.find({"type": "series"}).sort('_id', -1))
-    return render_template_string(
-        index_html, 
-        movies=all_series_content, 
-        query="All Series", 
-        is_full_page_list=True
-    )
+    return render_template_string(index_html, movies=all_series_content, query="All Series", is_full_page_list=True)
 
 @app.route('/category')
 def movies_by_category():
     title = request.args.get('name')
-    if not title:
-        return redirect(url_for('home'))
-
-    if title == "Latest Movies":
-        return redirect(url_for('all_movies'))
-    if title == "Latest Series":
-        return redirect(url_for('all_series'))
-        
-    query = {"categories": title}
-    content_list = list(movies.find(query).sort('_id', -1))
+    if not title: return redirect(url_for('home'))
+    if title == "Latest Movies": return redirect(url_for('all_movies'))
+    if title == "Latest Series": return redirect(url_for('all_series'))
     
-    return render_template_string(
-        index_html, 
-        movies=content_list, 
-        query=title, 
-        is_full_page_list=True
-    )
+    content_list = list(movies.find({"categories": title}).sort('_id', -1))
+    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
 
 @app.route('/wait')
 def wait_page():
     encoded_target_url = request.args.get('target')
-    if not encoded_target_url:
-        return redirect(url_for('home'))
-    
-    decoded_target_url = unquote(encoded_target_url)
-    return render_template_string(wait_page_html, target_url=decoded_target_url)
+    if not encoded_target_url: return redirect(url_for('home'))
+    return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
-
         if form_action == "update_ads":
-            ad_settings_data = {
-                "ad_header": request.form.get("ad_header"),
-                "ad_body_top": request.form.get("ad_body_top"),
-                "ad_footer": request.form.get("ad_footer"),
-                "ad_list_page": request.form.get("ad_list_page"),
-                "ad_detail_page": request.form.get("ad_detail_page"),
-                "ad_wait_page": request.form.get("ad_wait_page"),
-            }
+            ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
-        
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
             movie_data = {
-                "title": request.form.get("title").strip(), "type": content_type,
-                "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-                "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(),
-                "language": request.form.get("language").strip() or None,
-                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-                "categories": request.form.getlist("categories"),
+                "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+                "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
+                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()], "categories": request.form.getlist("categories"),
                 "episodes": [], "links": [], "season_packs": [], "manual_links": []
             }
-            
             tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
                 media_type = "tv" if content_type == "series" else "movie"
                 tmdb_details = get_tmdb_details(tmdb_id, media_type)
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
-
             if content_type == "movie":
                 movie_links = []
                 for quality in ["480p", "720p", "1080p"]:
-                    watch_url = request.form.get(f"watch_link_{quality}")
-                    download_url = request.form.get(f"download_link_{quality}")
-                    if watch_url or download_url:
-                        movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+                    watch_url, download_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
+                    if watch_url or download_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
                 movie_data["links"] = movie_links
-            else: # Series
-                season_pack_numbers = request.form.getlist('season_pack_number[]')
-                season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
-                season_pack_download_links = request.form.getlist('season_pack_download_link[]')
-                for i in range(len(season_pack_numbers)):
-                    if season_pack_numbers[i] and (season_pack_watch_links[i].strip() or season_pack_download_links[i].strip()):
-                        movie_data['season_packs'].append({
-                            "season_number": int(season_pack_numbers[i]),
-                            "watch_link": season_pack_watch_links[i].strip() or None,
-                            "download_link": season_pack_download_links[i].strip() or None
-                        })
-                
-                seasons = request.form.getlist('episode_season[]')
-                numbers = request.form.getlist('episode_number[]')
-                titles = request.form.getlist('episode_title[]')
-                links = request.form.getlist('episode_watch_link[]')
+            else:
+                season_packs = []
+                sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
+                for i in range(len(sp_nums)):
+                    if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip()):
+                        season_packs.append({"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None})
+                movie_data['season_packs'] = season_packs
+                episodes = []
+                seasons, nums, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 for i in range(len(seasons)):
-                    if seasons[i] and numbers[i] and links[i]:
-                        movie_data['episodes'].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+                    if seasons[i] and nums[i] and links[i]:
+                        episodes.append({"season": int(seasons[i]), "episode_number": int(nums[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+                movie_data['episodes'] = episodes
             
-            manual_links_data = []
-            link_names = request.form.getlist('manual_link_name[]')
-            link_urls = request.form.getlist('manual_link_url[]')
+            manual_links = []
+            link_names, link_urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             for i in range(len(link_names)):
                 if link_names[i].strip() and link_urls[i].strip():
-                    manual_links_data.append({
-                        "name": link_names[i].strip(),
-                        "url": link_urls[i].strip()
-                    })
-            movie_data["manual_links"] = manual_links_data
-            
+                    manual_links.append({"name": link_names[i].strip(), "url": link_urls[i].strip()})
+            movie_data["manual_links"] = manual_links
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
@@ -1268,60 +1080,39 @@ def edit_movie(movie_id):
     except: return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
     if not movie_obj: return "Movie not found", 404
-
     if request.method == "POST":
         content_type = request.form.get("content_type")
         update_data = {
-            "title": request.form.get("title").strip(), "type": content_type,
-            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-            "backdrop": request.form.get("backdrop").strip() or None,
-            "overview": request.form.get("overview").strip(),
-            "language": request.form.get("language").strip() or None,
-            "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
-            "categories": request.form.getlist("categories")
+            "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+            "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
+            "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories")
         }
-        
-        manual_links_data = []
-        link_names = request.form.getlist('manual_link_name[]')
-        link_urls = request.form.getlist('manual_link_url[]')
+        manual_links = []
+        link_names, link_urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         for i in range(len(link_names)):
             if link_names[i].strip() and link_urls[i].strip():
-                manual_links_data.append({
-                    "name": link_names[i].strip(),
-                    "url": link_urls[i].strip()
-                })
-        update_data["manual_links"] = manual_links_data
-
+                manual_links.append({"name": link_names[i].strip(), "url": link_urls[i].strip()})
+        update_data["manual_links"] = manual_links
         if content_type == "movie":
             movie_links = []
             for quality in ["480p", "720p", "1080p"]:
-                watch_url = request.form.get(f"watch_link_{quality}")
-                download_url = request.form.get(f"download_link_{quality}")
-                if watch_url or download_url:
-                    movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
+                watch_url, download_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
+                if watch_url or download_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": download_url})
             update_data["links"] = movie_links
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
-        else: # Series
-            update_data["season_packs"] = []
-            season_pack_numbers = request.form.getlist('season_pack_number[]')
-            season_pack_watch_links = request.form.getlist('season_pack_watch_link[]')
-            season_pack_download_links = request.form.getlist('season_pack_download_link[]')
-            for i in range(len(season_pack_numbers)):
-                 if season_pack_numbers[i] and (season_pack_watch_links[i].strip() or season_pack_download_links[i].strip()):
-                    update_data['season_packs'].append({
-                        "season_number": int(season_pack_numbers[i]),
-                        "watch_link": season_pack_watch_links[i].strip() or None,
-                        "download_link": season_pack_download_links[i].strip() or None
-                    })
-
-            update_data["episodes"] = []
-            seasons = request.form.getlist('episode_season[]')
-            numbers = request.form.getlist('episode_number[]')
-            titles = request.form.getlist('episode_title[]')
-            links = request.form.getlist('episode_watch_link[]')
+        else:
+            season_packs = []
+            sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
+            for i in range(len(sp_nums)):
+                if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip()):
+                    season_packs.append({"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None})
+            update_data['season_packs'] = season_packs
+            episodes = []
+            seasons, nums, titles, links = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             for i in range(len(seasons)):
-                if seasons[i] and numbers[i] and links[i]:
-                     update_data["episodes"].append({"season": int(seasons[i]), "episode_number": int(numbers[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+                if seasons[i] and nums[i] and links[i]:
+                    episodes.append({"season": int(seasons[i]), "episode_number": int(nums[i]), "title": titles[i].strip(), "watch_link": links[i].strip()})
+            update_data["episodes"] = episodes
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
     return render_template_string(edit_html, movie=movie_obj)
@@ -1364,15 +1155,13 @@ def api_get_details():
 @app.route('/api/search')
 def api_search():
     query = request.args.get('q', '').strip()
-    if not query:
-        return jsonify([])
+    if not query: return jsonify([])
     try:
         results = list(movies.find(
             {"title": {"$regex": query, "$options": "i"}},
             {"_id": 1, "title": 1, "poster": 1}
         ).limit(10))
-        for item in results:
-            item['_id'] = str(item['_id'])
+        for item in results: item['_id'] = str(item['_id'])
         return jsonify(results)
     except Exception as e:
         print(f"API Search Error: {e}")
