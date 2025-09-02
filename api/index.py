@@ -81,7 +81,12 @@ index_html = """
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {--primary-color: #E50914;--bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;--nav-height: 70px;}
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  /* --- START: UNIVERSAL BOX-SIZING FOR LAYOUT STABILITY --- */
+  html { box-sizing: border-box; }
+  *, *:before, *:after { box-sizing: inherit; }
+  /* --- END: UNIVERSAL BOX-SIZING --- */
+
   body {font-family: 'Poppins', sans-serif;background-color: var(--bg-color);color: var(--text-light);overflow-x: hidden;}
   a { text-decoration: none; color: inherit; }
   img { max-width: 100%; display: block; }
@@ -114,9 +119,7 @@ index_html = """
   .category-title { font-size: 1.8rem; font-weight: 600; }
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; }
   
-  /* --- START: HOMEPAGE GRID STYLE (INSTEAD OF CAROUSEL) --- */
   .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 20px; }
-  /* --- END: HOMEPAGE GRID STYLE --- */
 
   .movie-card { display: block; position: relative; }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
@@ -152,20 +155,18 @@ index_html = """
   .search-result-item { color: white; text-align: center; }
   .search-result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 5px; }
   @media (max-width: 992px) {.nav-links, .search-form { display: none; } .menu-toggle { display: block; } .container { padding: 0 20px; } }
+  
   @media (max-width: 768px) {
     body { padding-bottom: 60px; }
     .main-header .search-form, .main-header .nav-links { display: none; }
     .bottom-nav { display: flex; }
     .full-page-grid-container{padding-top:100px; padding-left: 15px; padding-right: 15px; padding-bottom:40px;} 
-
-    /* --- START: "VIEW ALL" PAGE MOBILE LAYOUT FIX --- */
     .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 20px 15px; }
     .full-page-grid-title { font-size: 1.8rem; }
-    /* --- END: "VIEW ALL" PAGE MOBILE LAYOUT FIX --- */
     
-    /* --- START: HOMEPAGE GRID MOBILE LAYOUT --- */
+    /* --- START: IMPROVED MOBILE GRID LAYOUT --- */
     .category-grid { grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    /* --- END: HOMEPAGE GRID MOBILE LAYOUT --- */
+    /* --- END: IMPROVED MOBILE GRID LAYOUT --- */
 
     .logo { font-size: 1.5rem; } 
     .hero-slider { margin-top: calc(var(--nav-height) + 10px); aspect-ratio: 16 / 10; }
@@ -173,6 +174,14 @@ index_html = """
     .slide-type-tag { font-size: 0.7rem; padding: 4px 10px; top: 15px; right: 15px; }
     .category-title { font-size: 1.4rem; } 
   }
+
+  /* --- START: NEW MEDIA QUERY FOR SMALLER PHONES --- */
+  @media (max-width: 480px) {
+    .category-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
+  }
+  /* --- END: NEW MEDIA QUERY --- */
+
   @media (min-width: 769px) { .bottom-nav { display: none; } }
 </style>
 </head>
@@ -239,7 +248,6 @@ index_html = """
     </div>
     <div class="container">
     
-    {# --- START: MODIFIED MACRO TO RENDER GRID INSTEAD OF CAROUSEL --- #}
     {% macro render_grid_section(title, movies_list, cat_name) %}
         {% if movies_list %}
         <section class="category-section">
@@ -255,7 +263,6 @@ index_html = """
         </section>
         {% endif %}
     {% endmacro %}
-    {# --- END: MODIFIED MACRO --- #}
 
     {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
     {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
@@ -289,11 +296,8 @@ index_html = """
     const header = document.querySelector('.main-header');
     window.addEventListener('scroll', () => { window.scrollY > 50 ? header.classList.add('scrolled') : header.classList.remove('scrolled'); });
     
-    // Hero slider remains
     new Swiper('.hero-slider', { loop: true, autoplay: { delay: 4000 }, pagination: { el: '.swiper-pagination', clickable: true }, });
     
-    // --- REMOVED: Movie carousel Swiper initialization, as it is no longer used ---
-
     const menuToggle = document.querySelector('.menu-toggle');
     const mobileMenu = document.querySelector('.mobile-nav-menu');
     const closeBtn = document.querySelector('.close-btn');
@@ -350,14 +354,13 @@ detail_html = """
 <meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-<!-- START: Added Swiper CSS for Related Content Carousel -->
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
-<!-- END: Added Swiper CSS -->
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #0c0c0c;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); }
+  html { box-sizing: border-box; }
+  *, *:before, *:after { box-sizing: inherit; }
+  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden;}
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
   .detail-hero { position: relative; padding: 120px 0 60px; min-height: 70vh; display: flex; align-items: center; }
@@ -393,8 +396,6 @@ detail_html = """
   .episode-name { font-weight: 500; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
   .ad-container > * { max-width: 100% !important; }
-  
-  /* START: Styles for Related Content Carousel */
   .category-section { margin: 50px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.8rem; font-weight: 600; }
@@ -406,8 +407,6 @@ detail_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .language-tag { position: absolute; top: 10px; left: 10px; background-color: var(--primary-color); color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 600; z-index: 2; text-transform: uppercase; }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); }
-  /* END: Styles for Related Content Carousel */
-  
   @media (max-width: 768px) {
     .container { padding: 0 20px; }
     .detail-hero { padding: 100px 0 40px; }
@@ -417,10 +416,8 @@ detail_html = """
     .detail-meta { justify-content: center; }
     .tab-link { padding: 12px 15px; font-size: 0.9rem; }
     .episode-item { flex-direction: column; gap: 10px; align-items: flex-start; }
-    /* START: Mobile styles for related content */
     .movie-poster { width: 160px; }
     .card-title { max-width: 160px; }
-    /* END: Mobile styles for related content */
   }
 </style>
 </head>
@@ -448,7 +445,6 @@ detail_html = """
         {% set episode_seasons = movie.episodes | map(attribute='season') | list if movie.episodes else [] %}
         {% set pack_seasons = movie.season_packs | map(attribute='season_number') | list if movie.season_packs else [] %}
         {% set all_seasons = (episode_seasons + pack_seasons) | unique | sort %}
-
         <nav class="tabs-nav">
             {% if movie.type == 'movie' %}
                 <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Download Links</div>
@@ -464,7 +460,6 @@ detail_html = """
             {% if movie.type == 'movie' %}
             <div class="tab-pane active" id="downloads">
                 {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
-                
                 {% if movie.links %}
                 <div class="link-group">
                     <h3>Watch & Download Links</h3>
@@ -479,7 +474,6 @@ detail_html = """
                     {% endfor %}
                 </div>
                 {% endif %}
-
                 {% if movie.manual_links %}
                 <div class="link-group">
                     <h3>Custom Download Links</h3>
@@ -490,7 +484,6 @@ detail_html = """
                     </div>
                 </div>
                 {% endif %}
-
                 {% if not movie.links and not movie.manual_links %}
                     <p style="text-align:center;">No links available yet.</p>
                 {% endif %}
@@ -499,7 +492,6 @@ detail_html = """
                 {% for season_num in all_seasons %}
                 <div class="tab-pane {% if loop.first %}active{% endif %}" id="season-{{ season_num }}">
                     {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
-                    
                     {% if loop.first and movie.manual_links %}
                     <div class="link-group">
                         <h3>Custom Download Links</h3>
@@ -510,7 +502,6 @@ detail_html = """
                         </div>
                     </div>
                     {% endif %}
-
                     {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
                     <div class="link-group">
                         <h3>Complete Season {{ season_num }} Links</h3>
@@ -524,7 +515,6 @@ detail_html = """
                         </div>
                     </div>
                     {% endif %}
-                    
                     {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
                     {% if episodes_for_season %}
                     <div class="episode-list">
@@ -558,8 +548,6 @@ detail_html = """
             {% endif %}
         </div>
     </div>
-
-    <!-- START: Related Content Section -->
     {% if related_content %}
     <section class="category-section">
         <div class="category-header">
@@ -582,8 +570,6 @@ detail_html = """
         </div>
     </section>
     {% endif %}
-    <!-- END: Related Content Section -->
-
 </div>
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
 <script>
@@ -597,7 +583,6 @@ detail_html = """
         if(targetPane) targetPane.classList.add('active');
     }); });
 </script>
-<!-- START: Added Swiper JS for Related Content Carousel -->
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
     new Swiper('.movie-carousel', {
@@ -613,7 +598,6 @@ detail_html = """
         }
     });
 </script>
-<!-- END: Added Swiper JS -->
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
@@ -1073,14 +1057,12 @@ def movie_detail(movie_id):
         if not movie: 
             return "Content not found", 404
         
-        # START: Fetch related content
         related_content = []
         if movie.get('type'):
             related_content = list(movies.find({
                 "type": movie['type'], 
                 "_id": {"$ne": movie['_id']}
             }).sort('_id', -1).limit(12))
-        # END: Fetch related content
 
         return render_template_string(detail_html, movie=movie, related_content=related_content)
     except Exception as e:
