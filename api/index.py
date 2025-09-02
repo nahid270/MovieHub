@@ -70,7 +70,8 @@ index_html = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>{{ website_name }} - Your Entertainment Hub</title>
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="Watch and download the latest movies and series on {{ website_name }}. Your ultimate entertainment hub.">
@@ -161,11 +162,14 @@ index_html = """
     .main-header .search-form, .main-header .nav-links { display: none; }
     .bottom-nav { display: flex; }
     .full-page-grid-container{padding-top:100px; padding-left: 15px; padding-right: 15px; padding-bottom:40px;} 
-    .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 20px 15px; }
+    
     .full-page-grid-title { font-size: 1.8rem; }
     
-    /* --- START: IMPROVED MOBILE GRID LAYOUT --- */
-    .category-grid { grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    /* --- START: IMPROVED MOBILE GRID LAYOUT (3 per row) --- */
+    .category-grid, .full-page-grid { 
+        grid-template-columns: repeat(3, 1fr); 
+        gap: 15px; 
+    }
     /* --- END: IMPROVED MOBILE GRID LAYOUT --- */
 
     .logo { font-size: 1.5rem; } 
@@ -175,10 +179,12 @@ index_html = """
     .category-title { font-size: 1.4rem; } 
   }
 
-  /* --- START: NEW MEDIA QUERY FOR SMALLER PHONES --- */
+  /* --- START: NEW MEDIA QUERY FOR SMALLER PHONES (2 per row) --- */
   @media (max-width: 480px) {
-    .category-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
-    .full-page-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .category-grid, .full-page-grid { 
+        grid-template-columns: repeat(2, 1fr); 
+        gap: 15px; 
+    }
   }
   /* --- END: NEW MEDIA QUERY --- */
 
@@ -347,7 +353,8 @@ detail_html = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
@@ -605,7 +612,8 @@ wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Generating Link... - {{ website_name }}</title>
     <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
     <meta name="robots" content="noindex, nofollow">
