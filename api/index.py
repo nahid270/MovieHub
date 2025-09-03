@@ -955,7 +955,7 @@ def home():
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
-    slider_content = list(movies.find({}).sort('_id', -1).limit(8))
+    slider_content = list(movies.find({}).sort('_id', -1).limit(15))
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in PREDEFINED_CATEGORIES}
     
     # --- পরিবর্তিত অংশ ---
