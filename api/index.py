@@ -284,8 +284,9 @@ index_html = """
       {% endmacro %}
       
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-      {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
-      {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
+      {# --- পরিবর্তিত অংশ --- #}
+      {{ render_grid_section('Latest Movies & Series', latest_content, 'Latest') }}
+      {# --- পরিবর্তন শেষ --- #}
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       {% for cat_name, movies_list in categorized_content.items() %}
           {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
@@ -956,15 +957,22 @@ def home():
     
     slider_content = list(movies.find({}).sort('_id', -1).limit(8))
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in PREDEFINED_CATEGORIES}
-    latest_movies = list(movies.find({"type": "movie"}).sort('_id', -1).limit(10))
-    latest_series = list(movies.find({"type": "series"}).sort('_id', -1).limit(10))
+    
+    # --- পরিবর্তিত অংশ ---
+    # মুভি এবং সিরিজ একসাথে আনার জন্য একটিমাত্র কোয়েরি চালানো হয়েছে
+    latest_content = list(movies.find().sort('_id', -1).limit(10))
+    # --- পরিবর্তন শেষ ---
 
     context = {
-        "slider_content": slider_content, "latest_movies": latest_movies,
-        "latest_series": latest_series, "categorized_content": categorized_content,
+        "slider_content": slider_content,
+        # --- পরিবর্তিত অংশ ---
+        "latest_content": latest_content, # নতুন ভ্যারিয়েবলটি টেমপ্লেটে পাঠানো হচ্ছে
+        # --- পরিবর্তন শেষ ---
+        "categorized_content": categorized_content,
         "is_full_page_list": False
     }
     return render_template_string(index_html, **context)
+
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -992,11 +1000,20 @@ def all_series():
 def movies_by_category():
     title = request.args.get('name')
     if not title: return redirect(url_for('home'))
+
+    # --- পরিবর্তিত অংশ ---
+    # নতুন 'Latest' ক্যাটাগরির "View All" লিঙ্কের জন্য এই কোড যুক্ত করা হয়েছে
+    if title == "Latest":
+        content_list = list(movies.find().sort('_id', -1))
+        return render_template_string(index_html, movies=content_list, query="Latest Movies & Series", is_full_page_list=True)
+    # --- পরিবর্তন শেষ ---
+        
     if title == "Latest Movies": return redirect(url_for('all_movies'))
     if title == "Latest Series": return redirect(url_for('all_series'))
     
     content_list = list(movies.find({"categories": title}).sort('_id', -1))
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
+
 
 @app.route('/wait')
 def wait_page():
