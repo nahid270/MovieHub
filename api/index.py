@@ -713,6 +713,11 @@ admin_html = """
         .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
         .result-item p { font-size: 0.9rem; }
         .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
+        /* --- নতুন সার্চ বারের জন্য স্টাইল --- */
+        .manage-content-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
+        .search-form { display: flex; gap: 10px; flex-grow: 1; max-width: 500px; }
+        .search-form input { flex-grow: 1; }
+        .search-form .btn { padding: 12px 20px; }
     </style>
 </head>
 <body>
@@ -776,9 +781,20 @@ admin_html = """
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
     <hr>
-    <h2><i class="fas fa-tasks"></i> Manage Content</h2>
+    <!-- === [START] পরিবর্তিত অংশ: সার্চ বার যুক্ত করা হয়েছে === -->
+    <div class="manage-content-header">
+        <h2><i class="fas fa-tasks"></i> Manage Content</h2>
+        <form method="get" action="{{ url_for('admin') }}" class="search-form">
+            <input type="search" name="search" placeholder="Search by title..." value="{{ request.args.get('search', '') }}">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
+            {% if request.args.get('search') %}
+            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    <!-- === [END] পরিবর্তিত অংশ === -->
     <div class="table-container"><table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-    {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="3" style="text-align:center;">No content found.</td></tr>{% endfor %}
+    {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="3" style="text-align:center;">No content found for your search.</td></tr>{% endfor %}
     </tbody></table></div>
 </div>
 <div class="modal-overlay" id="search-modal">
@@ -1059,7 +1075,15 @@ def admin():
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    content_list = list(movies.find().sort('_id', -1))
+    # === [START] পরিবর্তিত অংশ: সার্চের জন্য ব্যাকএন্ড লজিক ===
+    search_query = request.args.get('search', '').strip()
+    query_filter = {}
+    if search_query:
+        query_filter = {"title": {"$regex": search_query, "$options": "i"}}
+    
+    content_list = list(movies.find(query_filter).sort('_id', -1))
+    # === [END] পরিবর্তিত অংশ ===
+    
     return render_template_string(admin_html, content_list=content_list)
 
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
