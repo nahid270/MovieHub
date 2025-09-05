@@ -130,7 +130,6 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* --- [START] নতুন পরিবর্তন: স্লাইডার ডিজাইন --- */
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; }
       50% { box-shadow: 0 0 25px 6px #00D1FF; }
@@ -146,7 +145,6 @@ index_html = """
     overflow: hidden;
     animation: cyan-glow 5s infinite linear;
   }
-  /* --- [END] নতুন পরিবর্তন --- */
 
   .hero-slider .swiper-slide { position: relative; display: block; }
   .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
@@ -155,22 +153,22 @@ index_html = """
   .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
   .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
   
-  /* --- [START] নতুন পরিবর্তন: ট্যাগ ডিজাইন --- */
+  /* --- [START] ফাইনাল পরিবর্তন: ট্যাগ সাইজ কমানো হয়েছে --- */
   .hero-slide-content .hero-type-tag {
     position: absolute;
     bottom: 20px;
     right: 20px;
     background: linear-gradient(45deg, #00FFA3, #00D1FF);
     color: black;
-    padding: 6px 20px;
+    padding: 5px 15px; /* Padding কমানো হয়েছে */
     border-radius: 50px;
-    font-size: 0.8rem;
+    font-size: 0.75rem; /* Font size কমানো হয়েছে */
     font-weight: 700;
     z-index: 4;
     text-transform: uppercase;
     box-shadow: 0 4px 10px rgba(0, 255, 163, 0.2);
   }
-  /* --- [END] নতুন পরিবর্তন --- */
+  /* --- [END] ফাইনাল পরিবর্তন --- */
 
   .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
@@ -743,7 +741,6 @@ admin_html = """
         .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
         .result-item p { font-size: 0.9rem; }
         .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
-        /* --- নতুন সার্চ বারের জন্য স্টাইল --- */
         .manage-content-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
         .search-form { display: flex; gap: 10px; flex-grow: 1; max-width: 500px; }
         .search-form input { flex-grow: 1; }
@@ -811,7 +808,6 @@ admin_html = """
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
     <hr>
-    <!-- === [START] পরিবর্তিত অংশ: সার্চ বার যুক্ত করা হয়েছে === -->
     <div class="manage-content-header">
         <h2><i class="fas fa-tasks"></i> Manage Content</h2>
         <form method="get" action="{{ url_for('admin') }}" class="search-form">
@@ -822,7 +818,6 @@ admin_html = """
             {% endif %}
         </form>
     </div>
-    <!-- === [END] পরিবর্তিত অংশ === -->
     <div class="table-container"><table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
     {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="3" style="text-align:center;">No content found for your search.</td></tr>{% endfor %}
     </tbody></table></div>
