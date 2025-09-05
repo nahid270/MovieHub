@@ -130,21 +130,24 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* --- [START] নতুন পরিবর্তন --- */
-  @keyframes rgb-glow {
-      0% { box-shadow: 0 0 15px 3px var(--primary-color); }
-      33% { box-shadow: 0 0 15px 3px var(--cyan-accent); }
-      66% { box-shadow: 0 0 15px 3px var(--yellow-accent); }
-      100% { box-shadow: 0 0 15px 3px var(--primary-color); }
+  /* --- [START] নতুন পরিবর্তন: স্লাইডার ডিজাইন --- */
+  @keyframes cyan-glow {
+      0% { box-shadow: 0 0 15px 2px #00D1FF; }
+      50% { box-shadow: 0 0 25px 6px #00D1FF; }
+      100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
-  .hero-slider-section {
-    margin-bottom: 30px; border-radius: 12px; overflow: hidden; position: relative;
-    border: 1px solid #333;
-    animation: rgb-glow 6s infinite linear;
+  .hero-slider-section { margin-bottom: 30px; }
+
+  .hero-slider {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    animation: cyan-glow 5s infinite linear;
   }
   /* --- [END] নতুন পরিবর্তন --- */
 
-  .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); }
   .hero-slider .swiper-slide { position: relative; display: block; }
   .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
   .hero-slider .hero-slide-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 40%, transparent 70%); z-index: 2; }
@@ -152,20 +155,20 @@ index_html = """
   .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
   .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
   
-  /* --- [START] নতুন পরিবর্তন --- */
+  /* --- [START] নতুন পরিবর্তন: ট্যাগ ডিজাইন --- */
   .hero-slide-content .hero-type-tag {
     position: absolute;
     bottom: 20px;
     right: 20px;
-    background: linear-gradient(45deg, var(--cyan-accent), var(--yellow-accent));
+    background: linear-gradient(45deg, #00FFA3, #00D1FF);
     color: black;
-    padding: 6px 18px;
-    border-radius: 20px;
+    padding: 6px 20px;
+    border-radius: 50px;
     font-size: 0.8rem;
     font-weight: 700;
     z-index: 4;
     text-transform: uppercase;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 10px rgba(0, 255, 163, 0.2);
   }
   /* --- [END] নতুন পরিবর্তন --- */
 
@@ -284,9 +287,7 @@ index_html = """
                             <p class="hero-meta">
                                 {% if item.release_date %}{{ item.release_date.split('-')[0] }}{% endif %}
                             </p>
-                            <!-- === [START] HTML পরিবর্তন: ট্যাগটিকে এই div এর ভেতরে আনা হয়েছে === -->
                             <span class="hero-type-tag">{{ item.type | title }}</span>
-                            <!-- === [END] HTML পরিবর্তন === -->
                         </div>
                     </a>
                 </div>
@@ -315,9 +316,7 @@ index_html = """
       {% endmacro %}
       
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-      {# --- পরিবর্তিত অংশ --- #}
       {{ render_grid_section('Latest Movies & Series', latest_content, 'Latest') }}
-      {# --- পরিবর্তন শেষ --- #}
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       {% for cat_name, movies_list in categorized_content.items() %}
           {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
@@ -1005,16 +1004,11 @@ def home():
     slider_content = list(movies.find({}).sort('_id', -1).limit(15))
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in PREDEFINED_CATEGORIES}
     
-    # --- পরিবর্তিত অংশ ---
-    # মুভি এবং সিরিজ একসাথে আনার জন্য একটিমাত্র কোয়েরি চালানো হয়েছে
     latest_content = list(movies.find().sort('_id', -1).limit(10))
-    # --- পরিবর্তন শেষ ---
 
     context = {
         "slider_content": slider_content,
-        # --- পরিবর্তিত অংশ ---
-        "latest_content": latest_content, # নতুন ভ্যারিয়েবলটি টেমপ্লেটে পাঠানো হচ্ছে
-        # --- পরিবর্তন শেষ ---
+        "latest_content": latest_content,
         "categorized_content": categorized_content,
         "is_full_page_list": False
     }
@@ -1048,12 +1042,9 @@ def movies_by_category():
     title = request.args.get('name')
     if not title: return redirect(url_for('home'))
 
-    # --- পরিবর্তিত অংশ ---
-    # নতুন 'Latest' ক্যাটাগরির "View All" লিঙ্কের জন্য এই কোড যুক্ত করা হয়েছে
     if title == "Latest":
         content_list = list(movies.find().sort('_id', -1))
         return render_template_string(index_html, movies=content_list, query="Latest Movies & Series", is_full_page_list=True)
-    # --- পরিবর্তন শেষ ---
         
     if title == "Latest Movies": return redirect(url_for('all_movies'))
     if title == "Latest Series": return redirect(url_for('all_series'))
@@ -1106,14 +1097,12 @@ def admin():
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    # === [START] পরিবর্তিত অংশ: সার্চের জন্য ব্যাকএন্ড লজিক ===
     search_query = request.args.get('search', '').strip()
     query_filter = {}
     if search_query:
         query_filter = {"title": {"$regex": search_query, "$options": "i"}}
     
     content_list = list(movies.find(query_filter).sort('_id', -1))
-    # === [END] পরিবর্তিত অংশ ===
     
     return render_template_string(admin_html, content_list=content_list)
 
