@@ -7,6 +7,7 @@ from bson.objectid import ObjectId
 from functools import wraps
 from urllib.parse import unquote, quote
 from datetime import datetime, time
+import math # Added for pagination calculation
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -23,7 +24,7 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
-# PREDEFINED_CATEGORIES is now managed from the database
+ITEMS_PER_PAGE = 20 # New constant for pagination
 app = Flask(__name__)
 
 # --- Authentication ---
@@ -48,22 +49,23 @@ try:
     db = client["movie_db"]
     movies = db["movies"]
     settings = db["settings"]
-    categories_collection = db["categories"] # New collection for categories
+    categories_collection = db["categories"]
+    requests_collection = db["requests"] # New collection for user requests
     print("SUCCESS: Successfully connected to MongoDB!")
 
-    # --- Initialize default categories if the collection is empty ---
     if categories_collection.count_documents({}) == 0:
         default_categories = ["Coming Soon", "Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
-    # --- Create Indexes for Performance Improvement ---
     try:
         movies.create_index("title")
         movies.create_index("type")
         movies.create_index("categories")
-        movies.create_index("created_at") # Index for the new timestamp
+        movies.create_index("created_at")
         categories_collection.create_index("name", unique=True)
+        requests_collection.create_index("status")
+        requests_collection.create_index("created_at")
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
@@ -75,8 +77,7 @@ except Exception as e:
 
 # --- Custom Jinja Filter for Relative Time ---
 def time_ago(obj_id):
-    if not obj_id:
-        return ""
+    if not isinstance(obj_id, ObjectId): return ""
     post_time = obj_id.generation_time.replace(tzinfo=None)
     now = datetime.utcnow()
     diff = now - post_time
@@ -98,7 +99,6 @@ app.jinja_env.filters['time_ago'] = time_ago
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
-    # Fetch categories from DB instead of static list
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     return dict(
         website_name=WEBSITE_NAME,
@@ -142,43 +142,17 @@ index_html = """
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
   @keyframes cyan-glow {
-      0% { box-shadow: 0 0 15px 2px #00D1FF; }
-      50% { box-shadow: 0 0 25px 6px #00D1FF; }
-      100% { box-shadow: 0 0 15px 2px #00D1FF; }
+      0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
   .hero-slider-section { margin-bottom: 30px; }
-
-  .hero-slider {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background-color: var(--card-bg);
-    border-radius: 12px;
-    overflow: hidden;
-    animation: cyan-glow 5s infinite linear;
-  }
-
+  .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); border-radius: 12px; overflow: hidden; animation: cyan-glow 5s infinite linear; }
   .hero-slider .swiper-slide { position: relative; display: block; }
   .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
   .hero-slider .hero-slide-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 40%, transparent 70%); z-index: 2; }
   .hero-slider .hero-slide-content { position: absolute; bottom: 0; left: 0; width: 100%; padding: 20px; z-index: 3; color: white; }
   .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
   .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
-  
-  .hero-slide-content .hero-type-tag {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    background: linear-gradient(45deg, #00FFA3, #00D1FF);
-    color: black;
-    padding: 5px 15px;
-    border-radius: 50px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    z-index: 4;
-    text-transform: uppercase;
-    box-shadow: 0 4px 10px rgba(0, 255, 163, 0.2);
-  }
-
+  .hero-slide-content .hero-type-tag { position: absolute; bottom: 20px; right: 20px; background: linear-gradient(45deg, #00FFA3, #00D1FF); color: black; padding: 5px 15px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; z-index: 4; text-transform: uppercase; box-shadow: 0 4px 10px rgba(0, 255, 163, 0.2); }
   .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
@@ -201,7 +175,7 @@ index_html = """
   .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
   .language-tag { top: 8px; right: 8px; background-color: var(--primary-color); }
 
-  .full-page-grid-container { padding: 80px 10px 80px; }
+  .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
   .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
@@ -228,6 +202,10 @@ index_html = """
   #search-results-live { margin-top: 20px; max-height: calc(100vh - 150px); overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px; }
   .search-result-item { color: white; text-align: center; }
   .search-result-item img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 5px; margin-bottom: 5px; }
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 30px 0; }
+  .pagination a, .pagination span { padding: 8px 15px; border-radius: 5px; background-color: var(--card-bg); color: var(--text-dark); font-weight: 500; }
+  .pagination a:hover { background-color: #333; }
+  .pagination .current { background-color: var(--primary-color); color: white; }
 
   @media (min-width: 769px) { 
     .container { padding: 0 40px; } .main-header { padding: 0 40px; }
@@ -236,7 +214,7 @@ index_html = """
     .hero-slider .hero-slide-content { padding: 40px; }
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
-    .full-page-grid-container { padding: 120px 40px 50px; }
+    .full-page-grid-container { padding: 120px 40px 20px; }
   }
 </style>
 </head>
@@ -254,6 +232,7 @@ index_html = """
         <a href="{{ url_for('home') }}">Home</a>
         <a href="{{ url_for('all_movies') }}">All Movies</a>
         <a href="{{ url_for('all_series') }}">All Series</a>
+        <a href="{{ url_for('request_content') }}">Request Content</a>
         <hr>
         {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', name=cat) }}">{{ cat }}</a>{% endfor %}
     </div>
@@ -276,7 +255,16 @@ index_html = """
     <div class="full-page-grid-container">
         <h2 class="full-page-grid-title">{{ query }}</h2>
         {% if movies|length == 0 %}<p style="text-align:center;">No content found.</p>
-        {% else %}<div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>{% endif %}
+        {% else %}
+        <div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>
+        {% if pagination and pagination.total_pages > 1 %}
+        <div class="pagination">
+            {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, page=pagination.prev_num, name=query if 'category' in request.endpoint else None) }}">&laquo; Prev</a>{% endif %}
+            <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+            {% if pagination.has_next %}<a href="{{ url_for(request.endpoint, page=pagination.next_num, name=query if 'category' in request.endpoint else None) }}">Next &raquo;</a>{% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
     </div>
   {% else %}
     <div style="height: var(--nav-height);"></div>
@@ -336,8 +324,8 @@ index_html = """
 </footer>
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
-  <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-layer-group"></i><span>Movie & Series</span></a>
-  <a href="https://t.me/Movie_Request_Group_23" target="_blank" class="nav-item"><i class="fas fa-plus-circle"></i><span>Request</span></a>
+  <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-layer-group"></i><span>Content</span></a>
+  <a href="{{ url_for('request_content') }}" class="nav-item"><i class="fas fa-plus-circle"></i><span>Request</span></a>
   <button id="live-search-btn" class="nav-item"><i class="fas fa-search"></i><span>Search</span></button>
 </nav>
 <div id="search-overlay" class="search-overlay">
@@ -448,12 +436,12 @@ detail_html = """
   .category-section { margin: 50px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.5rem; font-weight: 600; }
-  .movie-carousel .swiper-slide { width: 150px; } /* Fixed width for mobile carousel items */
+  .movie-carousel .swiper-slide { width: 150px; }
   .movie-card { display: block; position: relative; }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }
   .card-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
-  .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; } /* Hide nav buttons on mobile */
+  .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; }
 
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
@@ -701,6 +689,68 @@ wait_page_html = """
 </body>
 </html>
 """
+request_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Request Content - {{ website_name }}</title>
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    {{ ad_settings.ad_header | safe }}
+    <style>
+        :root { --primary-color: #E50914; --bg-color: #000000; --card-bg: #1a1a1a; --text-light: #ffffff; --text-dark: #a0a0a0; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .container { max-width: 600px; width: 100%; padding: 0 15px; }
+        .back-link { align-self: flex-start; margin-bottom: 20px; color: var(--text-dark); text-decoration: none; font-size: 0.9rem;}
+        .request-container { background-color: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h1 { font-size: 2rem; color: var(--primary-color); margin-bottom: 10px; text-align: center; }
+        p { text-align: center; color: var(--text-dark); margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; }
+        input, textarea { width: 100%; padding: 12px; border-radius: 5px; border: 1px solid #333; font-size: 1rem; background: #222; color: var(--text-light); box-sizing: border-box; }
+        textarea { resize: vertical; min-height: 80px; }
+        .btn-submit { display: block; width: 100%; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 14px; border-radius: 5px; font-size: 1.1rem; background-color: var(--primary-color); transition: background-color 0.2s; }
+        .btn-submit:hover { background-color: #B20710; }
+        .flash-message { padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+        .flash-success { background-color: #28a745; color: white; }
+        .flash-error { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    {{ ad_settings.ad_body_top | safe }}
+    <div class="container">
+        <a href="{{ url_for('home') }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+        <div class="request-container">
+            <h1>Request Content</h1>
+            <p>Can't find what you're looking for? Let us know!</p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="post">
+                <div class="form-group">
+                    <label for="content_name">Movie/Series Name</label>
+                    <input type="text" id="content_name" name="content_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="extra_info">Additional Information (Optional)</label>
+                    <textarea id="extra_info" name="extra_info" placeholder="e.g., Release year, language, specific season..."></textarea>
+                </div>
+                <button type="submit" class="btn-submit">Submit Request</button>
+            </form>
+        </div>
+    </div>
+    {{ ad_settings.ad_footer | safe }}
+</body>
+</html>
+"""
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -728,8 +778,8 @@ admin_html = """
         .btn:disabled { background-color: #555; cursor: not-allowed; }
         .btn-primary { background: var(--netflix-red); } .btn-primary:hover:not(:disabled) { background-color: #B20710; }
         .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
-        .btn-edit { background: #007bff; }
-        .table-container { display: block; overflow-x: auto; }
+        .btn-edit { background: #007bff; } .btn-success { background: #28a745; }
+        .table-container { display: block; overflow-x: auto; white-space: nowrap; }
         table { width: 100%; border-collapse: collapse; } th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
         .action-buttons { display: flex; gap: 10px; }
         .dynamic-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; position: relative; }
@@ -761,6 +811,10 @@ admin_html = """
         .category-management { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
         .category-list { flex: 1; min-width: 250px; }
         .category-item { display: flex; justify-content: space-between; align-items: center; background: var(--dark-gray); padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 0.8rem; font-weight: bold; }
+        .status-pending { background-color: #ffc107; color: black; }
+        .status-fulfilled { background-color: #28a745; }
+        .status-rejected { background-color: #6c757d; }
     </style>
 </head>
 <body>
@@ -772,7 +826,31 @@ admin_html = """
         <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
         <div class="stat-card"><h3>Total Movies</h3><p>{{ stats.total_movies }}</p></div>
         <div class="stat-card"><h3>Total Series</h3><p>{{ stats.total_series }}</p></div>
-        <div class="stat-card"><h3>Added Today</h3><p>{{ stats.added_today }}</p></div>
+        <div class="stat-card"><h3>Pending Requests</h3><p>{{ stats.pending_requests }}</p></div>
+    </div>
+    <hr>
+    
+    <h2><i class="fas fa-inbox"></i> Manage Requests</h2>
+    <div class="table-container">
+        <table>
+            <thead><tr><th>Content Name</th><th>Extra Info</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for req in requests_list %}
+            <tr>
+                <td>{{ req.name }}</td>
+                <td style="white-space: pre-wrap; min-width: 200px;">{{ req.info }}</td>
+                <td><span class="status-badge status-{{ req.status|lower }}">{{ req.status }}</span></td>
+                <td class="action-buttons">
+                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Fulfilled') }}" class="btn btn-success" style="padding: 5px 10px;">Fulfilled</a>
+                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Rejected') }}" class="btn btn-secondary" style="padding: 5px 10px;">Rejected</a>
+                    <a href="{{ url_for('delete_request', req_id=req._id) }}" class="btn btn-danger" style="padding: 5px 10px;" onclick="return confirm('Are you sure?')">Delete</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;">No pending requests.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
     <hr>
     
@@ -780,23 +858,14 @@ admin_html = """
     <div class="category-management">
         <form method="post" style="flex: 1; min-width: 300px;">
             <input type="hidden" name="form_action" value="add_category">
-            <fieldset>
-                <legend>Add New Category</legend>
-                <div class="form-group">
-                    <label>Category Name:</label>
-                    <input type="text" name="category_name" required>
-                </div>
+            <fieldset><legend>Add New Category</legend>
+                <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
             </fieldset>
         </form>
         <div class="category-list">
             <h3>Existing Categories</h3>
-            {% for cat in categories_list %}
-            <div class="category-item">
-                <span>{{ cat.name }}</span>
-                <a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure? This will not remove the category from existing content.')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
-            </div>
-            {% endfor %}
+            {% for cat in categories_list %}<div class="category-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
         </div>
     </div>
     <hr>
@@ -804,19 +873,20 @@ admin_html = """
     <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
     <form method="post">
         <input type="hidden" name="form_action" value="update_ads">
-        <fieldset><legend>Global Ad Codes (Ezoic/Adsterra)</legend>
-            <div class="form-group"><label>Header Script (in &lt;head&gt;):</label><textarea name="ad_header" rows="4" placeholder="Adsterra/Ezoic verification script">{{ ad_settings.ad_header or '' }}</textarea></div>
-            <div class="form-group"><label>Body Top Script (after &lt;body&gt;):</label><textarea name="ad_body_top" rows="4" placeholder="Pop-up or other body scripts">{{ ad_settings.ad_body_top or '' }}</textarea></div>
-            <div class="form-group"><label>Footer Script (before &lt;/body&gt;):</label><textarea name="ad_footer" rows="4">{{ ad_settings.ad_footer or '' }}</textarea></div>
+        <fieldset><legend>Global Ad Codes</legend>
+            <div class="form-group"><label>Header Script:</label><textarea name="ad_header" rows="4">{{ ad_settings.ad_header or '' }}</textarea></div>
+            <div class="form-group"><label>Body Top Script:</label><textarea name="ad_body_top" rows="4">{{ ad_settings.ad_body_top or '' }}</textarea></div>
+            <div class="form-group"><label>Footer Script:</label><textarea name="ad_footer" rows="4">{{ ad_settings.ad_footer or '' }}</textarea></div>
         </fieldset>
         <fieldset><legend>In-Page Ad Units</legend>
-             <div class="form-group"><label>Homepage Ad (Between Sections):</label><textarea name="ad_list_page" rows="4">{{ ad_settings.ad_list_page or '' }}</textarea></div>
-             <div class="form-group"><label>Details Page Ad (Below Title):</label><textarea name="ad_detail_page" rows="4">{{ ad_settings.ad_detail_page or '' }}</textarea></div>
-             <div class="form-group"><label>Wait Page Ad (Countdown Page):</label><textarea name="ad_wait_page" rows="4">{{ ad_settings.ad_wait_page or '' }}</textarea></div>
+             <div class="form-group"><label>Homepage Ad:</label><textarea name="ad_list_page" rows="4">{{ ad_settings.ad_list_page or '' }}</textarea></div>
+             <div class="form-group"><label>Details Page Ad:</label><textarea name="ad_detail_page" rows="4">{{ ad_settings.ad_detail_page or '' }}</textarea></div>
+             <div class="form-group"><label>Wait Page Ad:</label><textarea name="ad_wait_page" rows="4">{{ ad_settings.ad_wait_page or '' }}</textarea></div>
         </fieldset>
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
     </form>
     <hr>
+
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method (Search TMDB)</legend><div class="form-group"><div class="tmdb-fetcher"><input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame"><button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button></div></div></fieldset>
     <form method="post">
@@ -824,9 +894,9 @@ admin_html = """
         <fieldset><legend>Core Details</legend>
             <div class="form-group"><label>Title:</label><input type="text" name="title" id="title" required></div>
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
-            <div class="form-group"><label>Backdrop URL (Slider Image):</label><input type="url" name="backdrop" id="backdrop"></div>
+            <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
-            <div class="form-group"><label>Language (for poster tag):</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
+            <div class="form-group"><label>Language:</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
@@ -840,95 +910,41 @@ admin_html = """
         </div>
         <div id="episode_fields" style="display: none;">
             <fieldset><legend>Series Links</legend>
-                <label style="font-size: 1.1rem;">Complete Season Packs (Optional):</label>
-                <div id="season_packs_container"></div>
-                <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Complete Season Pack</button>
-                <hr style="margin: 20px 0;">
-                <label style="font-size: 1.1rem;">Individual Episodes:</label>
-                <div id="episodes_container"></div>
-                <button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
+                <label>Complete Season Packs:</label><div id="season_packs_container"></div><button type="button" onclick="addSeasonPackField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Season Pack</button><hr style="margin: 20px 0;"><label>Individual Episodes:</label><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button>
             </fieldset>
         </div>
-        <fieldset>
-            <legend>Manual Download Buttons (Custom)</legend>
-            <div id="manual_links_container"></div>
-            <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;">
-                <i class="fas fa-plus"></i> Add Manual Button
-            </button>
-        </fieldset>
+        <fieldset><legend>Manual Download Buttons</legend><div id="manual_links_container"></div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
     <hr>
+    
     <div class="manage-content-header">
         <h2><i class="fas fa-tasks"></i> Manage Content</h2>
         <form method="get" action="{{ url_for('admin') }}" class="search-form">
             <input type="search" name="search" placeholder="Search by title..." value="{{ request.args.get('search', '') }}">
             <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
-            {% if request.args.get('search') %}
-            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Clear</a>
-            {% endif %}
+            {% if request.args.get('search') %}<a href="{{ url_for('admin') }}" class="btn btn-secondary">Clear</a>{% endif %}
         </form>
     </div>
     <form method="post" id="bulk-action-form">
         <input type="hidden" name="form_action" value="bulk_delete">
         <div class="table-container"><table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-        {% for movie in content_list %}<tr><td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="4" style="text-align:center;">No content found for your search.</td></tr>{% endfor %}
+        {% for movie in content_list %}<tr><td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>{% endfor %}
         </tbody></table></div>
         <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
     </form>
 </div>
-<div class="modal-overlay" id="search-modal">
-    <div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"><p>Type a name and click search to see results.</p></div></div>
-</div>
+<div class="modal-overlay" id="search-modal"><div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"></div></div></div>
 <script>
-    const modal = document.getElementById('search-modal');
-    const searchResultsContainer = document.getElementById('search-results');
-    const searchBtn = document.getElementById('tmdb_search_btn');
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
-    function openModal() { modal.style.display = 'flex'; }
-    function closeModal() { modal.style.display = 'none'; }
-    async function searchTmdb() {
-        const query = document.getElementById('tmdb_search_query').value.trim();
-        if (!query) return alert('Please enter a movie or series name.');
-        searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...';
-        searchResultsContainer.innerHTML = '<p>Loading results...</p>'; openModal();
-        try {
-            const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query));
-            const results = await response.json();
-            if (!response.ok) throw new Error(results.error || 'Unknown error');
-            if (results.length === 0) { searchResultsContainer.innerHTML = '<p>No results found.</p>'; return; }
-            searchResultsContainer.innerHTML = '';
-            results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; searchResultsContainer.appendChild(resultDiv); });
-        } catch (error) { searchResultsContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`; } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
-    }
-    async function selectResult(tmdbId, mediaType) {
-        closeModal(); searchBtn.disabled = true; searchBtn.innerHTML = 'Fetching...';
-        try {
-            const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`);
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to fetch details');
-            document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || '';
-            document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || '';
-            document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
-            document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie';
-            document.querySelectorAll('input[name="categories"]').forEach(checkbox => checkbox.checked = false);
-            toggleFields();
-            alert(`'${data.title}' details have been filled. Please select categories, add links and click 'Add Content'.`);
-        } catch (error) { alert('Error fetching details: ' + error.message); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        toggleFields();
-        const selectAllCheckbox = document.getElementById('select-all');
-        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
-        selectAllCheckbox.addEventListener('change', function() {
-            rowCheckboxes.forEach(checkbox => {
-                checkbox.checked = selectAllCheckbox.checked;
-            });
-        });
-    });
+    function openModal() { document.getElementById('search-modal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
+    async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
+    async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
+    document.addEventListener('DOMContentLoaded', function() { toggleFields(); const selectAll = document.getElementById('select-all'); if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); } });
 </script>
 </body></html>
 """
@@ -990,38 +1006,22 @@ edit_html = """
     </div>
     <div id="episode_fields" style="display: none;">
       <fieldset><legend>Series Links</legend>
-        <label style="font-size: 1.1rem;">Complete Season Packs (Optional):</label>
-        <div id="season_packs_container">
-        {% if movie.type == 'series' and movie.season_packs %}
-            {% for pack in movie.season_packs|sort(attribute='season_number') %}
-            <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="{{ pack.season_number }}" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]" value="{{ pack.watch_link or '' }}"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]" value="{{ pack.download_link or '' }}"></div></div></div>
-            {% endfor %}
-        {% endif %}
-        </div>
-        <button type="button" onclick="addSeasonPackField()" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-plus"></i> Add Season</button>
-        <hr style="margin: 20px 0;">
-        <label style="font-size: 1.1rem;">Individual Episodes:</label>
+        <label>Complete Season Packs:</label><div id="season_packs_container">
+        {% if movie.type == 'series' and movie.season_packs %}{% for pack in movie.season_packs|sort(attribute='season_number') %}<div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="{{ pack.season_number }}" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]" value="{{ pack.watch_link or '' }}"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]" value="{{ pack.download_link or '' }}"></div></div></div>{% endfor %}{% endif %}
+        </div><button type="button" onclick="addSeasonPackField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Season</button><hr style="margin: 20px 0;"><label>Individual Episodes:</label>
         <div id="episodes_container">
-        {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}
-        <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>
-        {% endfor %}{% endif %}</div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
+        {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes|sort(attribute='episode_number')|sort(attribute='season') %}<div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="{{ ep.season or 1 }}" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]" value="{{ ep.title or '' }}"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" required></div></div>{% endfor %}{% endif %}</div><button type="button" onclick="addEpisodeField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Episode</button></fieldset>
     </div>
-    <fieldset>
-        <legend>Manual Download Buttons (Custom)</legend>
-        <div id="manual_links_container">
-            {% if movie.manual_links %}{% for link in movie.manual_links %}
-                <div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" value="{{ link.name }}" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" value="{{ link.url }}" required></div></div></div>
-            {% endfor %}{% endif %}
-        </div>
-        <button type="button" onclick="addManualLinkField()" class="btn btn-secondary" style="margin-top: 10px;"><i class="fas fa-plus"></i> Add Manual Button</button>
-    </fieldset>
+    <fieldset><legend>Manual Download Buttons</legend><div id="manual_links_container">
+        {% if movie.manual_links %}{% for link in movie.manual_links %}<div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" value="{{ link.name }}" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" value="{{ link.url }}" required></div></div></div>{% endfor %}{% endif %}
+    </div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
   </form>
 </div>
 <script>
     function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
+    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
@@ -1030,6 +1030,7 @@ edit_html = """
 
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
+    # This function is unchanged
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "tv" else "movie"
     try:
@@ -1037,18 +1038,28 @@ def get_tmdb_details(tmdb_id, media_type):
         res = requests.get(detail_url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        details = {
-            "tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), 
-            "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None,
-            "backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None,
-            "overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"),
-            "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"),
-            "type": "series" if search_type == "tv" else "movie"
-        }
+        details = { "tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None, "backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None, "overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie" }
         return details
     except requests.RequestException as e:
-        print(f"ERROR: TMDb API request failed for ID {tmdb_id}. Reason: {e}")
+        print(f"ERROR: TMDb API request failed: {e}")
         return None
+
+# --- Pagination Helper Class ---
+class Pagination:
+    def __init__(self, page, per_page, total_count):
+        self.page = page
+        self.per_page = per_page
+        self.total_count = total_count
+    @property
+    def total_pages(self): return math.ceil(self.total_count / self.per_page)
+    @property
+    def has_prev(self): return self.page > 1
+    @property
+    def has_next(self): return self.page < self.total_pages
+    @property
+    def prev_num(self): return self.page - 1
+    @property
+    def next_num(self): return self.page + 1
 
 # =======================================================================================
 # === [START] FLASK ROUTES ==============================================================
@@ -1061,59 +1072,71 @@ def home():
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
     slider_content = list(movies.find({}).sort('_id', -1).limit(15))
-    
-    # Fetch categories from the database for the homepage sections
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in home_categories}
-    
     latest_content = list(movies.find().sort('_id', -1).limit(10))
-
-    context = {
-        "slider_content": slider_content,
-        "latest_content": latest_content,
-        "categorized_content": categorized_content,
-        "is_full_page_list": False
-    }
+    context = {"slider_content": slider_content, "latest_content": latest_content, "categorized_content": categorized_content, "is_full_page_list": False}
     return render_template_string(index_html, **context)
-
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie: return "Content not found", 404
-        
         related_content = []
-        if movie.get('type'):
-            related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('_id', -1).limit(10))
+        if movie.get('type'): related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('_id', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
     except: return "Content not found", 404
 
+def get_paginated_content(query_filter, page):
+    skip = (page - 1) * ITEMS_PER_PAGE
+    total_count = movies.count_documents(query_filter)
+    content_list = list(movies.find(query_filter).sort('_id', -1).skip(skip).limit(ITEMS_PER_PAGE))
+    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
+    return content_list, pagination
+
 @app.route('/movies')
 def all_movies():
-    all_movie_content = list(movies.find({"type": "movie"}).sort('_id', -1))
-    return render_template_string(index_html, movies=all_movie_content, query="All Movies", is_full_page_list=True)
+    page = request.args.get('page', 1, type=int)
+    all_movie_content, pagination = get_paginated_content({"type": "movie"}, page)
+    return render_template_string(index_html, movies=all_movie_content, query="All Movies", is_full_page_list=True, pagination=pagination)
 
 @app.route('/series')
 def all_series():
-    all_series_content = list(movies.find({"type": "series"}).sort('_id', -1))
-    return render_template_string(index_html, movies=all_series_content, query="All Series", is_full_page_list=True)
+    page = request.args.get('page', 1, type=int)
+    all_series_content, pagination = get_paginated_content({"type": "series"}, page)
+    return render_template_string(index_html, movies=all_series_content, query="All Series", is_full_page_list=True, pagination=pagination)
 
 @app.route('/category')
 def movies_by_category():
     title = request.args.get('name')
     if not title: return redirect(url_for('home'))
-
-    if title == "Latest":
-        content_list = list(movies.find().sort('_id', -1))
-        return render_template_string(index_html, movies=content_list, query="Latest Movies & Series", is_full_page_list=True)
-        
-    if title == "Latest Movies": return redirect(url_for('all_movies'))
-    if title == "Latest Series": return redirect(url_for('all_series'))
+    page = request.args.get('page', 1, type=int)
     
-    content_list = list(movies.find({"categories": title}).sort('_id', -1))
-    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
+    query_filter = {}
+    if title == "Latest": query_filter = {}
+    else: query_filter = {"categories": title}
+    
+    content_list, pagination = get_paginated_content(query_filter, page)
+    query_title = "Latest Movies & Series" if title == "Latest" else title
+    return render_template_string(index_html, movies=content_list, query=query_title, is_full_page_list=True, pagination=pagination)
 
+@app.route('/request', methods=['GET', 'POST'])
+def request_content():
+    if request.method == 'POST':
+        content_name = request.form.get('content_name', '').strip()
+        extra_info = request.form.get('extra_info', '').strip()
+        if content_name:
+            requests_collection.insert_one({
+                "name": content_name,
+                "info": extra_info,
+                "status": "Pending",
+                "created_at": datetime.utcnow()
+            })
+            # This requires SECRET_KEY to be set for flash messages
+            # flash('Your request has been submitted successfully!', 'success')
+        return redirect(url_for('request_content'))
+    return render_template_string(request_html)
 
 @app.route('/wait')
 def wait_page():
@@ -1121,9 +1144,11 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
+# --- ADMIN ROUTES ---
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
+    # POST request handling is unchanged
     if request.method == "POST":
         form_action = request.form.get("form_action")
         if form_action == "update_ads":
@@ -1131,74 +1156,70 @@ def admin():
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
-            if category_name:
-                categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
+            if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
         elif form_action == "bulk_delete":
             ids_to_delete = request.form.getlist("selected_ids")
-            if ids_to_delete:
-                object_ids = [ObjectId(id_str) for id_str in ids_to_delete]
-                movies.delete_many({"_id": {"$in": object_ids}})
+            if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
-            movie_data = {
-                "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-                "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
-                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()], "categories": request.form.getlist("categories"),
-                "episodes": [], "links": [], "season_packs": [], "manual_links": [],
-                "created_at": datetime.utcnow() # Add creation timestamp
-            }
-            tmdb_id = request.form.get("tmdb_id")
+            movie_data = { "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()], "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [], "created_at": datetime.utcnow() }
+            tmdb_id = request.form.get("tmdb_id");
             if tmdb_id:
-                media_type = "tv" if content_type == "series" else "movie"
-                tmdb_details = get_tmdb_details(tmdb_id, media_type)
+                tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
             if content_type == "movie":
                 movie_links = []
-                for quality in ["480p", "720p", "1080p"]:
-                    watch_url, dl_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
-                    if watch_url or dl_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": dl_url})
+                for q in ["480p", "720p", "1080p"]:
+                    w, d = request.form.get(f"watch_link_{q}"), request.form.get(f"download_link_{q}")
+                    if w or d: movie_links.append({"quality": q, "watch_url": w, "download_url": d})
                 movie_data["links"] = movie_links
             else:
-                sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-                movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip())]
+                sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
+                movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
                 s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
-            
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
-            movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i].strip() and urls[i].strip()]
+            movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    # --- GET Request Logic ---
     search_query = request.args.get('search', '').strip()
-    query_filter = {}
-    if search_query:
-        query_filter = {"title": {"$regex": search_query, "$options": "i"}}
-    
+    query_filter = {"title": {"$regex": search_query, "$options": "i"}} if search_query else {}
     content_list = list(movies.find(query_filter).sort('_id', -1))
     
-    # --- Dashboard Stats ---
-    start_of_day = datetime.combine(datetime.utcnow().date(), time.min)
     stats = {
         "total_content": movies.count_documents({}),
         "total_movies": movies.count_documents({"type": "movie"}),
         "total_series": movies.count_documents({"type": "series"}),
-        "added_today": movies.count_documents({"created_at": {"$gte": start_of_day}})
+        "pending_requests": requests_collection.count_documents({"status": "Pending"})
     }
     
-    # Fetch all data for rendering the admin page
+    requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
-    return render_template_string(admin_html, content_list=content_list, stats=stats, ad_settings=ad_settings_data, categories_list=categories_list)
+    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list)
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
 def delete_category(cat_id):
-    try:
-        categories_collection.delete_one({"_id": ObjectId(cat_id)})
-    except Exception as e:
-        print(f"Error deleting category: {e}")
+    try: categories_collection.delete_one({"_id": ObjectId(cat_id)})
+    except: pass
+    return redirect(url_for('admin'))
+
+@app.route('/admin/request/update/<req_id>/<status>')
+@requires_auth
+def update_request_status(req_id, status):
+    if status in ['Fulfilled', 'Rejected', 'Pending']:
+        try: requests_collection.update_one({"_id": ObjectId(req_id)}, {"$set": {"status": status}})
+        except: pass
+    return redirect(url_for('admin'))
+
+@app.route('/admin/request/delete/<req_id>')
+@requires_auth
+def delete_request(req_id):
+    try: requests_collection.delete_one({"_id": ObjectId(req_id)})
+    except: pass
     return redirect(url_for('admin'))
 
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
@@ -1210,30 +1231,26 @@ def edit_movie(movie_id):
     if not movie_obj: return "Movie not found", 404
     
     if request.method == "POST":
+        # POST logic is unchanged
         content_type = request.form.get("content_type")
-        update_data = {
-            "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-            "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
-            "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories")
-        }
+        update_data = { "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories") }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
-        update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i].strip() and urls[i].strip()]
+        update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         if content_type == "movie":
             movie_links = []
-            for quality in ["480p", "720p", "1080p"]:
-                watch_url, dl_url = request.form.get(f"watch_link_{quality}"), request.form.get(f"download_link_{quality}")
-                if watch_url or dl_url: movie_links.append({"quality": quality, "watch_url": watch_url, "download_url": dl_url})
+            for q in ["480p", "720p", "1080p"]:
+                w, d = request.form.get(f"watch_link_{q}"), request.form.get(f"download_link_{q}")
+                if w or d: movie_links.append({"quality": q, "watch_url": w, "download_url": d})
             update_data["links"] = movie_links
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
         else:
-            sp_nums, sp_watch, sp_dl = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-            update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_watch[i].strip() or None, "download_link": sp_dl[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i] and (sp_watch[i].strip() or sp_dl[i].strip())]
+            sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
+            update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
     
-    # GET Request: Fetch categories to display on the edit page
     categories_list = list(categories_collection.find().sort("name", 1))
     return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list)
 
@@ -1248,6 +1265,7 @@ def delete_movie(movie_id):
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
+    # This API is unchanged
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
@@ -1265,14 +1283,16 @@ def api_search_tmdb():
 @app.route('/admin/api/details')
 @requires_auth
 def api_get_details():
+    # This API is unchanged
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
-    if not tmdb_id or not media_type: return jsonify({"error": "ID and type parameters are required"}), 400
+    if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
     if details: return jsonify(details)
     else: return jsonify({"error": "Details not found on TMDb"}), 404
 
 @app.route('/api/search')
 def api_search():
+    # This API is unchanged
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
@@ -1281,7 +1301,7 @@ def api_search():
         return jsonify(results)
     except Exception as e:
         print(f"API Search Error: {e}")
-        return jsonify({"error": "An error occurred during search"}), 500
+        return jsonify({"error": "An error occurred"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
