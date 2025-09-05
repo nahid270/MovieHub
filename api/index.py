@@ -130,8 +130,20 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* --- Hero Slider Styles --- */
-  .hero-slider-section { margin-bottom: 30px; border-radius: 12px; overflow: hidden; position: relative; }
+  /* --- [START] নতুন পরিবর্তন --- */
+  @keyframes rgb-glow {
+      0% { box-shadow: 0 0 15px 3px var(--primary-color); }
+      33% { box-shadow: 0 0 15px 3px var(--cyan-accent); }
+      66% { box-shadow: 0 0 15px 3px var(--yellow-accent); }
+      100% { box-shadow: 0 0 15px 3px var(--primary-color); }
+  }
+  .hero-slider-section {
+    margin-bottom: 30px; border-radius: 12px; overflow: hidden; position: relative;
+    border: 1px solid #333;
+    animation: rgb-glow 6s infinite linear;
+  }
+  /* --- [END] নতুন পরিবর্তন --- */
+
   .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); }
   .hero-slider .swiper-slide { position: relative; display: block; }
   .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
@@ -139,7 +151,24 @@ index_html = """
   .hero-slider .hero-slide-content { position: absolute; bottom: 0; left: 0; width: 100%; padding: 20px; z-index: 3; color: white; }
   .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
   .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
-  .hero-slider .hero-type-tag { position: absolute; bottom: 20px; right: 20px; background: linear-gradient(45deg, var(--cyan-accent), var(--yellow-accent)); color: black; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; z-index: 3; }
+  
+  /* --- [START] নতুন পরিবর্তন --- */
+  .hero-slide-content .hero-type-tag {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(45deg, var(--cyan-accent), var(--yellow-accent));
+    color: black;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 4;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  /* --- [END] নতুন পরিবর্তন --- */
+
   .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
@@ -255,7 +284,9 @@ index_html = """
                             <p class="hero-meta">
                                 {% if item.release_date %}{{ item.release_date.split('-')[0] }}{% endif %}
                             </p>
+                            <!-- === [START] HTML পরিবর্তন: ট্যাগটিকে এই div এর ভেতরে আনা হয়েছে === -->
                             <span class="hero-type-tag">{{ item.type | title }}</span>
+                            <!-- === [END] HTML পরিবর্তন === -->
                         </div>
                     </a>
                 </div>
