@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
 from urllib.parse import unquote, quote
-from datetime import datetime
+from datetime import datetime, time
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -23,7 +23,7 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
-PREDEFINED_CATEGORIES = ["Coming Soon", "Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
+# PREDEFINED_CATEGORIES is now managed from the database
 app = Flask(__name__)
 
 # --- Authentication ---
@@ -48,13 +48,22 @@ try:
     db = client["movie_db"]
     movies = db["movies"]
     settings = db["settings"]
+    categories_collection = db["categories"] # New collection for categories
     print("SUCCESS: Successfully connected to MongoDB!")
+
+    # --- Initialize default categories if the collection is empty ---
+    if categories_collection.count_documents({}) == 0:
+        default_categories = ["Coming Soon", "Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
+        categories_collection.insert_many([{"name": cat} for cat in default_categories])
+        print("SUCCESS: Initialized default categories in the database.")
 
     # --- Create Indexes for Performance Improvement ---
     try:
         movies.create_index("title")
         movies.create_index("type")
         movies.create_index("categories")
+        movies.create_index("created_at") # Index for the new timestamp
+        categories_collection.create_index("name", unique=True)
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
@@ -89,10 +98,12 @@ app.jinja_env.filters['time_ago'] = time_ago
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
+    # Fetch categories from DB instead of static list
+    all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     return dict(
         website_name=WEBSITE_NAME,
         ad_settings=ad_settings or {},
-        predefined_categories=PREDEFINED_CATEGORIES,
+        predefined_categories=all_categories,
         quote=quote
     )
 
@@ -153,22 +164,20 @@ index_html = """
   .hero-slider .hero-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 5px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
   .hero-slider .hero-meta { font-size: 0.9rem; margin: 0; color: var(--text-dark); }
   
-  /* --- [START] ফাইনাল পরিবর্তন: ট্যাগ সাইজ কমানো হয়েছে --- */
   .hero-slide-content .hero-type-tag {
     position: absolute;
     bottom: 20px;
     right: 20px;
     background: linear-gradient(45deg, #00FFA3, #00D1FF);
     color: black;
-    padding: 5px 15px; /* Padding কমানো হয়েছে */
+    padding: 5px 15px;
     border-radius: 50px;
-    font-size: 0.75rem; /* Font size কমানো হয়েছে */
+    font-size: 0.75rem;
     font-weight: 700;
     z-index: 4;
     text-transform: uppercase;
     box-shadow: 0 4px 10px rgba(0, 255, 163, 0.2);
   }
-  /* --- [END] ফাইনাল পরিবর্তন --- */
 
   .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
@@ -705,7 +714,7 @@ admin_html = """
     <style>
         :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); margin: 0; padding: 20px; }
-        .admin-container { max-width: 1000px; margin: 20px auto; }
+        .admin-container { max-width: 1200px; margin: 20px auto; }
         .admin-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--netflix-red); padding-bottom: 10px; margin-bottom: 30px; }
         .admin-header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--netflix-red); margin: 0; }
         h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.2rem; margin-top: 40px; margin-bottom: 20px; border-left: 4px solid var(--netflix-red); padding-left: 15px; }
@@ -745,11 +754,53 @@ admin_html = """
         .search-form { display: flex; gap: 10px; flex-grow: 1; max-width: 500px; }
         .search-form input { flex-grow: 1; }
         .search-form .btn { padding: 12px 20px; }
+        .dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: var(--dark-gray); padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid var(--netflix-red); }
+        .stat-card h3 { margin: 0 0 10px; font-size: 1.2rem; color: var(--text-light); }
+        .stat-card p { font-size: 2.5rem; font-weight: 700; margin: 0; color: var(--netflix-red); }
+        .category-management { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
+        .category-list { flex: 1; min-width: 250px; }
+        .category-item { display: flex; justify-content: space-between; align-items: center; background: var(--dark-gray); padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
+    
+    <h2><i class="fas fa-tachometer-alt"></i> At a Glance</h2>
+    <div class="dashboard-stats">
+        <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
+        <div class="stat-card"><h3>Total Movies</h3><p>{{ stats.total_movies }}</p></div>
+        <div class="stat-card"><h3>Total Series</h3><p>{{ stats.total_series }}</p></div>
+        <div class="stat-card"><h3>Added Today</h3><p>{{ stats.added_today }}</p></div>
+    </div>
+    <hr>
+    
+    <h2><i class="fas fa-tags"></i> Category Management</h2>
+    <div class="category-management">
+        <form method="post" style="flex: 1; min-width: 300px;">
+            <input type="hidden" name="form_action" value="add_category">
+            <fieldset>
+                <legend>Add New Category</legend>
+                <div class="form-group">
+                    <label>Category Name:</label>
+                    <input type="text" name="category_name" required>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
+            </fieldset>
+        </form>
+        <div class="category-list">
+            <h3>Existing Categories</h3>
+            {% for cat in categories_list %}
+            <div class="category-item">
+                <span>{{ cat.name }}</span>
+                <a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure? This will not remove the category from existing content.')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <hr>
+
     <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
     <form method="post">
         <input type="hidden" name="form_action" value="update_ads">
@@ -777,7 +828,7 @@ admin_html = """
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
             <div class="form-group"><label>Language (for poster tag):</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
-            <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in predefined_categories %}<label><input type="checkbox" name="categories" value="{{ cat }}"> {{ cat }}</label>{% endfor %}</div></div>
+            <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
         </fieldset>
         <div id="movie_fields">
@@ -818,9 +869,13 @@ admin_html = """
             {% endif %}
         </form>
     </div>
-    <div class="table-container"><table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-    {% for movie in content_list %}<tr><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="3" style="text-align:center;">No content found for your search.</td></tr>{% endfor %}
-    </tbody></table></div>
+    <form method="post" id="bulk-action-form">
+        <input type="hidden" name="form_action" value="bulk_delete">
+        <div class="table-container"><table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
+        {% for movie in content_list %}<tr><td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="4" style="text-align:center;">No content found for your search.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
+    </form>
 </div>
 <div class="modal-overlay" id="search-modal">
     <div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"><p>Type a name and click search to see results.</p></div></div>
@@ -864,7 +919,16 @@ admin_html = """
             alert(`'${data.title}' details have been filled. Please select categories, add links and click 'Add Content'.`);
         } catch (error) { alert('Error fetching details: ' + error.message); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; }
     }
-    document.addEventListener('DOMContentLoaded', toggleFields);
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleFields();
+        const selectAllCheckbox = document.getElementById('select-all');
+        const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+        selectAllCheckbox.addEventListener('change', function() {
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+        });
+    });
 </script>
 </body></html>
 """
@@ -911,7 +975,7 @@ edit_html = """
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
-        <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in predefined_categories %}<label><input type="checkbox" name="categories" value="{{ cat }}" {% if movie.categories and cat in movie.categories %}checked{% endif %}> {{ cat }}</label>{% endfor %}</div></div>
+        <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
     </fieldset>
     <div id="movie_fields">
@@ -997,7 +1061,10 @@ def home():
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
     slider_content = list(movies.find({}).sort('_id', -1).limit(15))
-    categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in PREDEFINED_CATEGORIES}
+    
+    # Fetch categories from the database for the homepage sections
+    home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in home_categories}
     
     latest_content = list(movies.find().sort('_id', -1).limit(10))
 
@@ -1062,13 +1129,23 @@ def admin():
         if form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
+        elif form_action == "add_category":
+            category_name = request.form.get("category_name", "").strip()
+            if category_name:
+                categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
+        elif form_action == "bulk_delete":
+            ids_to_delete = request.form.getlist("selected_ids")
+            if ids_to_delete:
+                object_ids = [ObjectId(id_str) for id_str in ids_to_delete]
+                movies.delete_many({"_id": {"$in": object_ids}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()], "categories": request.form.getlist("categories"),
-                "episodes": [], "links": [], "season_packs": [], "manual_links": []
+                "episodes": [], "links": [], "season_packs": [], "manual_links": [],
+                "created_at": datetime.utcnow() # Add creation timestamp
             }
             tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
@@ -1092,6 +1169,7 @@ def admin():
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
+    # --- GET Request Logic ---
     search_query = request.args.get('search', '').strip()
     query_filter = {}
     if search_query:
@@ -1099,7 +1177,29 @@ def admin():
     
     content_list = list(movies.find(query_filter).sort('_id', -1))
     
-    return render_template_string(admin_html, content_list=content_list)
+    # --- Dashboard Stats ---
+    start_of_day = datetime.combine(datetime.utcnow().date(), time.min)
+    stats = {
+        "total_content": movies.count_documents({}),
+        "total_movies": movies.count_documents({"type": "movie"}),
+        "total_series": movies.count_documents({"type": "series"}),
+        "added_today": movies.count_documents({"created_at": {"$gte": start_of_day}})
+    }
+    
+    # Fetch all data for rendering the admin page
+    categories_list = list(categories_collection.find().sort("name", 1))
+    ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
+    
+    return render_template_string(admin_html, content_list=content_list, stats=stats, ad_settings=ad_settings_data, categories_list=categories_list)
+
+@app.route('/admin/category/delete/<cat_id>')
+@requires_auth
+def delete_category(cat_id):
+    try:
+        categories_collection.delete_one({"_id": ObjectId(cat_id)})
+    except Exception as e:
+        print(f"Error deleting category: {e}")
+    return redirect(url_for('admin'))
 
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
@@ -1108,6 +1208,7 @@ def edit_movie(movie_id):
     except: return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
     if not movie_obj: return "Movie not found", 404
+    
     if request.method == "POST":
         content_type = request.form.get("content_type")
         update_data = {
@@ -1131,7 +1232,10 @@ def edit_movie(movie_id):
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         return redirect(url_for('admin'))
-    return render_template_string(edit_html, movie=movie_obj)
+    
+    # GET Request: Fetch categories to display on the edit page
+    categories_list = list(categories_collection.find().sort("name", 1))
+    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list)
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
