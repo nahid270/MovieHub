@@ -16,7 +16,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 # NEW: Environment variable for the logo URL. Add your logo's URL here.
-WEBSITE_LOGO_URL = os.environ.get("WEBSITE_LOGO_URL", "https://i.ibb.co/DDFKTWw4/photo-2025-09-06-10-45-42-7546925586875154444.jpg")
+WEBSITE_LOGO_URL = os.environ.get("WEBSITE_LOGO_URL", "https://img.icons8.com/fluency/96/cinema-.png")
 
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
@@ -139,13 +139,11 @@ index_html = """
   a { text-decoration: none; color: inherit; } img { max-width: 100%; display: block; }
   .container { max-width: 1400px; margin: 0 auto; padding: 0 10px; }
   
-  /* MODIFIED: Header styles for centered logo */
   .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
-  .header-content { display: flex; justify-content: center; /* Center the logo */ align-items: center; width: 100%; position: relative; }
-  .logo img { height: 45px; /* Control logo height */ width: auto; }
-  .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001; position: absolute; /* Position menu button to the right */ right: 15px; top: 50%; transform: translateY(-50%); }
+  .header-content { display: flex; justify-content: center; align-items: center; width: 100%; position: relative; }
+  .logo img { height: 45px; width: auto; }
+  .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); }
   
-  /* --- KEYFRAME ANIMATIONS START --- */
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
@@ -160,7 +158,6 @@ index_html = """
       50% { box-shadow: 0 0 16px var(--primary-color); }
       100% { box-shadow: 0 0 8px var(--cyan-accent); }
   }
-  /* --- KEYFRAME ANIMATIONS END --- */
 
   .hero-slider-section { margin-bottom: 30px; }
   .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); border-radius: 12px; overflow: hidden; animation: cyan-glow 5s infinite linear; }
@@ -182,18 +179,24 @@ index_html = """
   .view-all-link:hover { transform: scale(1.05); color: white; }
   
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-  .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
+  
+  /* --- MODIFIED MOVIE CARD STYLES --- */
+  .movie-card { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
   .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
   .movie-card:nth-child(4n+2), .movie-card:nth-child(4n+3) { border-color: var(--cyan-accent); }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
-  .card-info { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7), transparent); padding: 20px 8px 8px 8px; color: white; }
+  .card-content-wrapper { padding: 10px; display: flex; flex-direction: column; flex-grow: 1; }
+  .card-tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .card-info { padding: 0; color: white; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; }
   .card-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cyan-accent); margin: 4px 0 0 0; }
   .card-meta { font-size: 0.75rem; color: #f0f0f0; display: flex; align-items: center; gap: 5px; }
   .card-meta i { color: var(--cyan-accent); }
-  .type-tag, .trending-tag, .language-tag { position: absolute; color: white; padding: 3px 10px; font-size: 0.7rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;}
-  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
-  .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
-  .language-tag { top: 8px; right: 8px; background-color: var(--primary-color); }
+  
+  .type-tag, .trending-tag, .language-tag { color: white; padding: 3px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; border-radius: 4px; }
+  .type-tag { background-color: var(--type-color); }
+  .trending-tag { background-color: var(--trending-color); }
+  .language-tag { background-color: var(--primary-color); }
+  /* --- END OF MODIFIED STYLES --- */
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
@@ -235,7 +238,7 @@ index_html = """
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     .full-page-grid-container { padding: 120px 40px 20px; }
-    .menu-toggle { right: 40px; } /* Adjust menu button position on desktop */
+    .menu-toggle { right: 40px; }
   }
 </style>
 </head>
@@ -243,7 +246,6 @@ index_html = """
 {{ ad_settings.ad_body_top | safe }}
 <header class="main-header">
     <div class="container header-content">
-        <!-- MODIFIED: Replaced text with image logo -->
         <a href="{{ url_for('home') }}" class="logo">
             <img src="{{ website_logo_url }}" alt="{{ website_name }} Logo">
         </a>
@@ -262,18 +264,24 @@ index_html = """
     </div>
 </div>
 <main>
+  {# --- MODIFIED MOVIE CARD MACRO --- #}
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-      {% if m.categories and 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
-      {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
       <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-      <div class="card-info">
-        <p class="card-meta"><i class="fas fa-clock"></i> {{ m._id | time_ago }}</p>
-        <h4 class="card-title">{{ m.title }}</h4>
+      <div class="card-content-wrapper">
+        <div class="card-tags-container">
+            {% if m.categories and 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
+            {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
+            <span class="type-tag">{{ m.type | title }}</span>
+        </div>
+        <div class="card-info">
+          <p class="card-meta"><i class="fas fa-clock"></i> {{ m._id | time_ago }}</p>
+          <h4 class="card-title">{{ m.title }}</h4>
+        </div>
       </div>
-       <span class="type-tag">{{ m.type | title }}</span>
     </a>
   {% endmacro %}
+  {# --- END OF MODIFIED MACRO --- #}
 
   {% if is_full_page_list %}
     <div class="full-page-grid-container">
