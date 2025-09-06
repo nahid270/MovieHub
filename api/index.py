@@ -15,6 +15,8 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819"
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
+# NEW: Environment variable for the logo URL. Add your logo's URL here.
+WEBSITE_LOGO_URL = os.environ.get("WEBSITE_LOGO_URL", "https://i.ibb.co/DDFKTWw4/photo-2025-09-06-10-45-42-7546925586875154444.jpg")
 
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
@@ -102,6 +104,7 @@ def inject_globals():
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     return dict(
         website_name=WEBSITE_NAME,
+        website_logo_url=WEBSITE_LOGO_URL, # NEW: Pass logo URL to all templates
         ad_settings=ad_settings or {},
         predefined_categories=all_categories,
         quote=quote
@@ -136,25 +139,22 @@ index_html = """
   a { text-decoration: none; color: inherit; } img { max-width: 100%; display: block; }
   .container { max-width: 1400px; margin: 0 auto; padding: 0 10px; }
   
+  /* MODIFIED: Header styles for centered logo */
   .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
-  .header-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-  .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
-  .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
+  .header-content { display: flex; justify-content: center; /* Center the logo */ align-items: center; width: 100%; position: relative; }
+  .logo img { height: 45px; /* Control logo height */ width: auto; }
+  .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001; position: absolute; /* Position menu button to the right */ right: 15px; top: 50%; transform: translateY(-50%); }
   
   /* --- KEYFRAME ANIMATIONS START --- */
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
-  
-  /* NEW: Keyframe for Category Box RGB Glow */
   @keyframes rgb-glow {
     0% { box-shadow: 0 0 6px var(--primary-color), 0 0 12px var(--primary-color); }
     33% { box-shadow: 0 0 6px var(--cyan-accent), 0 0 12px var(--cyan-accent); }
     66% { box-shadow: 0 0 6px var(--yellow-accent), 0 0 12px var(--yellow-accent); }
     100% { box-shadow: 0 0 6px var(--primary-color), 0 0 12px var(--primary-color); }
   }
-
-  /* NEW: Keyframe for View All Button Glow */
   @keyframes button-glow {
       0% { box-shadow: 0 0 8px var(--cyan-accent); }
       50% { box-shadow: 0 0 16px var(--primary-color); }
@@ -175,33 +175,11 @@ index_html = """
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
 
-  /* MODIFIED: Category Section Styles */
-  .category-section { 
-    background-color: var(--card-bg);
-    border-radius: 12px;
-    padding: 20px;
-    margin: 40px 0; /* Increased margin for glow effect */
-    animation: rgb-glow 5s ease-in-out infinite;
-    transition: box-shadow 0.3s ease-in-out;
-  }
+  .category-section { background-color: var(--card-bg); border-radius: 12px; padding: 20px; margin: 40px 0; animation: rgb-glow 5s ease-in-out infinite; transition: box-shadow 0.3s ease-in-out; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.5rem; font-weight: 600; }
-  
-  /* MODIFIED: View All Link Styles */
-  .view-all-link {
-    background: #282828;
-    padding: 8px 18px;
-    border-radius: 50px;
-    font-weight: 500;
-    font-size: 0.85rem;
-    color: var(--text-light);
-    transition: all 0.3s ease;
-    animation: button-glow 4s linear infinite;
-  }
-  .view-all-link:hover {
-    transform: scale(1.05);
-    color: white;
-  }
+  .view-all-link { background: #282828; padding: 8px 18px; border-radius: 50px; font-weight: 500; font-size: 0.85rem; color: var(--text-light); transition: all 0.3s ease; animation: button-glow 4s linear infinite; }
+  .view-all-link:hover { transform: scale(1.05); color: white; }
   
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
   .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
@@ -257,6 +235,7 @@ index_html = """
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     .full-page-grid-container { padding: 120px 40px 20px; }
+    .menu-toggle { right: 40px; } /* Adjust menu button position on desktop */
   }
 </style>
 </head>
@@ -264,7 +243,10 @@ index_html = """
 {{ ad_settings.ad_body_top | safe }}
 <header class="main-header">
     <div class="container header-content">
-        <a href="{{ url_for('home') }}" class="logo">{{ website_name }}</a>
+        <!-- MODIFIED: Replaced text with image logo -->
+        <a href="{{ url_for('home') }}" class="logo">
+            <img src="{{ website_logo_url }}" alt="{{ website_name }} Logo">
+        </a>
         <button class="menu-toggle"><i class="fas fa-bars"></i></button>
     </div>
 </header>
@@ -1072,7 +1054,6 @@ edit_html = """
 
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
-    # This function is unchanged
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "tv" else "movie"
     try:
@@ -1175,8 +1156,6 @@ def request_content():
                 "status": "Pending",
                 "created_at": datetime.utcnow()
             })
-            # This requires SECRET_KEY to be set for flash messages
-            # flash('Your request has been submitted successfully!', 'success')
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
@@ -1190,7 +1169,6 @@ def wait_page():
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
-    # POST request handling is unchanged
     if request.method == "POST":
         form_action = request.form.get("form_action")
         if form_action == "update_ads":
@@ -1273,7 +1251,6 @@ def edit_movie(movie_id):
     if not movie_obj: return "Movie not found", 404
     
     if request.method == "POST":
-        # POST logic is unchanged
         content_type = request.form.get("content_type")
         update_data = { "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories") }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
@@ -1307,7 +1284,6 @@ def delete_movie(movie_id):
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
-    # This API is unchanged
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
@@ -1325,7 +1301,6 @@ def api_search_tmdb():
 @app.route('/admin/api/details')
 @requires_auth
 def api_get_details():
-    # This API is unchanged
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
@@ -1334,7 +1309,6 @@ def api_get_details():
 
 @app.route('/api/search')
 def api_search():
-    # This API is unchanged
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
