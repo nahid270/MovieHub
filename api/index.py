@@ -141,9 +141,27 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
+  /* --- KEYFRAME ANIMATIONS START --- */
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
+  
+  /* NEW: Keyframe for Category Box RGB Glow */
+  @keyframes rgb-glow {
+    0% { box-shadow: 0 0 6px var(--primary-color), 0 0 12px var(--primary-color); }
+    33% { box-shadow: 0 0 6px var(--cyan-accent), 0 0 12px var(--cyan-accent); }
+    66% { box-shadow: 0 0 6px var(--yellow-accent), 0 0 12px var(--yellow-accent); }
+    100% { box-shadow: 0 0 6px var(--primary-color), 0 0 12px var(--primary-color); }
+  }
+
+  /* NEW: Keyframe for View All Button Glow */
+  @keyframes button-glow {
+      0% { box-shadow: 0 0 8px var(--cyan-accent); }
+      50% { box-shadow: 0 0 16px var(--primary-color); }
+      100% { box-shadow: 0 0 8px var(--cyan-accent); }
+  }
+  /* --- KEYFRAME ANIMATIONS END --- */
+
   .hero-slider-section { margin-bottom: 30px; }
   .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); border-radius: 12px; overflow: hidden; animation: cyan-glow 5s infinite linear; }
   .hero-slider .swiper-slide { position: relative; display: block; }
@@ -157,10 +175,34 @@ index_html = """
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
 
-  .category-section { margin: 30px 0; }
-  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+  /* MODIFIED: Category Section Styles */
+  .category-section { 
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 40px 0; /* Increased margin for glow effect */
+    animation: rgb-glow 5s ease-in-out infinite;
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
   .category-title { font-size: 1.5rem; font-weight: 600; }
-  .view-all-link { font-size: 0.8rem; color: var(--text-dark); font-weight: 500; }
+  
+  /* MODIFIED: View All Link Styles */
+  .view-all-link {
+    background: #282828;
+    padding: 8px 18px;
+    border-radius: 50px;
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    transition: all 0.3s ease;
+    animation: button-glow 4s linear infinite;
+  }
+  .view-all-link:hover {
+    transform: scale(1.05);
+    color: white;
+  }
+  
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
   .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
   .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
