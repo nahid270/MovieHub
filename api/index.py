@@ -950,17 +950,30 @@ admin_html = """
     
     <div class="manage-content-header">
         <h2><i class="fas fa-tasks"></i> Manage Content</h2>
-        <form method="get" action="{{ url_for('admin') }}" class="search-form">
-            <input type="search" name="search" placeholder="Search by title..." value="{{ request.args.get('search', '') }}">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
-            {% if request.args.get('search') %}<a href="{{ url_for('admin') }}" class="btn btn-secondary">Clear</a>{% endif %}
-        </form>
+        <div class="search-form">
+            <input type="search" id="admin-live-search" placeholder="Type to search content live..." autocomplete="off">
+        </div>
     </div>
     <form method="post" id="bulk-action-form">
         <input type="hidden" name="form_action" value="bulk_delete">
-        <div class="table-container"><table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-        {% for movie in content_list %}<tr><td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td><td>{{ movie.title }}</td><td>{{ movie.type|title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a><a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a></td></tr>{% else %}<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>{% endfor %}
-        </tbody></table></div>
+        <div class="table-container"><table>
+            <thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead>
+            <tbody id="content-table-body">
+            {% for movie in content_list %}
+            <tr>
+                <td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td>
+                <td>{{ movie.title }}</td>
+                <td>{{ movie.type|title }}</td>
+                <td class="action-buttons">
+                    <a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a>
+                    <a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;">No content found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
         <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
     </form>
 </div>
@@ -974,6 +987,51 @@ admin_html = """
     function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
     async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
     async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
+    
+    // --- NEW LIVE SEARCH SCRIPT ---
+    let debounceTimer;
+    const searchInput = document.getElementById('admin-live-search');
+    const tableBody = document.getElementById('content-table-body');
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            const query = searchInput.value.trim();
+            
+            // Show loading state
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+            
+            fetch(`/admin/api/live_search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    tableBody.innerHTML = ''; // Clear table
+                    if (data.length > 0) {
+                        data.forEach(movie => {
+                            const row = `
+                                <tr>
+                                    <td><input type="checkbox" name="selected_ids" value="${movie._id}" class="row-checkbox"></td>
+                                    <td>${movie.title}</td>
+                                    <td>${movie.type.charAt(0).toUpperCase() + movie.type.slice(1)}</td>
+                                    <td class="action-buttons">
+                                        <a href="/edit_movie/${movie._id}" class="btn btn-edit">Edit</a>
+                                        <a href="/delete_movie/${movie._id}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
+                                    </td>
+                                </tr>
+                            `;
+                            tableBody.innerHTML += row;
+                        });
+                    } else {
+                        tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching search results:', error);
+                    tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Error loading results.</td></tr>';
+                });
+        }, 400); // 400ms delay
+    });
+    // --- END LIVE SEARCH SCRIPT ---
+
     document.addEventListener('DOMContentLoaded', function() { toggleFields(); const selectAll = document.getElementById('select-all'); if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); } });
 </script>
 </body></html>
@@ -1213,9 +1271,8 @@ def admin():
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    search_query = request.args.get('search', '').strip()
-    query_filter = {"title": {"$regex": search_query, "$options": "i"}} if search_query else {}
-    content_list = list(movies.find(query_filter).sort('_id', -1))
+    # Live search is now handled by the API, so the initial GET request can be simplified.
+    content_list = list(movies.find({}).sort('_id', -1))
     
     stats = {
         "total_content": movies.count_documents({}),
@@ -1292,6 +1349,23 @@ def delete_movie(movie_id):
     return redirect(url_for('admin'))
 
 # --- API Routes ---
+@app.route('/admin/api/live_search') # NEW API ENDPOINT FOR ADMIN LIVE SEARCH
+@requires_auth
+def admin_api_live_search():
+    query = request.args.get('q', '').strip()
+    query_filter = {}
+    if query:
+        query_filter = {"title": {"$regex": query, "$options": "i"}}
+    
+    try:
+        results = list(movies.find(query_filter, {"_id": 1, "title": 1, "type": 1}).sort('_id', -1))
+        for item in results:
+            item['_id'] = str(item['_id'])
+        return jsonify(results)
+    except Exception as e:
+        print(f"Admin Live Search API Error: {e}")
+        return jsonify({"error": "An error occurred"}), 500
+
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
