@@ -8,7 +8,6 @@ from functools import wraps
 from urllib.parse import unquote, quote
 from datetime import datetime
 import math # Added for pagination calculation
-from collections import defaultdict # Added for grouping TV channels
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -52,7 +51,6 @@ try:
     settings = db["settings"]
     categories_collection = db["categories"]
     requests_collection = db["requests"]
-    tv_channels = db["tv_channels"] # New collection for TV channels
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
@@ -67,8 +65,6 @@ try:
         movies.create_index("updated_at")
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
-        tv_channels.create_index("name", unique=True) # Index for TV channels
-        tv_channels.create_index("category") # Index for TV channels
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
@@ -165,6 +161,7 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
+  /* --- UPDATED: Nav Grid Styles (Smaller Buttons) --- */
   .nav-grid-container { padding: 20px 0 30px 0; }
   .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .nav-grid-item { display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-color); color: white; padding: 8px 15px; border-radius: 5px; font-size: 0.85rem; font-weight: 500; text-transform: uppercase; text-decoration: none; transition: transform 0.2s ease, background-color 0.2s ease; }
@@ -257,7 +254,6 @@ index_html = """
     <button class="close-btn">&times;</button>
     <div class="mobile-links">
         <a href="{{ url_for('home') }}">Home</a>
-        <a href="{{ url_for('live_tv_index') }}">Live TV</a>
         <a href="{{ url_for('all_movies') }}">All Movies</a>
         <a href="{{ url_for('all_series') }}">All Series</a>
         <a href="{{ url_for('request_content') }}">Request Content</a>
@@ -300,14 +296,15 @@ index_html = """
   {% else %}
     <div style="height: var(--nav-height);"></div>
     
-    <!-- Category Grid Navigation -->
+    <!-- Category Grid Navigation (As per your image) -->
     <section class="nav-grid-container container">
         <div class="nav-grid">
             <a href="{{ url_for('home') }}" class="nav-grid-item"><i class="fas fa-home"></i> HOME</a>
-            <a href="{{ url_for('live_tv_index') }}" class="nav-grid-item"><i class="fas fa-tv"></i> LIVE TV</a>
             {% for cat in predefined_categories %}
                 <a href="{{ url_for('movies_by_category', name=cat) }}" class="nav-grid-item">
-                    {% if '18+' in cat %}<span class="icon-18">18</span>{% endif %}
+                    {% if '18+' in cat %}
+                        <span class="icon-18">18</span>
+                    {% endif %}
                     {{ cat }}
                 </a>
             {% endfor %}
@@ -359,8 +356,22 @@ index_html = """
       {% endmacro %}
       
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-      {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
-      {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
+
+      {# MODIFIED: Combined "Recently Added" section replaces separate movie/series sections #}
+      {% if latest_content %}
+      <section class="category-section">
+          <div class="category-header">
+              <h2 class="category-title">Recently Added</h2>
+              {# This "View All" link now goes to the all movies page as a general catch-all #}
+              <a href="{{ url_for('all_movies') }}" class="view-all-link">View All &rarr;</a>
+          </div>
+          <div class="category-grid">
+              {% for m in latest_content %}
+                  {{ render_movie_card(m) }}
+              {% endfor %}
+          </div>
+      </section>
+      {% endif %}
 
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       
@@ -377,7 +388,7 @@ index_html = """
 </footer>
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
-  <a href="{{ url_for('live_tv_index') }}" class="nav-item"><i class="fas fa-tv"></i><span>Live TV</span></a>
+  <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-layer-group"></i><span>Content</span></a>
   <a href="{{ url_for('request_content') }}" class="nav-item"><i class="fas fa-plus-circle"></i><span>Request</span></a>
   <button id="live-search-btn" class="nav-item"><i class="fas fa-search"></i><span>Search</span></button>
 </nav>
@@ -879,7 +890,6 @@ admin_html = """
         <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
         <div class="stat-card"><h3>Total Movies</h3><p>{{ stats.total_movies }}</p></div>
         <div class="stat-card"><h3>Total Series</h3><p>{{ stats.total_series }}</p></div>
-        <div class="stat-card"><h3>Total TV Channels</h3><p>{{ stats.total_tv_channels }}</p></div>
         <div class="stat-card"><h3>Pending Requests</h3><p>{{ stats.pending_requests }}</p></div>
     </div>
     <hr>
@@ -970,41 +980,6 @@ admin_html = """
         <fieldset><legend>Manual Download Buttons</legend><div id="manual_links_container"></div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Add Content</button>
     </form>
-    <hr>
-    
-    <h2><i class="fas fa-tv"></i> Manage Live TV</h2>
-    <form method="post">
-        <input type="hidden" name="form_action" value="add_tv_channel">
-        <fieldset>
-            <legend>Add New TV Channel</legend>
-            <div class="form-group"><label>Channel Name:</label><input type="text" name="channel_name" required></div>
-            <div class="form-group"><label>Logo URL:</label><input type="url" name="logo_url" required></div>
-            <div class="form-group"><label>Stream URL (m3u8):</label><input type="url" name="stream_url" required></div>
-            <div class="form-group"><label>Category:</label><input type="text" name="category" placeholder="e.g., Sports, Entertainment, News" required></div>
-            <div class="form-group"><label>Language:</label><input type="text" name="language" placeholder="e.g., Bangla, Hindi"></div>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
-        </fieldset>
-    </form>
-    <div class="table-container" style="margin-top: 20px;">
-        <table>
-            <thead><tr><th>Logo</th><th>Name</th><th>Category</th><th>Actions</th></tr></thead>
-            <tbody>
-            {% for channel in tv_channels_list %}
-            <tr>
-                <td><img src="{{ channel.logo_url }}" alt="{{ channel.name }}" style="width: 50px; height: auto; background: #fff; padding: 2px; border-radius: 4px;"></td>
-                <td>{{ channel.name }}</td>
-                <td>{{ channel.category }}</td>
-                <td class="action-buttons">
-                    <a href="{{ url_for('edit_tv_channel', channel_id=channel._id) }}" class="btn btn-edit">Edit</a>
-                    <a href="{{ url_for('delete_tv_channel', channel_id=channel._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" style="text-align:center;">No TV channels added yet.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
     <hr>
     
     <div class="manage-content-header">
@@ -1162,159 +1137,6 @@ edit_html = """
 </body></html>
 """
 
-# --- New Templates for TV Channels ---
-tv_index_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live TV Channels - {{ website_name }}</title>
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-    {{ ad_settings.ad_header | safe }}
-    <style>
-        :root { --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a; --text-light: #ffffff; --text-dark: #a0a0a0; }
-        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 20px 10px 80px 10px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .page-header { text-align: center; margin-bottom: 30px; }
-        .page-header h1 { font-size: 2.5rem; color: var(--primary-color); }
-        .category-section { margin-bottom: 40px; }
-        .category-title { font-size: 1.8rem; font-weight: 600; margin-bottom: 20px; border-left: 4px solid var(--primary-color); padding-left: 15px; }
-        .channels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
-        .channel-card { display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: var(--card-bg); border-radius: 8px; padding: 15px; text-decoration: none; color: var(--text-light); transition: transform 0.2s ease, box-shadow 0.2s ease; aspect-ratio: 16 / 10; }
-        .channel-card:hover { transform: scale(1.05); box-shadow: 0 0 15px rgba(229, 9, 20, 0.5); }
-        .channel-logo { max-width: 80%; max-height: 80px; object-fit: contain; margin-bottom: 10px; }
-        .channel-name { font-size: 0.9rem; font-weight: 500; text-align: center; }
-        .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 65px; background-color: #181818; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); z-index: 1000; justify-content: space-around; align-items: center; padding-top: 5px; }
-        .bottom-nav .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dark); background: none; border: none; font-size: 12px; flex-grow: 1; font-weight: 500; text-decoration: none;}
-        .bottom-nav .nav-item i { font-size: 22px; margin-bottom: 5px; }
-        .bottom-nav .nav-item:hover, .bottom-nav .nav-item.active { color: var(--primary-color); }
-        @media (max-width: 768px) { .channels-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; } }
-        @media (max-width: 480px) { .channels-grid { grid-template-columns: repeat(2, 1fr); } }
-    </style>
-</head>
-<body>
-    {{ ad_settings.ad_body_top | safe }}
-    <div class="container">
-        <div class="page-header">
-            <h1><i class="fas fa-tv"></i> Live TV Channels</h1>
-        </div>
-        {% for category, channels in grouped_channels.items() %}
-            <section class="category-section">
-                <h2 class="category-title">{{ category }}</h2>
-                <div class="channels-grid">
-                    {% for channel in channels %}
-                    <a href="{{ url_for('watch_tv', channel_id=channel._id) }}" class="channel-card">
-                        <img src="{{ channel.logo_url }}" alt="{{ channel.name }} Logo" class="channel-logo" loading="lazy">
-                        <span class="channel-name">{{ channel.name }}</span>
-                    </a>
-                    {% endfor %}
-                </div>
-            </section>
-        {% endfor %}
-    </div>
-    <nav class="bottom-nav">
-        <a href="{{ url_for('home') }}" class="nav-item"><i class="fas fa-home"></i><span>Home</span></a>
-        <a href="{{ url_for('live_tv_index') }}" class="nav-item active"><i class="fas fa-tv"></i><span>Live TV</span></a>
-        <a href="{{ url_for('request_content') }}" class="nav-item"><i class="fas fa-plus-circle"></i><span>Request</span></a>
-        <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-film"></i><span>Movies</span></a>
-    </nav>
-    {{ ad_settings.ad_footer | safe }}
-</body>
-</html>
-"""
-
-tv_player_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watching: {{ channel.name }} - {{ website_name }}</title>
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clappr@latest/dist/clappr.min.js"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/level-selector@latest/dist/level-selector.min.js"></script>
-    {{ ad_settings.ad_header | safe }}
-    <style>
-        body { margin: 0; background-color: #000; font-family: sans-serif; color: white; }
-        #player { width: 100%; height: 100vh; }
-        .header { position: absolute; top: 0; left: 0; width: 100%; padding: 15px; background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent); z-index: 10; display: flex; align-items: center; gap: 15px;}
-        .back-btn { color: white; text-decoration: none; font-size: 1.5rem; }
-        .channel-info h1 { margin: 0; font-size: 1.2rem; }
-    </style>
-</head>
-<body>
-    {{ ad_settings.ad_body_top | safe }}
-    <div class="header">
-        <a href="{{ url_for('live_tv_index') }}" class="back-btn">&larr;</a>
-        <div class="channel-info">
-            <h1>Now Playing: {{ channel.name }}</h1>
-        </div>
-    </div>
-    <div id="player"></div>
-    <script>
-        var player = new Clappr.Player({
-            source: '{{ channel.stream_url | safe }}',
-            parentId: '#player',
-            width: '100%',
-            height: '100%',
-            autoPlay: true,
-            plugins: [LevelSelector],
-            levelSelectorConfig: {
-                title: 'Quality',
-                labels: { 2: 'High', 1: 'Med', 0: 'Low', },
-                labelCallback: function(playbackLevel, customLabel) {
-                    return customLabel + playbackLevel.level.height+'p';
-                }
-            },
-        });
-    </script>
-    {{ ad_settings.ad_footer | safe }}
-</body>
-</html>
-"""
-
-edit_tv_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit TV Channel - {{ website_name }}</title>
-    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
-    <meta name="robots" content="noindex, nofollow">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-    <style>
-        :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
-        body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); padding: 20px; }
-        .admin-container { max-width: 800px; margin: 20px auto; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: #999; text-decoration: none; }
-        h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; }
-        form { background: var(--dark-gray); padding: 25px; border-radius: 8px; }
-        .form-group { margin-bottom: 15px; } label { display: block; margin-bottom: 8px; font-weight: bold;}
-        input { width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray); font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box; }
-        .btn { display: inline-block; color: white; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; background: var(--netflix-red); }
-    </style>
-</head>
-<body>
-<div class="admin-container">
-    <a href="{{ url_for('admin') }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Admin Panel</a>
-    <h2>Edit Channel: {{ channel.name }}</h2>
-    <form method="post">
-        <div class="form-group"><label>Channel Name:</label><input type="text" name="name" value="{{ channel.name }}" required></div>
-        <div class="form-group"><label>Logo URL:</label><input type="url" name="logo_url" value="{{ channel.logo_url }}" required></div>
-        <div class="form-group"><label>Stream URL (m3u8):</label><input type="url" name="stream_url" value="{{ channel.stream_url }}" required></div>
-        <div class="form-group"><label>Category:</label><input type="text" name="category" value="{{ channel.category }}" required></div>
-        <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ channel.language or '' }}"></div>
-        <button type="submit" class="btn"><i class="fas fa-save"></i> Update Channel</button>
-    </form>
-</div>
-</body>
-</html>
-"""
-
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
@@ -1359,29 +1181,18 @@ def home():
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
-    # Homepage logic
-    slider_content = list(movies.find({"categories": "Trending"}).sort('updated_at', -1).limit(10))
-    if len(slider_content) < 5:
-        additional_content = list(movies.find({}).sort('updated_at', -1).limit(10))
-        slider_content.extend(additional_content)
-        seen_ids = set()
-        unique_slider_content = []
-        for item in slider_content:
-            if item['_id'] not in seen_ids:
-                unique_slider_content.append(item)
-                seen_ids.add(item['_id'])
-        slider_content = unique_slider_content[:10]
+    # MODIFIED: The slider will now show the 10 most recently updated items (movies or series).
+    slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
 
-    latest_movies = list(movies.find({"type": "movie"}).sort('updated_at', -1).limit(10))
-    latest_series = list(movies.find({"type": "series"}).sort('updated_at', -1).limit(10))
+    # MODIFIED: A single list for the "Recently Added" section, containing both movies and series.
+    latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
 
     context = {
         "slider_content": slider_content,
-        "latest_movies": latest_movies,
-        "latest_series": latest_series,
+        "latest_content": latest_content, # MODIFIED: Pass the new combined list
         "categorized_content": categorized_content,
         "is_full_page_list": False
     }
@@ -1450,24 +1261,6 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
-# [START] TV Channel Routes
-@app.route('/live-tv')
-def live_tv_index():
-    all_channels = list(tv_channels.find().sort("name", 1))
-    grouped_channels = defaultdict(list)
-    for channel in all_channels:
-        grouped_channels[channel.get('category', 'General')].append(channel)
-    return render_template_string(tv_index_html, grouped_channels=dict(grouped_channels))
-
-@app.route('/live-tv/watch/<channel_id>')
-def watch_tv(channel_id):
-    try:
-        channel = tv_channels.find_one({"_id": ObjectId(channel_id)})
-        if not channel: return "Channel not found", 404
-        return render_template_string(tv_player_html, channel=channel)
-    except: return "Invalid channel ID", 400
-# [END] TV Channel Routes
-
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
@@ -1507,33 +1300,14 @@ def admin():
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
             movies.insert_one(movie_data)
-        elif form_action == "add_tv_channel":
-            channel_data = {
-                "name": request.form.get("channel_name", "").strip(),
-                "logo_url": request.form.get("logo_url", "").strip(),
-                "stream_url": request.form.get("stream_url", "").strip(),
-                "category": request.form.get("category", "General").strip(),
-                "language": request.form.get("language", "").strip(),
-                "created_at": datetime.utcnow()
-            }
-            if channel_data["name"] and channel_data["logo_url"] and channel_data["stream_url"]:
-                tv_channels.insert_one(channel_data)
         return redirect(url_for('admin'))
     
     content_list = list(movies.find({}).sort('updated_at', -1))
-    stats = {
-        "total_content": movies.count_documents({}), 
-        "total_movies": movies.count_documents({"type": "movie"}), 
-        "total_series": movies.count_documents({"type": "series"}), 
-        "total_tv_channels": tv_channels.count_documents({}),
-        "pending_requests": requests_collection.count_documents({"status": "Pending"})
-    }
+    stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    tv_channels_list = list(tv_channels.find({}).sort("name", 1))
-    
-    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list, tv_channels_list=tv_channels_list)
+    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list)
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
@@ -1597,37 +1371,6 @@ def delete_movie(movie_id):
     try: movies.delete_one({"_id": ObjectId(movie_id)})
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
-
-# [START] Admin TV Channel Management Routes
-@app.route('/admin/tv/edit/<channel_id>', methods=["GET", "POST"])
-@requires_auth
-def edit_tv_channel(channel_id):
-    try: obj_id = ObjectId(channel_id)
-    except: return "Invalid ID", 400
-    
-    channel_obj = tv_channels.find_one({"_id": obj_id})
-    if not channel_obj: return "Channel not found", 404
-
-    if request.method == "POST":
-        update_data = {
-            "name": request.form.get("name").strip(),
-            "logo_url": request.form.get("logo_url").strip(),
-            "stream_url": request.form.get("stream_url").strip(),
-            "category": request.form.get("category").strip(),
-            "language": request.form.get("language").strip()
-        }
-        tv_channels.update_one({"_id": obj_id}, {"$set": update_data})
-        return redirect(url_for('admin'))
-
-    return render_template_string(edit_tv_html, channel=channel_obj)
-
-@app.route('/admin/tv/delete/<channel_id>')
-@requires_auth
-def delete_tv_channel(channel_id):
-    try: tv_channels.delete_one({"_id": ObjectId(channel_id)})
-    except: return "Invalid ID", 400
-    return redirect(url_for('admin'))
-# [END] Admin TV Channel Management Routes
 
 @app.route('/admin/api/live_search')
 @requires_auth
