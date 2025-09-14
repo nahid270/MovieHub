@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
 from urllib.parse import unquote, quote
-from datetime import datetime, time
+from datetime import datetime
 import math # Added for pagination calculation
 
 # --- Environment Variables ---
@@ -24,7 +24,7 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
-ITEMS_PER_PAGE = 20 # New constant for pagination
+ITEMS_PER_PAGE = 20
 app = Flask(__name__)
 
 # --- Authentication ---
@@ -50,11 +50,11 @@ try:
     movies = db["movies"]
     settings = db["settings"]
     categories_collection = db["categories"]
-    requests_collection = db["requests"] # New collection for user requests
+    requests_collection = db["requests"]
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
-        default_categories = ["Coming Soon", "Bengali", "Hindi", "English", "18+ Adult Zone", "Trending"]
+        default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
@@ -62,11 +62,9 @@ try:
         movies.create_index("title")
         movies.create_index("type")
         movies.create_index("categories")
-        movies.create_index("created_at")
         movies.create_index("updated_at")
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
-        requests_collection.create_index("created_at")
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
@@ -137,7 +135,7 @@ index_html = """
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {
-    --primary-color: #E50914; --bg-color: #000000; --card-bg: #1a1a1a;
+    --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a;
     --text-light: #ffffff; --text-dark: #a0a0a0; --nav-height: 60px;
     --cyan-accent: #00FFFF; --yellow-accent: #FFFF00; --trending-color: #F83D61;
     --type-color: #00E599;
@@ -163,12 +161,13 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* --- NEW: Category Bar Styles --- */
-  .category-bar-section { margin-top: 15px; margin-bottom: 25px; }
-  .category-bar-scroller { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 10px; -ms-overflow-style: none; scrollbar-width: none; }
-  .category-bar-scroller::-webkit-scrollbar { display: none; }
-  .category-item { display: inline-block; background-color: var(--card-bg); border: 1px solid #333; color: var(--text-dark); padding: 8px 18px; border-radius: 50px; margin-right: 10px; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; flex-shrink: 0; }
-  .category-item:hover, .category-item.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); transform: translateY(-2px); }
+  /* --- NEW: Nav Grid Styles --- */
+  .nav-grid-container { padding: 20px 0 30px 0; }
+  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .nav-grid-item { display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-color); color: white; padding: 10px 20px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; text-decoration: none; transition: transform 0.2s ease, background-color 0.2s ease; }
+  .nav-grid-item:hover { background-color: #c40812; transform: scale(1.05); }
+  .nav-grid-item i { margin-right: 8px; font-size: 1.1em; }
+  .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 2px solid white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 1; margin-right: 8px; font-weight: bold; }
   
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -265,11 +264,10 @@ index_html = """
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-      {% if m.categories and 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
+      {% if 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
       {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
       <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
       <div class="card-info">
-        {# UPDATED: Added release year to card meta info #}
         <p class="card-meta">
           {% if m.release_date %}<i class="fas fa-calendar-alt"></i> {{ m.release_date.split('-')[0] }} &nbsp;&nbsp;{% endif %}
           <i class="fas fa-clock"></i> {{ m._id | time_ago }}
@@ -298,13 +296,20 @@ index_html = """
   {% else %}
     <div style="height: var(--nav-height);"></div>
     
-    <!-- NEW: Dynamic Category Bar -->
-    <section class="category-bar-section container">
-        <div class="category-bar-scroller">
-            <a href="{{ url_for('movies_by_category', name='Latest') }}" class="category-item">🔥 Latest</a>
+    <!-- NEW: Category Grid Navigation (As per your image) -->
+    <section class="nav-grid-container container">
+        <div class="nav-grid">
+            <a href="{{ url_for('home') }}" class="nav-grid-item"><i class="fas fa-home"></i> HOME</a>
             {% for cat in predefined_categories %}
-                <a href="{{ url_for('movies_by_category', name=cat) }}" class="category-item">{{ cat }}</a>
+                <a href="{{ url_for('movies_by_category', name=cat) }}" class="nav-grid-item">
+                    {% if '18+' in cat %}
+                        <span class="icon-18">18</span>
+                    {% endif %}
+                    {{ cat }}
+                </a>
             {% endfor %}
+            <a href="{{ url_for('all_movies') }}" class="nav-grid-item">ALL MOVIES</a>
+            <a href="{{ url_for('all_series') }}" class="nav-grid-item">WEB SERIES & TV SHOWS</a>
         </div>
     </section>
 
@@ -339,10 +344,7 @@ index_html = """
           <section class="category-section">
               <div class="category-header">
                   <h2 class="category-title">{{ title }}</h2>
-                  {# Don't show "View All" for dynamically generated "Latest" sections #}
-                  {% if cat_name != 'Latest' %}
-                    <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
-                  {% endif %}
+                  <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
               </div>
               <div class="category-grid">
                   {% for m in movies_list %}
@@ -353,10 +355,9 @@ index_html = """
           {% endif %}
       {% endmacro %}
       
-      {# UPDATED: New homepage section layout #}
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-      {{ render_grid_section('Latest Movies', latest_movies, 'Latest') }}
-      {{ render_grid_section('Latest Series', latest_series, 'Latest') }}
+      {{ render_grid_section('Latest Movies', latest_movies, 'Latest Movies') }}
+      {{ render_grid_section('Latest Series', latest_series, 'Latest Series') }}
 
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       
@@ -1166,13 +1167,11 @@ def home():
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
-    # UPDATED: Homepage logic for new sections
-    # 1. Hero Slider prioritizes "Trending" content
+    # Homepage logic
     slider_content = list(movies.find({"categories": "Trending"}).sort('updated_at', -1).limit(10))
     if len(slider_content) < 5:
         additional_content = list(movies.find({}).sort('updated_at', -1).limit(10))
         slider_content.extend(additional_content)
-        # Remove duplicates
         seen_ids = set()
         unique_slider_content = []
         for item in slider_content:
@@ -1181,11 +1180,9 @@ def home():
                 seen_ids.add(item['_id'])
         slider_content = unique_slider_content[:10]
 
-    # 2. Separate latest movies and series
     latest_movies = list(movies.find({"type": "movie"}).sort('updated_at', -1).limit(10))
     latest_series = list(movies.find({"type": "series"}).sort('updated_at', -1).limit(10))
-
-    # 3. Fetch content for other categories
+    
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
 
@@ -1197,7 +1194,6 @@ def home():
         "is_full_page_list": False
     }
     return render_template_string(index_html, **context)
-
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -1227,7 +1223,7 @@ def all_movies():
 def all_series():
     page = request.args.get('page', 1, type=int)
     all_series_content, pagination = get_paginated_content({"type": "series"}, page)
-    return render_template_string(index_html, movies=all_series_content, query="All Series", is_full_page_list=True, pagination=pagination)
+    return render_template_string(index_html, movies=all_series_content, query="Web Series & TV Shows", is_full_page_list=True, pagination=pagination)
 
 @app.route('/category')
 def movies_by_category():
@@ -1236,14 +1232,15 @@ def movies_by_category():
     page = request.args.get('page', 1, type=int)
     
     query_filter = {}
-    if title == "Latest":
-        query_filter = {}
+    if title == "Latest Movies":
+        query_filter = {"type": "movie"}
+    elif title == "Latest Series":
+        query_filter = {"type": "series"}
     else:
         query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
-    query_title = "Latest Content" if title == "Latest" else title
-    return render_template_string(index_html, movies=content_list, query=query_title, is_full_page_list=True, pagination=pagination)
+    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
@@ -1252,10 +1249,7 @@ def request_content():
         extra_info = request.form.get('extra_info', '').strip()
         if content_name:
             requests_collection.insert_one({
-                "name": content_name,
-                "info": extra_info,
-                "status": "Pending",
-                "created_at": datetime.utcnow()
+                "name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()
             })
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
@@ -1266,7 +1260,6 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
-# --- ADMIN ROUTES ---
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
@@ -1284,28 +1277,20 @@ def admin():
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
             movie_data = {
-                "title": request.form.get("title").strip(),
-                "type": content_type,
+                "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(),
-                "language": request.form.get("language").strip() or None,
+                "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-                "categories": request.form.getlist("categories"),
-                "episodes": [], "links": [], "season_packs": [], "manual_links": [],
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()
             }
             tmdb_id = request.form.get("tmdb_id");
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
             if content_type == "movie":
-                movie_links = []
-                for q in ["480p", "720p", "1080p"]:
-                    w, d = request.form.get(f"watch_link_{q}"), request.form.get(f"download_link_{q}")
-                    if w or d: movie_links.append({"quality": q, "watch_url": w, "download_url": d})
-                movie_data["links"] = movie_links
+                movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in ["480p", "720p", "1080p"] if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             else:
                 sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
@@ -1321,7 +1306,6 @@ def admin():
     requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    
     return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list)
 
 @app.route('/admin/category/delete/<cat_id>')
@@ -1357,24 +1341,17 @@ def edit_movie(movie_id):
     if request.method == "POST":
         content_type = request.form.get("content_type")
         update_data = {
-            "title": request.form.get("title").strip(),
-            "type": content_type,
+            "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
-            "overview": request.form.get("overview").strip(),
-            "language": request.form.get("language").strip() or None,
+            "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
-            "categories": request.form.getlist("categories"),
-            "updated_at": datetime.utcnow()
+            "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow()
         }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         if content_type == "movie":
-            movie_links = []
-            for q in ["480p", "720p", "1080p"]:
-                w, d = request.form.get(f"watch_link_{q}"), request.form.get(f"download_link_{q}")
-                if w or d: movie_links.append({"quality": q, "watch_url": w, "download_url": d})
-            update_data["links"] = movie_links
+            update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in ["480p", "720p", "1080p"] if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
         else:
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
@@ -1394,23 +1371,16 @@ def delete_movie(movie_id):
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
 
-# --- API Routes ---
 @app.route('/admin/api/live_search')
 @requires_auth
 def admin_api_live_search():
     query = request.args.get('q', '').strip()
-    query_filter = {}
-    if query:
-        query_filter = {"title": {"$regex": query, "$options": "i"}}
-    
     try:
-        results = list(movies.find(query_filter, {"_id": 1, "title": 1, "type": 1}).sort('updated_at', -1))
-        for item in results:
-            item['_id'] = str(item['_id'])
+        results = list(movies.find({"title": {"$regex": query, "$options": "i"} if query else {}}, {"_id": 1, "title": 1, "type": 1}).sort('updated_at', -1))
+        for item in results: item['_id'] = str(item['_id'])
         return jsonify(results)
     except Exception as e:
-        print(f"Admin Live Search API Error: {e}")
-        return jsonify({"error": "An error occurred"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/admin/api/search')
 @requires_auth
@@ -1422,10 +1392,7 @@ def api_search_tmdb():
         res = requests.get(search_url, timeout=10)
         res.raise_for_status()
         data = res.json()
-        results = []
-        for item in data.get('results', []):
-            if item.get('media_type') in ['movie', 'tv'] and item.get('poster_path'):
-                results.append({"id": item.get('id'),"title": item.get('title') or item.get('name'),"year": (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0],"poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}","media_type": item.get('media_type')})
+        results = [{"id": item.get('id'),"title": item.get('title') or item.get('name'),"year": (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0],"poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}","media_type": item.get('media_type')} for item in data.get('results', []) if item.get('media_type') in ['movie', 'tv'] and item.get('poster_path')]
         return jsonify(results)
     except Exception as e: return jsonify({"error": str(e)}), 500
 
@@ -1451,4 +1418,6 @@ def api_search():
         return jsonify({"error": "An error occurred"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
+    # For local development
+    port = int(os.environ.get('PORT', 3000))
+    app.run(debug=True, host='0.0.0.0', port=port)
