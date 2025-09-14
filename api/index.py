@@ -63,12 +63,25 @@ try:
         movies.create_index("type")
         movies.create_index("categories")
         movies.create_index("created_at")
+        movies.create_index("updated_at") # ADDED: Index for sorting by update time
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         requests_collection.create_index("created_at")
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
+
+    # ONE-TIME MIGRATION: Add 'updated_at' to documents that don't have it.
+    print("INFO: Checking for documents missing 'updated_at' field for migration...")
+    result = movies.update_many(
+        {"updated_at": {"$exists": False}},
+        [{"$set": {"updated_at": "$created_at"}}] # Sets updated_at from created_at for old documents
+    )
+    if result.modified_count > 0:
+        print(f"SUCCESS: Migrated {result.modified_count} old documents to include 'updated_at' field.")
+    else:
+        print("INFO: All documents already have the 'updated_at' field.")
+
 
 except Exception as e:
     print(f"FATAL: Error connecting to MongoDB: {e}.")
@@ -108,7 +121,7 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES ============================================================
+# === [START] HTML TEMPLATES (HTML templates remain unchanged) ==========================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -1156,13 +1169,13 @@ class Pagination:
 def home():
     query = request.args.get('q', '').strip()
     if query:
-        movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
+        movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
     
-    slider_content = list(movies.find({}).sort('_id', -1).limit(15))
+    slider_content = list(movies.find({}).sort('updated_at', -1).limit(15))
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
-    categorized_content = {cat: list(movies.find({"categories": cat}).sort('_id', -1).limit(10)) for cat in home_categories}
-    latest_content = list(movies.find().sort('_id', -1).limit(10))
+    categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
+    latest_content = list(movies.find().sort('updated_at', -1).limit(10))
     context = {"slider_content": slider_content, "latest_content": latest_content, "categorized_content": categorized_content, "is_full_page_list": False}
     return render_template_string(index_html, **context)
 
@@ -1172,14 +1185,15 @@ def movie_detail(movie_id):
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie: return "Content not found", 404
         related_content = []
-        if movie.get('type'): related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('_id', -1).limit(10))
+        if movie.get('type'):
+            related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
     except: return "Content not found", 404
 
 def get_paginated_content(query_filter, page):
     skip = (page - 1) * ITEMS_PER_PAGE
     total_count = movies.count_documents(query_filter)
-    content_list = list(movies.find(query_filter).sort('_id', -1).skip(skip).limit(ITEMS_PER_PAGE))
+    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
     pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
     return content_list, pagination
 
@@ -1202,8 +1216,11 @@ def movies_by_category():
     page = request.args.get('page', 1, type=int)
     
     query_filter = {}
-    if title == "Latest": query_filter = {}
-    else: query_filter = {"categories": title}
+    if title == "Latest":
+        # For "Latest", we don't filter by category, just sort by update time
+        query_filter = {}
+    else:
+        query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
     query_title = "Latest Movies & Series" if title == "Latest" else title
@@ -1221,8 +1238,6 @@ def request_content():
                 "status": "Pending",
                 "created_at": datetime.utcnow()
             })
-            # This requires SECRET_KEY to be set for flash messages
-            # flash('Your request has been submitted successfully!', 'success')
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
@@ -1236,7 +1251,6 @@ def wait_page():
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
-    # POST request handling is unchanged
     if request.method == "POST":
         form_action = request.form.get("form_action")
         if form_action == "update_ads":
@@ -1250,7 +1264,19 @@ def admin():
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
-            movie_data = { "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()], "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [], "created_at": datetime.utcnow() }
+            movie_data = {
+                "title": request.form.get("title").strip(),
+                "type": content_type,
+                "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+                "backdrop": request.form.get("backdrop").strip() or None,
+                "overview": request.form.get("overview").strip(),
+                "language": request.form.get("language").strip() or None,
+                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
+                "categories": request.form.getlist("categories"),
+                "episodes": [], "links": [], "season_packs": [], "manual_links": [],
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow() # ADDED: Set update timestamp on creation
+            }
             tmdb_id = request.form.get("tmdb_id");
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
@@ -1271,8 +1297,7 @@ def admin():
             movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    # Live search is now handled by the API, so the initial GET request can be simplified.
-    content_list = list(movies.find({}).sort('_id', -1))
+    content_list = list(movies.find({}).sort('updated_at', -1))
     
     stats = {
         "total_content": movies.count_documents({}),
@@ -1318,9 +1343,18 @@ def edit_movie(movie_id):
     if not movie_obj: return "Movie not found", 404
     
     if request.method == "POST":
-        # POST logic is unchanged
         content_type = request.form.get("content_type")
-        update_data = { "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()], "categories": request.form.getlist("categories") }
+        update_data = {
+            "title": request.form.get("title").strip(),
+            "type": content_type,
+            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+            "backdrop": request.form.get("backdrop").strip() or None,
+            "overview": request.form.get("overview").strip(),
+            "language": request.form.get("language").strip() or None,
+            "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
+            "categories": request.form.getlist("categories"),
+            "updated_at": datetime.utcnow() # ADDED: Set update timestamp on edit
+        }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         if content_type == "movie":
@@ -1349,7 +1383,7 @@ def delete_movie(movie_id):
     return redirect(url_for('admin'))
 
 # --- API Routes ---
-@app.route('/admin/api/live_search') # NEW API ENDPOINT FOR ADMIN LIVE SEARCH
+@app.route('/admin/api/live_search')
 @requires_auth
 def admin_api_live_search():
     query = request.args.get('q', '').strip()
@@ -1358,7 +1392,7 @@ def admin_api_live_search():
         query_filter = {"title": {"$regex": query, "$options": "i"}}
     
     try:
-        results = list(movies.find(query_filter, {"_id": 1, "title": 1, "type": 1}).sort('_id', -1))
+        results = list(movies.find(query_filter, {"_id": 1, "title": 1, "type": 1}).sort('updated_at', -1))
         for item in results:
             item['_id'] = str(item['_id'])
         return jsonify(results)
@@ -1369,7 +1403,6 @@ def admin_api_live_search():
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
-    # This API is unchanged
     query = request.args.get('query')
     if not query: return jsonify({"error": "Query parameter is missing"}), 400
     try:
@@ -1387,7 +1420,6 @@ def api_search_tmdb():
 @app.route('/admin/api/details')
 @requires_auth
 def api_get_details():
-    # This API is unchanged
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
@@ -1396,7 +1428,6 @@ def api_get_details():
 
 @app.route('/api/search')
 def api_search():
-    # This API is unchanged
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
