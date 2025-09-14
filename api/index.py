@@ -63,7 +63,7 @@ try:
         movies.create_index("type")
         movies.create_index("categories")
         movies.create_index("created_at")
-        movies.create_index("updated_at") # ADDED: Index for sorting by update time
+        movies.create_index("updated_at")
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         requests_collection.create_index("created_at")
@@ -71,17 +71,15 @@ try:
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
 
-    # ONE-TIME MIGRATION: Add 'updated_at' to documents that don't have it.
     print("INFO: Checking for documents missing 'updated_at' field for migration...")
     result = movies.update_many(
         {"updated_at": {"$exists": False}},
-        [{"$set": {"updated_at": "$created_at"}}] # Sets updated_at from created_at for old documents
+        [{"$set": {"updated_at": "$created_at"}}]
     )
     if result.modified_count > 0:
         print(f"SUCCESS: Migrated {result.modified_count} old documents to include 'updated_at' field.")
     else:
         print("INFO: All documents already have the 'updated_at' field.")
-
 
 except Exception as e:
     print(f"FATAL: Error connecting to MongoDB: {e}.")
@@ -121,7 +119,7 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (HTML templates remain unchanged) ==========================
+# === [START] HTML TEMPLATES ==============================================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -165,6 +163,13 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
+  /* --- NEW: Category Bar Styles --- */
+  .category-bar-section { margin-top: 15px; margin-bottom: 25px; }
+  .category-bar-scroller { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 10px; -ms-overflow-style: none; scrollbar-width: none; }
+  .category-bar-scroller::-webkit-scrollbar { display: none; }
+  .category-item { display: inline-block; background-color: var(--card-bg); border: 1px solid #333; color: var(--text-dark); padding: 8px 18px; border-radius: 50px; margin-right: 10px; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; flex-shrink: 0; }
+  .category-item:hover, .category-item.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); transform: translateY(-2px); }
+  
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
   }
@@ -183,27 +188,8 @@ index_html = """
 
   .category-section { margin: 30px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .category-title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    display: inline-block;
-    padding: 8px 20px;
-    background-color: rgba(26, 26, 26, 0.8);
-    border: 2px solid;
-    border-radius: 50px;
-    animation: rgb-glow 4s linear infinite;
-    backdrop-filter: blur(3px);
-  }
-  .view-all-link {
-    font-size: 0.9rem;
-    color: var(--text-dark);
-    font-weight: 500;
-    padding: 6px 15px;
-    border-radius: 20px;
-    background-color: #222;
-    transition: all 0.3s ease;
-    animation: pulse-glow 2.5s ease-in-out infinite;
-  }
+  .category-title { font-size: 1.5rem; font-weight: 600; display: inline-block; padding: 8px 20px; background-color: rgba(26, 26, 26, 0.8); border: 2px solid; border-radius: 50px; animation: rgb-glow 4s linear infinite; backdrop-filter: blur(3px); }
+  .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; padding: 6px 15px; border-radius: 20px; background-color: #222; transition: all 0.3s ease; animation: pulse-glow 2.5s ease-in-out infinite; }
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
   .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
   .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
@@ -217,13 +203,11 @@ index_html = """
   .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
   .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
   .language-tag { top: 8px; right: 8px; background-color: var(--primary-color); }
-
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
   .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
   .ad-container > * { max-width: 100% !important; }
-  
   .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
   .mobile-nav-menu.active {transform: translateX(0);}
   .mobile-nav-menu .close-btn {position: absolute;top: 20px;right: 20px;font-size: 2.5rem;color: white;background: none;border: none;cursor: pointer;}
@@ -231,12 +215,10 @@ index_html = """
   .mobile-links a {font-size: 1.5rem;font-weight: 500;color: var(--text-light);transition: color 0.2s;}
   .mobile-links a:hover {color: var(--primary-color);}
   .mobile-links hr {width: 50%;border-color: #333;margin: 10px auto;}
-  
   .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 65px; background-color: #181818; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); z-index: 1000; justify-content: space-around; align-items: center; padding-top: 5px; }
   .bottom-nav .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dark); background: none; border: none; font-size: 12px; flex-grow: 1; font-weight: 500; }
   .bottom-nav .nav-item i { font-size: 22px; margin-bottom: 5px; }
   .bottom-nav .nav-item.active, .bottom-nav .nav-item:hover { color: var(--primary-color); }
-  
   .search-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: none; flex-direction: column; padding: 20px; }
   .search-overlay.active { display: flex; }
   .search-container { width: 100%; max-width: 800px; margin: 0 auto; }
@@ -287,7 +269,11 @@ index_html = """
       {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
       <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
       <div class="card-info">
-        <p class="card-meta"><i class="fas fa-clock"></i> {{ m._id | time_ago }}</p>
+        {# UPDATED: Added release year to card meta info #}
+        <p class="card-meta">
+          {% if m.release_date %}<i class="fas fa-calendar-alt"></i> {{ m.release_date.split('-')[0] }} &nbsp;&nbsp;{% endif %}
+          <i class="fas fa-clock"></i> {{ m._id | time_ago }}
+        </p>
         <h4 class="card-title">{{ m.title }}</h4>
       </div>
        <span class="type-tag">{{ m.type | title }}</span>
@@ -311,6 +297,17 @@ index_html = """
     </div>
   {% else %}
     <div style="height: var(--nav-height);"></div>
+    
+    <!-- NEW: Dynamic Category Bar -->
+    <section class="category-bar-section container">
+        <div class="category-bar-scroller">
+            <a href="{{ url_for('movies_by_category', name='Latest') }}" class="category-item">🔥 Latest</a>
+            {% for cat in predefined_categories %}
+                <a href="{{ url_for('movies_by_category', name=cat) }}" class="category-item">{{ cat }}</a>
+            {% endfor %}
+        </div>
+    </section>
+
     {% if slider_content %}
     <section class="hero-slider-section container">
         <div class="swiper hero-slider">
@@ -342,7 +339,10 @@ index_html = """
           <section class="category-section">
               <div class="category-header">
                   <h2 class="category-title">{{ title }}</h2>
-                  <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
+                  {# Don't show "View All" for dynamically generated "Latest" sections #}
+                  {% if cat_name != 'Latest' %}
+                    <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
+                  {% endif %}
               </div>
               <div class="category-grid">
                   {% for m in movies_list %}
@@ -353,11 +353,17 @@ index_html = """
           {% endif %}
       {% endmacro %}
       
+      {# UPDATED: New homepage section layout #}
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
-      {{ render_grid_section('Latest Movies & Series', latest_content, 'Latest') }}
+      {{ render_grid_section('Latest Movies', latest_movies, 'Latest') }}
+      {{ render_grid_section('Latest Series', latest_series, 'Latest') }}
+
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
+      
       {% for cat_name, movies_list in categorized_content.items() %}
-          {% if cat_name != 'Trending' %}{{ render_grid_section(cat_name, movies_list, cat_name) }}{% endif %}
+          {% if cat_name != 'Trending' %}
+            {{ render_grid_section(cat_name, movies_list, cat_name) }}
+          {% endif %}
       {% endfor %}
     </div>
   {% endif %}
@@ -1000,24 +1006,18 @@ admin_html = """
     function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
     async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
     async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
-    
-    // --- NEW LIVE SEARCH SCRIPT ---
     let debounceTimer;
     const searchInput = document.getElementById('admin-live-search');
     const tableBody = document.getElementById('content-table-body');
-
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             const query = searchInput.value.trim();
-            
-            // Show loading state
             tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-            
             fetch(`/admin/api/live_search?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
-                    tableBody.innerHTML = ''; // Clear table
+                    tableBody.innerHTML = '';
                     if (data.length > 0) {
                         data.forEach(movie => {
                             const row = `
@@ -1033,18 +1033,11 @@ admin_html = """
                             `;
                             tableBody.innerHTML += row;
                         });
-                    } else {
-                        tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>';
-                    }
+                    } else { tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>'; }
                 })
-                .catch(error => {
-                    console.error('Error fetching search results:', error);
-                    tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Error loading results.</td></tr>';
-                });
-        }, 400); // 400ms delay
+                .catch(error => { console.error('Error fetching search results:', error); tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Error loading results.</td></tr>'; });
+        }, 400);
     });
-    // --- END LIVE SEARCH SCRIPT ---
-
     document.addEventListener('DOMContentLoaded', function() { toggleFields(); const selectAll = document.getElementById('select-all'); if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); } });
 </script>
 </body></html>
@@ -1131,7 +1124,6 @@ edit_html = """
 
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
-    # This function is unchanged
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "tv" else "movie"
     try:
@@ -1170,14 +1162,42 @@ def home():
     query = request.args.get('q', '').strip()
     if query:
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
-        return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True)
-    
-    slider_content = list(movies.find({}).sort('updated_at', -1).limit(15))
+        total_results = movies.count_documents({"title": {"$regex": query, "$options": "i"}})
+        pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
+        return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
+
+    # UPDATED: Homepage logic for new sections
+    # 1. Hero Slider prioritizes "Trending" content
+    slider_content = list(movies.find({"categories": "Trending"}).sort('updated_at', -1).limit(10))
+    if len(slider_content) < 5:
+        additional_content = list(movies.find({}).sort('updated_at', -1).limit(10))
+        slider_content.extend(additional_content)
+        # Remove duplicates
+        seen_ids = set()
+        unique_slider_content = []
+        for item in slider_content:
+            if item['_id'] not in seen_ids:
+                unique_slider_content.append(item)
+                seen_ids.add(item['_id'])
+        slider_content = unique_slider_content[:10]
+
+    # 2. Separate latest movies and series
+    latest_movies = list(movies.find({"type": "movie"}).sort('updated_at', -1).limit(10))
+    latest_series = list(movies.find({"type": "series"}).sort('updated_at', -1).limit(10))
+
+    # 3. Fetch content for other categories
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
-    latest_content = list(movies.find().sort('updated_at', -1).limit(10))
-    context = {"slider_content": slider_content, "latest_content": latest_content, "categorized_content": categorized_content, "is_full_page_list": False}
+
+    context = {
+        "slider_content": slider_content,
+        "latest_movies": latest_movies,
+        "latest_series": latest_series,
+        "categorized_content": categorized_content,
+        "is_full_page_list": False
+    }
     return render_template_string(index_html, **context)
+
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -1217,13 +1237,12 @@ def movies_by_category():
     
     query_filter = {}
     if title == "Latest":
-        # For "Latest", we don't filter by category, just sort by update time
         query_filter = {}
     else:
         query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
-    query_title = "Latest Movies & Series" if title == "Latest" else title
+    query_title = "Latest Content" if title == "Latest" else title
     return render_template_string(index_html, movies=content_list, query=query_title, is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
@@ -1275,7 +1294,7 @@ def admin():
                 "categories": request.form.getlist("categories"),
                 "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow() # ADDED: Set update timestamp on creation
+                "updated_at": datetime.utcnow()
             }
             tmdb_id = request.form.get("tmdb_id");
             if tmdb_id:
@@ -1298,14 +1317,7 @@ def admin():
         return redirect(url_for('admin'))
     
     content_list = list(movies.find({}).sort('updated_at', -1))
-    
-    stats = {
-        "total_content": movies.count_documents({}),
-        "total_movies": movies.count_documents({"type": "movie"}),
-        "total_series": movies.count_documents({"type": "series"}),
-        "pending_requests": requests_collection.count_documents({"status": "Pending"})
-    }
-    
+    stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
@@ -1353,7 +1365,7 @@ def edit_movie(movie_id):
             "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "categories": request.form.getlist("categories"),
-            "updated_at": datetime.utcnow() # ADDED: Set update timestamp on edit
+            "updated_at": datetime.utcnow()
         }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
