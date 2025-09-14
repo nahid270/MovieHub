@@ -161,13 +161,13 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* --- NEW: Nav Grid Styles --- */
+  /* --- UPDATED: Nav Grid Styles (Smaller Buttons) --- */
   .nav-grid-container { padding: 20px 0 30px 0; }
-  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-  .nav-grid-item { display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-color); color: white; padding: 10px 20px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; text-decoration: none; transition: transform 0.2s ease, background-color 0.2s ease; }
+  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .nav-grid-item { display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-color); color: white; padding: 8px 15px; border-radius: 5px; font-size: 0.85rem; font-weight: 500; text-transform: uppercase; text-decoration: none; transition: transform 0.2s ease, background-color 0.2s ease; }
   .nav-grid-item:hover { background-color: #c40812; transform: scale(1.05); }
-  .nav-grid-item i { margin-right: 8px; font-size: 1.1em; }
-  .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 2px solid white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 1; margin-right: 8px; font-weight: bold; }
+  .nav-grid-item i { margin-right: 6px; font-size: 1em; }
+  .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; margin-right: 6px; font-weight: bold; }
   
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -296,7 +296,7 @@ index_html = """
   {% else %}
     <div style="height: var(--nav-height);"></div>
     
-    <!-- NEW: Category Grid Navigation (As per your image) -->
+    <!-- Category Grid Navigation (As per your image) -->
     <section class="nav-grid-container container">
         <div class="nav-grid">
             <a href="{{ url_for('home') }}" class="nav-grid-item"><i class="fas fa-home"></i> HOME</a>
@@ -1200,9 +1200,7 @@ def movie_detail(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie: return "Content not found", 404
-        related_content = []
-        if movie.get('type'):
-            related_content = list(movies.find({"type": movie['type'], "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
+        related_content = list(movies.find({"type": movie.get('type'), "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
     except: return "Content not found", 404
 
@@ -1285,7 +1283,7 @@ def admin():
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()
             }
-            tmdb_id = request.form.get("tmdb_id");
+            tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
