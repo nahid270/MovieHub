@@ -567,7 +567,7 @@ detail_html = """
                     <div class="quality-group">
                         <h4>{{ link_item.quality }}</h4>
                         <div class="link-buttons">
-                            {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn btn-watch"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
+                            {% if link_item.watch_url %}<a href="{{ url_for('player_page', target=quote(link_item.watch_url)) }}" target="_blank" class="action-btn btn-watch"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
                             {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn btn-download"><i class="fas fa-download"></i> Download</a>{% endif %}
                         </div>
                     </div>
@@ -607,7 +607,7 @@ detail_html = """
                         <h3>Complete Season {{ season_num }} Links</h3>
                         <div class="link-buttons">
                             {% if season_pack.watch_link %}
-                                <a href="{{ url_for('wait_page', target=quote(season_pack.watch_link)) }}" class="action-btn btn-watch"><i class="fas fa-play-circle"></i> Watch All Episodes</a>
+                                <a href="{{ url_for('player_page', target=quote(season_pack.watch_link)) }}" target="_blank" class="action-btn btn-watch"><i class="fas fa-play-circle"></i> Watch All Episodes</a>
                             {% endif %}
                             {% if season_pack.download_link %}
                                 <a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn btn-download"><i class="fas fa-cloud-download-alt"></i> Download All Episodes</a>
@@ -621,7 +621,7 @@ detail_html = """
                         {% for ep in episodes_for_season | sort(attribute='episode_number') %}
                         <div class="episode-item">
                             <span class="episode-name"><i class="fas fa-play-circle"></i> Episode {{ ep.episode_number }} {% if ep.title %}- {{ep.title}}{% endif %}</span>
-                            {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn btn-download">Download / Watch</a>{% endif %}
+                            {% if ep.watch_link %}<a href="{{ url_for('player_page', target=quote(ep.watch_link)) }}" target="_blank" class="action-btn btn-download">Download / Watch</a>{% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -1137,6 +1137,65 @@ edit_html = """
 </body></html>
 """
 
+# START: New HTML Template for Video Player
+player_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watching - {{ website_name }}</title>
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
+    <meta name="robots" content="noindex, nofollow">
+    <!-- Plyr CSS -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+        :root {
+            --plyr-color-main: #E50914; /* Your primary color */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if video_url %}
+            <video id="player" playsinline controls>
+                <source src="{{ video_url }}" type="video/mp4" />
+            </video>
+        {% else %}
+            <p>Sorry, the video link is invalid or missing.</p>
+        {% endif %}
+    </div>
+
+    <!-- Plyr JS -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoSource = document.querySelector('#player source');
+            if (videoSource && videoSource.getAttribute('src')) {
+                const player = new Plyr('#player');
+            }
+        });
+    </script>
+</body>
+</html>
+"""
+# END: New HTML Template for Video Player
+
+
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
@@ -1172,6 +1231,17 @@ class Pagination:
 # =======================================================================================
 # === [START] FLASK ROUTES ==============================================================
 # =======================================================================================
+
+# START: New Route for Video Player
+@app.route('/play')
+def player_page():
+    encoded_video_url = request.args.get('target')
+    if not encoded_video_url:
+        return "Video URL not provided.", 400
+    video_url = unquote(encoded_video_url)
+    return render_template_string(player_html, video_url=video_url)
+# END: New Route for Video Player
+
 @app.route('/')
 def home():
     query = request.args.get('q', '').strip()
