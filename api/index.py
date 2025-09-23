@@ -186,33 +186,33 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* New Category Button Design */
-  .nav-grid-container { padding: 20px 0 30px 0; }
-  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  /* MODIFIED: Category Button Design - Made Smaller */
+  .nav-grid-container { padding: 15px 0; }
+  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .nav-grid-item {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: white;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    font-weight: 600;
+    padding: 6px 12px; /* Reduced padding */
+    border-radius: 6px; /* Slightly smaller radius */
+    font-size: 0.75rem;   /* Reduced font size */
+    font-weight: 500;   /* Slightly lighter weight */
     text-transform: uppercase;
     text-decoration: none;
     transition: all 0.3s ease;
     background: linear-gradient(145deg, #d40a0a, #a00000);
     border: 1px solid #ff4b4b;
-    box-shadow: 0 4px 15px -5px rgba(229, 9, 20, 0.6);
+    box-shadow: 0 2px 8px -3px rgba(229, 9, 20, 0.6);
   }
   .nav-grid-item:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px -5px rgba(229, 9, 20, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -4px rgba(229, 9, 20, 0.9);
     filter: brightness(1.1);
   }
   .nav-grid-item i {
-    margin-right: 8px;
-    font-size: 1.1em;
+    margin-right: 6px; /* Reduced margin */
+    font-size: 1em; /* Adjusted icon size */
     line-height: 1;
   }
   .icon-18 {
@@ -222,11 +222,11 @@ index_html = """
     justify-content: center;
     border: 1.5px solid white;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
+    width: 16px; /* Smaller */
+    height: 16px; /* Smaller */
+    font-size: 10px; /* Smaller */
     line-height: 1;
-    margin-right: 8px;
+    margin-right: 6px;
     font-weight: bold;
   }
 
