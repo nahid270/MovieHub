@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
 from urllib.parse import unquote, quote
-from datetime import datetime
+from datetime import datetime, timedelta # Added timedelta for NEW badge calculation
 import math # Added for pagination calculation
 
 # --- Environment Variables ---
@@ -113,7 +113,10 @@ def inject_globals():
         website_name=WEBSITE_NAME,
         ad_settings=ad_settings or {},
         predefined_categories=all_categories,
-        quote=quote
+        quote=quote,
+        # ---[CHANGE START] Add datetime to context for NEW badge logic ---
+        datetime=datetime
+        # ---[CHANGE END] ---
     )
 
 # =========================================================================================
@@ -138,7 +141,7 @@ index_html = """
     --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a;
     --text-light: #ffffff; --text-dark: #a0a0a0; --nav-height: 60px;
     --cyan-accent: #00FFFF; --yellow-accent: #FFFF00; --trending-color: #F83D61;
-    --type-color: #00E599;
+    --type-color: #00E599; --new-color: #ffc107;
   }
   @keyframes rgb-glow {
     0%   { border-color: #ff00de; box-shadow: 0 0 5px #ff00de, 0 0 10px #ff00de inset; }
@@ -167,11 +170,8 @@ index_html = """
   .nav-grid-item:hover { background-color: #c40812; transform: scale(1.05); }
   .nav-grid-item i { margin-right: 6px; font-size: 1em; }
   .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; margin-right: 6px; font-weight: bold; }
-  
-  /* ---[CHANGE START] 18+ Category Button Style --- */
   .nav-grid-item--adult { background-color: #a00000; border: 1px solid #d40a0a; }
   .nav-grid-item--adult:hover { background-color: #8b0000; }
-  /* ---[CHANGE END] --- */
 
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -194,36 +194,73 @@ index_html = """
   .category-title { font-size: 1.5rem; font-weight: 600; display: inline-block; padding: 8px 20px; background-color: rgba(26, 26, 26, 0.8); border: 2px solid; border-radius: 50px; animation: rgb-glow 4s linear infinite; backdrop-filter: blur(3px); }
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; padding: 6px 15px; border-radius: 20px; background-color: #222; transition: all 0.3s ease; animation: pulse-glow 2.5s ease-in-out infinite; }
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-  .movie-card { display: block; position: relative; border-radius: 8px; overflow: hidden; background-color: var(--card-bg); border: 2px solid; }
-  .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
-  .movie-card:nth-child(4n+2), .movie-card:nth-child(4n+3) { border-color: var(--cyan-accent); }
-  .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
-  .card-info { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7), transparent); padding: 25px 8px 8px 8px; color: white; }
-  
-  /* ---[CHANGE START] Title Visibility --- */
+
+  /* ---[CHANGE START] New Movie Card Layout CSS --- */
+  .movie-card {
+    display: flex; /* Use flexbox for layout */
+    flex-direction: column; /* Stack items vertically */
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: var(--card-bg);
+    border: 2px solid transparent; /* Keep for glow effect */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .movie-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0, 255, 255, 0.2);
+  }
+  .poster-wrapper {
+      position: relative; /* Anchor for absolute positioned tags */
+  }
+  .movie-poster {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+      display: block; /* Remove any whitespace below image */
+  }
+  .card-info {
+    padding: 10px; /* Space for the text below the poster */
+    background-color: var(--card-bg);
+  }
   .card-title {
-    font-size: 0.9rem; font-weight: 500; color: var(--cyan-accent);
-    margin: 4px 0 0 0;
-    /* Removed nowrap and ellipsis to allow wrapping */
-    white-space: normal; 
-    line-height: 1.35;
-    /* Added min-height to reserve space for two lines, preventing layout jumps */
-    min-height: 2.7em;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-light); /* Changed to white for better contrast */
+    margin: 0 0 5px 0;
+    line-height: 1.4;
+    min-height: 2.8em; /* Reserve space for two lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-meta {
+      font-size: 0.75rem;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+  }
+  .card-meta i { color: var(--cyan-accent); }
+  .type-tag, .language-tag {
+    position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
+  }
+  .language-tag { padding: 2px 6px; font-size: 0.6rem; top: 8px; right: 8px; background-color: rgba(0,0,0,0.6); }
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
+  .new-badge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 4px 12px 4px 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    z-index: 3;
+    clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
   }
   /* ---[CHANGE END] --- */
 
-  .card-meta { font-size: 0.75rem; color: #f0f0f0; display: flex; align-items: center; gap: 5px; }
-  .card-meta i { color: var(--cyan-accent); }
-  
-  /* ---[CHANGE START] Smaller Tags --- */
-  .type-tag, .trending-tag, .language-tag { position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;}
-  .language-tag { padding: 2px 6px; font-size: 0.6rem; top: 8px; right: 8px; background-color: var(--primary-color); }
-  /* ---[CHANGE END] --- */
-  
-  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
-  .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
-  
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
   .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
@@ -284,21 +321,30 @@ index_html = """
     </div>
 </div>
 <main>
+  {# ---[CHANGE START] Updated Movie Card Macro --- #}
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-      {% if 'Trending' in m.categories %}<span class="trending-tag">Trending</span>{% endif %}
-      {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
-      <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+      <div class="poster-wrapper">
+        {# NEW Badge Logic: Show if posted within last 7 days #}
+        {% if (datetime.utcnow() - m._id.generation_time.replace(tzinfo=None)).days < 7 %}
+            <span class="new-badge">NEW</span>
+        {% endif %}
+        {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
+        <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
+        <span class="type-tag">{{ m.type | title }}</span>
+      </div>
       <div class="card-info">
+        <h4 class="card-title">
+          {{ m.title }}
+          {% if m.release_date %} ({{ m.release_date.split('-')[0] }}){% endif %}
+        </h4>
         <p class="card-meta">
-          {% if m.release_date %}<i class="fas fa-calendar-alt"></i> {{ m.release_date.split('-')[0] }} &nbsp;&nbsp;{% endif %}
           <i class="fas fa-clock"></i> {{ m._id | time_ago }}
         </p>
-        <h4 class="card-title">{{ m.title }}</h4>
       </div>
-       <span class="type-tag">{{ m.type | title }}</span>
     </a>
   {% endmacro %}
+  {# ---[CHANGE END] --- #}
 
   {% if is_full_page_list %}
     <div class="full-page-grid-container">
@@ -322,9 +368,7 @@ index_html = """
         <div class="nav-grid">
             <a href="{{ url_for('home') }}" class="nav-grid-item"><i class="fas fa-home"></i> HOME</a>
             {% for cat in predefined_categories %}
-                {# ---[CHANGE START] Conditional class for 18+ category --- #}
                 <a href="{{ url_for('movies_by_category', name=cat) }}" class="nav-grid-item {% if '18+' in cat %}nav-grid-item--adult{% endif %}">
-                {# ---[CHANGE END] --- #}
                     {% if '18+' in cat %}
                         <span class="icon-18">18</span>
                     {% endif %}
@@ -378,7 +422,9 @@ index_html = """
           {% endif %}
       {% endmacro %}
       
+      {% if categorized_content['Trending'] %}
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
+      {% endif %}
 
       {% if latest_content %}
       <section class="category-section">
@@ -1202,18 +1248,18 @@ def home():
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
-    # MODIFIED: The slider will now show the 10 most recently updated items (movies or series).
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
-
-    # MODIFIED: A single list for the "Recently Added" section, containing both movies and series.
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
+    
+    # Filter out empty categories before passing to template
+    categorized_content = {k: v for k, v in categorized_content.items() if v}
 
     context = {
         "slider_content": slider_content,
-        "latest_content": latest_content, # MODIFIED: Pass the new combined list
+        "latest_content": latest_content,
         "categorized_content": categorized_content,
         "is_full_page_list": False
     }
