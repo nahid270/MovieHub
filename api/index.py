@@ -109,14 +109,36 @@ app.jinja_env.filters['time_ago'] = time_ago
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    
+    # Dictionary to hold icons for each category
+    category_icons = {
+        "Bangla": "fa-film",
+        "Hindi": "fa-film",
+        "English": "fa-film",
+        "18+ Adult": "fa-exclamation-circle",
+        "Korean": "fa-tv",
+        "Dual Audio": "fa-headphones",
+        "Bangla Dubbed": "fa-microphone-alt",
+        "Hindi Dubbed": "fa-microphone-alt",
+        "Horror": "fa-ghost",
+        "Action": "fa-bolt",
+        "Thriller": "fa-knife-kitchen",
+        "Anime": "fa-dragon",
+        "Romance": "fa-heart",
+        "Trending": "fa-fire",
+        "ALL MOVIES": "fa-layer-group",
+        "WEB SERIES & TV SHOWS": "fa-tv-alt",
+        "HOME": "fa-home"
+        # You can add more category-icon pairs here
+    }
+
     return dict(
         website_name=WEBSITE_NAME,
         ad_settings=ad_settings or {},
         predefined_categories=all_categories,
         quote=quote,
-        # ---[CHANGE START] Add datetime to context for NEW badge logic ---
-        datetime=datetime
-        # ---[CHANGE END] ---
+        datetime=datetime,
+        category_icons=category_icons # Pass icons to the template
     )
 
 # =========================================================================================
@@ -164,14 +186,49 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
+  /* New Category Button Design */
   .nav-grid-container { padding: 20px 0 30px 0; }
-  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-  .nav-grid-item { display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-color); color: white; padding: 8px 15px; border-radius: 5px; font-size: 0.85rem; font-weight: 500; text-transform: uppercase; text-decoration: none; transition: transform 0.2s ease, background-color 0.2s ease; }
-  .nav-grid-item:hover { background-color: #c40812; transform: scale(1.05); }
-  .nav-grid-item i { margin-right: 6px; font-size: 1em; }
-  .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; margin-right: 6px; font-weight: bold; }
-  .nav-grid-item--adult { background-color: #a00000; border: 1px solid #d40a0a; }
-  .nav-grid-item--adult:hover { background-color: #8b0000; }
+  .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  .nav-grid-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    background: linear-gradient(145deg, #d40a0a, #a00000);
+    border: 1px solid #ff4b4b;
+    box-shadow: 0 4px 15px -5px rgba(229, 9, 20, 0.6);
+  }
+  .nav-grid-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px -5px rgba(229, 9, 20, 0.9);
+    filter: brightness(1.1);
+  }
+  .nav-grid-item i {
+    margin-right: 8px;
+    font-size: 1.1em;
+    line-height: 1;
+  }
+  .icon-18 {
+    font-family: sans-serif;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    line-height: 1;
+    margin-right: 8px;
+    font-weight: bold;
+  }
 
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -195,52 +252,29 @@ index_html = """
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; padding: 6px 15px; border-radius: 20px; background-color: #222; transition: all 0.3s ease; animation: pulse-glow 2.5s ease-in-out infinite; }
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
 
-  /* ---[CHANGE START] New Movie Card Layout CSS --- */
+  /* New Movie Card Layout CSS */
   .movie-card {
-    display: flex; /* Use flexbox for layout */
-    flex-direction: column; /* Stack items vertically */
+    display: flex;
+    flex-direction: column;
     border-radius: 8px;
     overflow: hidden;
     background-color: var(--card-bg);
-    border: 2px solid transparent; /* Keep for glow effect */
+    border: 2px solid transparent;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .movie-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0, 255, 255, 0.2);
   }
-  .poster-wrapper {
-      position: relative; /* Anchor for absolute positioned tags */
-  }
-  .movie-poster {
-      width: 100%;
-      aspect-ratio: 2 / 3;
-      object-fit: cover;
-      display: block; /* Remove any whitespace below image */
-  }
-  .card-info {
-    padding: 10px; /* Space for the text below the poster */
-    background-color: var(--card-bg);
-  }
+  .poster-wrapper { position: relative; }
+  .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
+  .card-info { padding: 10px; background-color: var(--card-bg); }
   .card-title {
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--text-light); /* Changed to white for better contrast */
-    margin: 0 0 5px 0;
-    line-height: 1.4;
-    min-height: 2.8em; /* Reserve space for two lines */
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    font-size: 0.9rem; font-weight: 500; color: var(--text-light);
+    margin: 0 0 5px 0; line-height: 1.4; min-height: 2.8em;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .card-meta {
-      font-size: 0.75rem;
-      color: var(--text-dark);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-  }
+  .card-meta { font-size: 0.75rem; color: var(--text-dark); display: flex; align-items: center; gap: 5px; }
   .card-meta i { color: var(--cyan-accent); }
   .type-tag, .language-tag {
     position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
@@ -248,18 +282,10 @@ index_html = """
   .language-tag { padding: 2px 6px; font-size: 0.6rem; top: 8px; right: 8px; background-color: rgba(0,0,0,0.6); }
   .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
   .new-badge {
-    position: absolute;
-    top: 0;
-    left: 0;
-    background-color: var(--primary-color);
-    color: white;
-    padding: 4px 12px 4px 8px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    z-index: 3;
-    clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    position: absolute; top: 0; left: 0; background-color: var(--primary-color);
+    color: white; padding: 4px 12px 4px 8px; font-size: 0.7rem; font-weight: 700;
+    z-index: 3; clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
   }
-  /* ---[CHANGE END] --- */
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
@@ -321,11 +347,9 @@ index_html = """
     </div>
 </div>
 <main>
-  {# ---[CHANGE START] Updated Movie Card Macro --- #}
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
       <div class="poster-wrapper">
-        {# NEW Badge Logic: Show if posted within last 7 days #}
         {% if (datetime.utcnow() - m._id.generation_time.replace(tzinfo=None)).days < 7 %}
             <span class="new-badge">NEW</span>
         {% endif %}
@@ -344,7 +368,6 @@ index_html = """
       </div>
     </a>
   {% endmacro %}
-  {# ---[CHANGE END] --- #}
 
   {% if is_full_page_list %}
     <div class="full-page-grid-container">
@@ -366,17 +389,25 @@ index_html = """
     
     <section class="nav-grid-container container">
         <div class="nav-grid">
-            <a href="{{ url_for('home') }}" class="nav-grid-item"><i class="fas fa-home"></i> HOME</a>
+            <a href="{{ url_for('home') }}" class="nav-grid-item">
+                <i class="fas {{ category_icons.get('HOME', 'fa-tag') }}"></i> HOME
+            </a>
             {% for cat in predefined_categories %}
-                <a href="{{ url_for('movies_by_category', name=cat) }}" class="nav-grid-item {% if '18+' in cat %}nav-grid-item--adult{% endif %}">
+                <a href="{{ url_for('movies_by_category', name=cat) }}" class="nav-grid-item">
                     {% if '18+' in cat %}
                         <span class="icon-18">18</span>
+                    {% else %}
+                        <i class="fas {{ category_icons.get(cat, 'fa-tag') }}"></i>
                     {% endif %}
                     {{ cat }}
                 </a>
             {% endfor %}
-            <a href="{{ url_for('all_movies') }}" class="nav-grid-item">ALL MOVIES</a>
-            <a href="{{ url_for('all_series') }}" class="nav-grid-item">WEB SERIES & TV SHOWS</a>
+            <a href="{{ url_for('all_movies') }}" class="nav-grid-item">
+                <i class="fas {{ category_icons.get('ALL MOVIES', 'fa-tag') }}"></i> ALL MOVIES
+            </a>
+            <a href="{{ url_for('all_series') }}" class="nav-grid-item">
+                <i class="fas {{ category_icons.get('WEB SERIES & TV SHOWS', 'fa-tag') }}"></i> WEB SERIES & TV SHOWS
+            </a>
         </div>
     </section>
 
