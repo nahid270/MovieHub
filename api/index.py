@@ -138,7 +138,7 @@ index_html = """
     --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a;
     --text-light: #ffffff; --text-dark: #a0a0a0; --nav-height: 60px;
     --cyan-accent: #00FFFF; --yellow-accent: #FFFF00; --trending-color: #F83D61;
-    --type-color: #00E599;
+    --type-color: #00E599; --update-badge-glow: #00e599;
   }
   @keyframes rgb-glow {
     0%   { border-color: #ff00de; box-shadow: 0 0 5px #ff00de, 0 0 10px #ff00de inset; }
@@ -150,6 +150,11 @@ index_html = """
   @keyframes pulse-glow {
     0%, 100% { color: var(--text-dark); text-shadow: none; }
     50% { color: var(--text-light); text-shadow: 0 0 10px var(--cyan-accent); }
+  }
+  @keyframes badge-glow {
+    0% { border-color: var(--update-badge-glow); box-shadow: 0 0 3px var(--update-badge-glow); }
+    50% { border-color: var(--update-badge-glow); box-shadow: 0 0 10px var(--update-badge-glow); }
+    100% { border-color: var(--update-badge-glow); box-shadow: 0 0 3px var(--update-badge-glow); }
   }
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
   body {font-family: 'Poppins', sans-serif;background-color: var(--bg-color);color: var(--text-light);overflow-x: hidden; padding-bottom: 70px;}
@@ -168,11 +173,8 @@ index_html = """
   .nav-grid-item i { margin-right: 6px; font-size: 1em; }
   .icon-18 { font-family: sans-serif; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 1; margin-right: 6px; font-weight: bold; }
   
-  @keyframes cyan-glow {
-      0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
-  }
   .hero-slider-section { margin-bottom: 30px; }
-  .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); border-radius: 12px; overflow: hidden; animation: cyan-glow 5s infinite linear; }
+  .hero-slider { width: 100%; aspect-ratio: 16 / 9; background-color: var(--card-bg); border-radius: 12px; overflow: hidden; }
   .hero-slider .swiper-slide { position: relative; display: block; }
   .hero-slider .hero-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
   .hero-slider .hero-slide-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 40%, transparent 70%); z-index: 2; }
@@ -190,7 +192,7 @@ index_html = """
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; padding: 6px 15px; border-radius: 20px; background-color: #222; transition: all 0.3s ease; animation: pulse-glow 2.5s ease-in-out infinite; }
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
 
-  /* --- [START] UPDATED MOVIE CARD STYLES --- */
+  /* --- [START] UPDATED MOVIE CARD STYLES (v2) --- */
   .movie-card { 
     display: flex;
     flex-direction: column;
@@ -198,12 +200,9 @@ index_html = """
     border-radius: 8px; 
     overflow: hidden; 
     background-color: var(--card-bg); 
-    border: 2px solid; 
+    border: 1px solid #282828;
     text-decoration: none;
   }
-  .movie-card:nth-child(4n+1), .movie-card:nth-child(4n+4) { border-color: var(--yellow-accent); }
-  .movie-card:nth-child(4n+2), .movie-card:nth-child(4n+3) { border-color: var(--cyan-accent); }
-  
   .poster-container {
     position: relative;
   }
@@ -215,31 +214,48 @@ index_html = """
   }
   .card-info { 
     padding: 12px 10px;
-    text-align: left;
+    text-align: center;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
-  }
-  .card-title { 
-    font-size: 0.9rem; 
-    font-weight: 600;
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    color: var(--text-light);
-    margin: 0 0 4px 0;
+    gap: 6px;
   }
   .card-meta { 
     font-size: 0.75rem; 
     color: #b0b0b0; 
-    display: flex; 
-    align-items: center; 
-    gap: 5px; 
     margin: 0;
   }
-  .card-meta i { color: var(--cyan-accent); }
-  
+  .update-badge {
+    display: inline-block;
+    border: 1.5px solid var(--update-badge-glow);
+    color: var(--update-badge-glow);
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 auto;
+    animation: badge-glow 2s infinite;
+  }
+  .card-title { 
+    font-size: 1rem; 
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    color: var(--text-light);
+    margin: 0;
+  }
+  .card-subtitle {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+  }
   .type-tag, .trending-tag, .language-tag { 
     position: absolute; 
     color: white; 
@@ -250,9 +266,9 @@ index_html = """
     text-transform: uppercase; 
     border-radius: 4px;
   }
-  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--primary-color); }
+  .language-tag { bottom: 8px; left: 8px; background-color: #0088cc; }
   .trending-tag { top: 8px; left: -1px; background-color: var(--trending-color); clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%); padding-right: 15px; border-radius:0; }
-  .language-tag { top: 8px; right: 8px; background-color: var(--primary-color); }
   /* --- [END] UPDATED MOVIE CARD STYLES --- */
 
   .full-page-grid-container { padding: 80px 10px 20px; }
@@ -315,7 +331,7 @@ index_html = """
     </div>
 </div>
 <main>
-  {# --- [START] UPDATED MOVIE CARD MACRO --- #}
+  {# --- [START] FINAL MOVIE CARD MACRO --- #}
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
       <div class="poster-container">
@@ -325,15 +341,18 @@ index_html = """
         <span class="type-tag">{{ m.type | title }}</span>
       </div>
       <div class="card-info">
-        <h4 class="card-title">{{ m.title }}</h4>
-        <p class="card-meta">
-          {% if m.release_date %}<i class="fas fa-calendar-alt"></i> {{ m.release_date.split('-')[0] }} &nbsp;&nbsp;{% endif %}
-          <i class="fas fa-clock"></i> {{ m._id | time_ago }}
-        </p>
+        <p class="card-meta">{{ m._id | time_ago }}</p>
+        {% if m.update_badge %}
+            <div class="update-badge">{{ m.update_badge }}</div>
+        {% endif %}
+        <h4 class="card-title">{{ m.title }} {% if m.release_date %}({{ m.release_date.split('-')[0] }}){% endif %}</h4>
+        {% if m.subtitle %}
+            <p class="card-subtitle">{{ m.subtitle }}</p>
+        {% endif %}
       </div>
     </a>
   {% endmacro %}
-  {# --- [END] UPDATED MOVIE CARD MACRO --- #}
+  {# --- [END] FINAL MOVIE CARD MACRO --- #}
 
   {% if is_full_page_list %}
     <div class="full-page-grid-container">
@@ -1011,6 +1030,10 @@ admin_html = """
         <input type="hidden" name="form_action" value="add_content"><input type="hidden" name="tmdb_id" id="tmdb_id">
         <fieldset><legend>Core Details</legend>
             <div class="form-group"><label>Title:</label><input type="text" name="title" id="title" required></div>
+            {# <!-- NEW FIELDS ADDED HERE --> #}
+            <div class="form-group"><label>Subtitle / Display Title (Optional):</label><input type="text" name="subtitle" id="subtitle" placeholder="e.g., S01 [Ep01-16 Added]"></div>
+            <div class="form-group"><label>Update Badge Text (Optional):</label><input type="text" name="update_badge" id="update_badge" placeholder="e.g., S01 | Ep 16 Added"></div>
+            {# <!-- END OF NEW FIELDS --> #}
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
@@ -1149,6 +1172,10 @@ edit_html = """
   <form method="post">
     <fieldset><legend>Core Details</legend>
         <div class="form-group"><label>Title:</label><input type="text" name="title" value="{{ movie.title }}" required></div>
+        {# <!-- NEW FIELDS ADDED HERE --> #}
+        <div class="form-group"><label>Subtitle / Display Title (Optional):</label><input type="text" name="subtitle" value="{{ movie.subtitle or '' }}"></div>
+        <div class="form-group"><label>Update Badge Text (Optional):</label><input type="text" name="update_badge" value="{{ movie.update_badge or '' }}"></div>
+        {# <!-- END OF NEW FIELDS --> #}
         <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
         <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
@@ -1329,7 +1356,10 @@ def admin():
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
             movie_data = {
-                "title": request.form.get("title").strip(), "type": content_type,
+                "title": request.form.get("title").strip(), 
+                "subtitle": request.form.get("subtitle", "").strip(), # NEW
+                "update_badge": request.form.get("update_badge", "").strip(), # NEW
+                "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None,
                 "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
@@ -1393,7 +1423,10 @@ def edit_movie(movie_id):
     if request.method == "POST":
         content_type = request.form.get("content_type")
         update_data = {
-            "title": request.form.get("title").strip(), "type": content_type,
+            "title": request.form.get("title").strip(),
+            "subtitle": request.form.get("subtitle", "").strip(), # NEW
+            "update_badge": request.form.get("update_badge", "").strip(), # NEW
+            "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
             "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
