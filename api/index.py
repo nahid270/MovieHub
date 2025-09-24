@@ -164,6 +164,7 @@ index_html = """
     --text-light: #ffffff; --text-dark: #a0a0a0; --nav-height: 60px;
     --cyan-accent: #00FFFF; --yellow-accent: #FFFF00; --trending-color: #F83D61;
     --type-color: #00E599; --new-color: #ffc107;
+    --search-accent-color: #00bfff; /* Color for the new search bar */
   }
   @keyframes rgb-glow {
     0%   { border-color: #ff00de; box-shadow: 0 0 5px #ff00de, 0 0 10px #ff00de inset; }
@@ -186,7 +187,6 @@ index_html = """
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
   
-  /* MODIFIED: Category Button Design - Made Smaller */
   .nav-grid-container { padding: 15px 0; }
   .nav-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .nav-grid-item {
@@ -194,10 +194,10 @@ index_html = """
     align-items: center;
     justify-content: center;
     color: white;
-    padding: 6px 12px; /* Reduced padding */
-    border-radius: 6px; /* Slightly smaller radius */
-    font-size: 0.75rem;   /* Reduced font size */
-    font-weight: 500;   /* Slightly lighter weight */
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
     text-decoration: none;
     transition: all 0.3s ease;
@@ -211,8 +211,8 @@ index_html = """
     filter: brightness(1.1);
   }
   .nav-grid-item i {
-    margin-right: 6px; /* Reduced margin */
-    font-size: 1em; /* Adjusted icon size */
+    margin-right: 6px;
+    font-size: 1em;
     line-height: 1;
   }
   .icon-18 {
@@ -222,13 +222,56 @@ index_html = """
     justify-content: center;
     border: 1.5px solid white;
     border-radius: 50%;
-    width: 16px; /* Smaller */
-    height: 16px; /* Smaller */
-    font-size: 10px; /* Smaller */
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
     line-height: 1;
     margin-right: 6px;
     font-weight: bold;
   }
+
+  /* START: New Home Page Search Bar Styles */
+  .home-search-section {
+      padding: 10px 0 20px 0;
+  }
+  .home-search-form {
+      display: flex;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      border: 2px solid var(--search-accent-color);
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: var(--card-bg);
+  }
+  .home-search-input {
+      flex-grow: 1;
+      border: none;
+      background-color: transparent;
+      color: var(--text-light);
+      padding: 12px 20px;
+      font-size: 1rem;
+      outline: none;
+  }
+  .home-search-input::placeholder {
+      color: var(--text-dark);
+  }
+  .home-search-button {
+      background-color: var(--search-accent-color);
+      border: none;
+      color: white;
+      padding: 0 25px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s ease;
+  }
+  .home-search-button:hover {
+      filter: brightness(1.1);
+  }
+  /* END: New Home Page Search Bar Styles */
 
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -252,7 +295,6 @@ index_html = """
   .view-all-link { font-size: 0.9rem; color: var(--text-dark); font-weight: 500; padding: 6px 15px; border-radius: 20px; background-color: #222; transition: all 0.3s ease; animation: pulse-glow 2.5s ease-in-out infinite; }
   .category-grid, .full-page-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
 
-  /* New Movie Card Layout CSS */
   .movie-card {
     display: flex;
     flex-direction: column;
@@ -410,6 +452,17 @@ index_html = """
             </a>
         </div>
     </section>
+
+    <!-- START: New Search Bar Section -->
+    <section class="home-search-section container">
+        <form action="{{ url_for('home') }}" method="get" class="home-search-form">
+            <input type="text" name="q" class="home-search-input" placeholder="সার্চ করে খুঁজে নিন আপনার পছন্দের ...">
+            <button type="submit" class="home-search-button" aria-label="Search">
+                <i class="fas fa-search"></i>
+            </button>
+        </form>
+    </section>
+    <!-- END: New Search Bar Section -->
 
     {% if slider_content %}
     <section class="hero-slider-section container">
