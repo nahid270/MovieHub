@@ -658,6 +658,18 @@ detail_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; }
 
+  /* START: New Screenshot Gallery Styles */
+  .screenshots-section { margin: 40px 0; }
+  .screenshots-section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+  .gallery-top { border-radius: 10px; margin-bottom: 10px; background: #111; }
+  .gallery-top .swiper-slide { background-size: cover; background-position: center; }
+  .gallery-top .swiper-slide img { display: block; width: 100%; height: auto; object-fit: contain; }
+  .gallery-thumbs { height: 100px; }
+  .gallery-thumbs .swiper-slide { width: 25%; height: 100%; opacity: 0.5; transition: opacity 0.3s; }
+  .gallery-thumbs .swiper-slide-thumb-active { opacity: 1; border: 2px solid var(--primary-color); border-radius: 5px; }
+  .gallery-thumbs .swiper-slide img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+  /* END: New Screenshot Gallery Styles */
+
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
     .detail-hero { padding: 120px 0 60px; }
@@ -669,6 +681,7 @@ detail_html = """
     .episode-item { flex-direction: row; justify-content: space-between; align-items: center; }
     .movie-carousel .swiper-slide { width: 220px; }
     .swiper-button-next, .swiper-button-prev { display: flex; }
+    .gallery-thumbs { height: 150px; }
   }
 </style>
 </head>
@@ -799,6 +812,35 @@ detail_html = """
             {% endif %}
         </div>
     </div>
+    
+    <!-- START: Screenshots Section -->
+    {% if movie.screenshots %}
+    <section class="screenshots-section">
+        <h2><i class="fas fa-images"></i> Screenshots</h2>
+        <div class="swiper gallery-top">
+            <div class="swiper-wrapper">
+                {% for ss in movie.screenshots %}
+                <div class="swiper-slide">
+                    <img src="{{ ss }}" loading="lazy" alt="Screenshot of {{ movie.title }}">
+                </div>
+                {% endfor %}
+            </div>
+            <div class="swiper-button-next"></div>
+            <div class="swiper-button-prev"></div>
+        </div>
+        <div class="swiper gallery-thumbs">
+            <div class="swiper-wrapper">
+                {% for ss in movie.screenshots %}
+                <div class="swiper-slide">
+                    <img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+    <!-- END: Screenshots Section -->
+
     {% if related_content %}
     <section class="category-section">
         <div class="category-header">
@@ -842,6 +884,28 @@ detail_html = """
             prevEl: '.swiper-button-prev',
         }
     });
+
+    // START: New Screenshot Gallery JS
+    if (document.querySelector('.gallery-thumbs')) {
+        var galleryThumbs = new Swiper('.gallery-thumbs', {
+            spaceBetween: 10,
+            slidesPerView: 4,
+            freeMode: true,
+            watchSlidesVisibility: true,
+            watchSlidesProgress: true,
+        });
+        var galleryTop = new Swiper('.gallery-top', {
+            spaceBetween: 10,
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+            thumbs: {
+                swiper: galleryThumbs
+            }
+        });
+    }
+    // END: New Screenshot Gallery JS
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
@@ -1111,6 +1175,12 @@ admin_html = """
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
+            <!-- START: New Screenshots Field -->
+            <div class="form-group">
+                <label>Screenshots (Paste one URL per line):</label>
+                <textarea name="screenshots" rows="5"></textarea>
+            </div>
+            <!-- END: New Screenshots Field -->
             <div class="form-group"><label>Language:</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
@@ -1249,6 +1319,12 @@ edit_html = """
         <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
         <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
+        <!-- START: New Screenshots Field for Editing -->
+        <div class="form-group">
+            <label>Screenshots (Paste one URL per line):</label>
+            <textarea name="screenshots" rows="5">{{ movie.screenshots|join('\n') if movie.screenshots }}</textarea>
+        </div>
+        <!-- END: New Screenshots Field for Editing -->
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
@@ -1428,11 +1504,17 @@ def admin():
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
+            # START: Process Screenshots
+            screenshots_text = request.form.get("screenshots", "").strip()
+            screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
+            # END: Process Screenshots
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
+                "overview": request.form.get("overview").strip(), 
+                "screenshots": screenshots_list, # Add screenshots to database
+                "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()
@@ -1492,11 +1574,17 @@ def edit_movie(movie_id):
     
     if request.method == "POST":
         content_type = request.form.get("content_type")
+        # START: Process Screenshots for editing
+        screenshots_text = request.form.get("screenshots", "").strip()
+        screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
+        # END: Process Screenshots
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
-            "overview": request.form.get("overview").strip(), "language": request.form.get("language").strip() or None,
+            "overview": request.form.get("overview").strip(), 
+            "screenshots": screenshots_list, # Add screenshots to update data
+            "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow()
         }
