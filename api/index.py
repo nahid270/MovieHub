@@ -316,8 +316,25 @@ index_html = """
     margin: 0 0 5px 0; line-height: 1.4; min-height: 2.8em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .card-meta { font-size: 0.75rem; color: var(--text-dark); display: flex; align-items: center; gap: 5px; }
-  .card-meta i { color: var(--cyan-accent); }
+  
+  /* ## START: VIEW COUNT CSS CHANGE ## */
+  .card-meta { 
+    font-size: 0.75rem; 
+    color: var(--text-dark); 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; /* This creates the left/right alignment */
+  }
+  .card-meta span { /* Style for the inner groups (time and views) */
+      display: flex;
+      align-items: center;
+      gap: 5px;
+  }
+  .card-meta i { 
+      color: var(--cyan-accent); 
+  }
+  /* ## END: VIEW COUNT CSS CHANGE ## */
+
   .type-tag, .language-tag {
     position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
   }
@@ -404,9 +421,12 @@ index_html = """
           {{ m.title }}
           {% if m.release_date %} ({{ m.release_date.split('-')[0] }}){% endif %}
         </h4>
+        <!-- ## START: VIEW COUNT HTML CHANGE ## -->
         <p class="card-meta">
-          <i class="fas fa-clock"></i> {{ m._id | time_ago }}
+          <span><i class="fas fa-clock"></i> {{ m._id | time_ago }}</span>
+          <span><i class="fas fa-eye"></i> {{ '{:,.0f}'.format(m.view_count or 0) }}</span>
         </p>
+        <!-- ## END: VIEW COUNT HTML CHANGE ## -->
       </div>
     </a>
   {% endmacro %}
@@ -1428,7 +1448,15 @@ def home():
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
     try:
-        movie = movies.find_one({"_id": ObjectId(movie_id)})
+        # ## START: VIEW COUNT CHANGE ##
+        # Find the movie and increment its view count in one atomic operation
+        movie = movies.find_one_and_update(
+            {"_id": ObjectId(movie_id)},
+            {"$inc": {"view_count": 1}},
+            return_document=True # Returns the updated document
+        )
+        # ## END: VIEW COUNT CHANGE ##
+        
         if not movie: return "Content not found", 404
         related_content = list(movies.find({"type": movie.get('type'), "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
@@ -1504,20 +1532,19 @@ def admin():
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
-            # START: Process Screenshots
             screenshots_text = request.form.get("screenshots", "").strip()
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
-            # END: Process Screenshots
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None,
                 "overview": request.form.get("overview").strip(), 
-                "screenshots": screenshots_list, # Add screenshots to database
+                "screenshots": screenshots_list,
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
-                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
+                "view_count": 0  # ## VIEW COUNT CHANGE: Initialize with 0 ##
             }
             tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
@@ -1574,16 +1601,14 @@ def edit_movie(movie_id):
     
     if request.method == "POST":
         content_type = request.form.get("content_type")
-        # START: Process Screenshots for editing
         screenshots_text = request.form.get("screenshots", "").strip()
         screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
-        # END: Process Screenshots
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None,
             "overview": request.form.get("overview").strip(), 
-            "screenshots": screenshots_list, # Add screenshots to update data
+            "screenshots": screenshots_list,
             "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow()
