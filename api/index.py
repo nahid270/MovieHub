@@ -1,7 +1,7 @@
 import os
 import sys
 import requests
-import json  # <--- টেলিগ্রামের জন্য নতুন যোগ করা হয়েছে
+import json
 from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -17,11 +17,10 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid270270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 
-# --- [START] টেলিগ্রাম নোটিফিকেশনের জন্য নতুন ভেরিয়েবল ---
+# --- Telegram Notification Variables (from Vercel Environment Variables) ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
-WEBSITE_URL = os.environ.get("WEBSITE_URL", "http://127.0.0.1:3000") # আপনার লাইভ ওয়েবসাইটের URL এখানে দিন
-# --- [END] টেলিগ্রাম নোটিফিকেশনের জন্য নতুন ভেরিয়েবল ---
+WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
@@ -91,50 +90,100 @@ except Exception as e:
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
-# --- [START] টেলিগ্রাম নোটিফিকেশন পাঠানোর জন্য নতুন ফাংশন ---
+# --- [START] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন ---
 def send_telegram_notification(movie_data, inserted_id):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
         return
 
     try:
-        # মুভির বিস্তারিত পেজের লিঙ্ক তৈরি
+        # মুভির বিস্তারিত পেজের লিঙ্ক
         movie_url = f"{WEBSITE_URL}/movie/{str(inserted_id)}"
         
-        # পোস্টের ক্যাপশন তৈরি
-        caption = f"🎬 **{movie_data['title']}**\n\nNew content has been added to {WEBSITE_NAME}!"
+        # --- নতুন ফরম্যাটের জন্য তথ্য প্রস্তুত করা ---
         
-        # 'Watch Now' বাটন তৈরি
+        # Quality বের করা
+        available_qualities = []
+        if movie_data.get('links'):
+            for link in movie_data['links']:
+                if link.get('quality'):
+                    available_qualities.append(link['quality'])
+        
+        if not available_qualities and movie_data.get('manual_links'):
+            available_qualities.append("480p, 720p, 1080p")
+            
+        quality_str = ", ".join(sorted(available_qualities)) if available_qualities else "N/A"
+
+        # Language প্রস্তুত করা
+        language_str = movie_data.get('language', 'N/A')
+
+        # Genres প্রস্তুত করা
+        genres_list = movie_data.get('genres', [])
+        genres_str = ", ".join(genres_list) if genres_list else "N/A"
+
+        # Overview বা সংক্ষিপ্ত রিভিউ প্রস্তুত করা
+        overview = movie_data.get('overview', '').strip()
+        review_section = f"\n💬 {overview}\n" if overview else ""
+
+        # --- সম্পূর্ণ ক্যাপশন তৈরি করা ---
+        caption = f"**🔥 NEW ADDED : {movie_data['title']}**\n"
+        caption += review_section
+        caption += f"\n🎞️ **Quality:** {quality_str}"
+        caption += f"\n🌐 **Language:** {language_str}"
+        caption += f"\n🎭 **Genres:** {genres_str}"
+        
+        # --- বাটন তৈরি করা ---
+        # URL থেকে https:// এবং www. বাদ দেওয়া
+        clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
         inline_keyboard = {
             "inline_keyboard": [
-                [{"text": "🍿 Watch / Download Now", "url": movie_url}]
+                [{"text": f"🔗 Visit : {clean_url}", "url": movie_url}]
             ]
         }
+        
+        # সতর্কবার্তা
+        warning_text = "⚠️ _অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!_"
 
-        # টেলিগ্রাম API-এর URL এবং ডেটা প্রস্তুত
-        api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-        payload = {
+        # --- টেলিগ্রাম API-এর জন্য ডেটা প্রস্তুত করা ---
+        # ফটো পোস্ট করার URL
+        api_url_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        
+        # ফটো পোস্ট করার জন্য ডেটা
+        payload_photo = {
             'chat_id': TELEGRAM_CHANNEL_ID,
             'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
             'caption': caption,
             'parse_mode': 'Markdown',
             'reply_markup': json.dumps(inline_keyboard)
         }
-
-        # রিকোয়েস্ট পাঠানো
-        response = requests.post(api_url, data=payload, timeout=10)
-        response.raise_for_status()
         
-        if response.json().get('ok'):
-            print(f"SUCCESS: Telegram notification sent for '{movie_data['title']}'.")
+        # প্রথম রিকোয়েস্ট: ফটো এবং মূল তথ্য পাঠানো
+        response_photo = requests.post(api_url_photo, data=payload_photo, timeout=15)
+        response_photo.raise_for_status()
+        
+        if response_photo.json().get('ok'):
+            print(f"SUCCESS: Telegram photo notification sent for '{movie_data['title']}'.")
+            
+            # সতর্কবার্তা আলাদা মেসেজ হিসেবে পাঠানোর URL
+            api_url_message = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            # মেসেজ পাঠানোর জন্য ডেটা
+            payload_warning = {
+                'chat_id': TELEGRAM_CHANNEL_ID,
+                'text': warning_text,
+                'parse_mode': 'Markdown'
+            }
+            # দ্বিতীয় রিকোয়েস্ট: সতর্কবার্তা পাঠানো
+            response_warning = requests.post(api_url_message, data=payload_warning, timeout=10)
+            if not response_warning.json().get('ok'):
+                 print(f"WARNING: Could not send the warning message to Telegram: {response_warning.json().get('description')}")
         else:
-            print(f"WARNING: Telegram API returned an error: {response.json().get('description')}")
+            print(f"WARNING: Telegram API returned an error for photo post: {response_photo.json().get('description')}")
 
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Failed to send Telegram notification: {e}")
     except Exception as e:
         print(f"ERROR: An unexpected error occurred in send_telegram_notification: {e}")
-# --- [END] টেলিগ্রাম নোটিফিকেশন পাঠানোর জন্য নতুন ফাংশন ---
+# --- [END] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন ---
 
 # --- Custom Jinja Filter for Relative Time ---
 def time_ago(obj_id):
@@ -264,6 +313,7 @@ index_html = """
     font-weight: bold;
   }
 
+  /* START: New Home Page Search Bar Styles */
   .home-search-section {
       padding: 10px 0 20px 0;
   }
@@ -304,6 +354,7 @@ index_html = """
   .home-search-button:hover {
       filter: brightness(1.1);
   }
+  /* END: New Home Page Search Bar Styles */
 
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -349,14 +400,15 @@ index_html = """
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   
+  /* ## START: VIEW COUNT CSS CHANGE ## */
   .card-meta { 
     font-size: 0.75rem; 
     color: var(--text-dark); 
     display: flex; 
     align-items: center; 
-    justify-content: space-between;
+    justify-content: space-between; /* This creates the left/right alignment */
   }
-  .card-meta span {
+  .card-meta span { /* Style for the inner groups (time and views) */
       display: flex;
       align-items: center;
       gap: 5px;
@@ -364,6 +416,7 @@ index_html = """
   .card-meta i { 
       color: var(--cyan-accent); 
   }
+  /* ## END: VIEW COUNT CSS CHANGE ## */
 
   .type-tag, .language-tag {
     position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
@@ -451,10 +504,12 @@ index_html = """
           {{ m.title }}
           {% if m.release_date %} ({{ m.release_date.split('-')[0] }}){% endif %}
         </h4>
+        <!-- ## START: VIEW COUNT HTML CHANGE ## -->
         <p class="card-meta">
           <span><i class="fas fa-clock"></i> {{ m._id | time_ago }}</span>
           <span><i class="fas fa-eye"></i> {{ '{:,.0f}'.format(m.view_count or 0) }}</span>
         </p>
+        <!-- ## END: VIEW COUNT HTML CHANGE ## -->
       </div>
     </a>
   {% endmacro %}
@@ -501,6 +556,7 @@ index_html = """
         </div>
     </section>
 
+    <!-- START: New Search Bar Section -->
     <section class="home-search-section container">
         <form action="{{ url_for('home') }}" method="get" class="home-search-form">
             <input type="text" name="q" class="home-search-input" placeholder="সার্চ করে খুঁজে নিন আপনার পছন্দের ...">
@@ -509,6 +565,7 @@ index_html = """
             </button>
         </form>
     </section>
+    <!-- END: New Search Bar Section -->
 
     {% if slider_content %}
     <section class="hero-slider-section container">
@@ -704,6 +761,7 @@ detail_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; }
 
+  /* START: New Screenshot Gallery Styles */
   .screenshots-section { margin: 40px 0; }
   .screenshots-section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
   .gallery-top { border-radius: 10px; margin-bottom: 10px; background: #111; }
@@ -713,6 +771,7 @@ detail_html = """
   .gallery-thumbs .swiper-slide { width: 25%; height: 100%; opacity: 0.5; transition: opacity 0.3s; }
   .gallery-thumbs .swiper-slide-thumb-active { opacity: 1; border: 2px solid var(--primary-color); border-radius: 5px; }
   .gallery-thumbs .swiper-slide img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+  /* END: New Screenshot Gallery Styles */
 
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
@@ -857,6 +916,7 @@ detail_html = """
         </div>
     </div>
     
+    <!-- START: Screenshots Section -->
     {% if movie.screenshots %}
     <section class="screenshots-section">
         <h2><i class="fas fa-images"></i> Screenshots</h2>
@@ -882,6 +942,7 @@ detail_html = """
         </div>
     </section>
     {% endif %}
+    <!-- END: Screenshots Section -->
 
     {% if related_content %}
     <section class="category-section">
@@ -927,6 +988,7 @@ detail_html = """
         }
     });
 
+    // START: New Screenshot Gallery JS
     if (document.querySelector('.gallery-thumbs')) {
         var galleryThumbs = new Swiper('.gallery-thumbs', {
             spaceBetween: 10,
@@ -946,6 +1008,7 @@ detail_html = """
             }
         });
     }
+    // END: New Screenshot Gallery JS
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
@@ -1215,10 +1278,12 @@ admin_html = """
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
+            <!-- START: New Screenshots Field -->
             <div class="form-group">
                 <label>Screenshots (Paste one URL per line):</label>
                 <textarea name="screenshots" rows="5"></textarea>
             </div>
+            <!-- END: New Screenshots Field -->
             <div class="form-group"><label>Language:</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
@@ -1357,10 +1422,12 @@ edit_html = """
         <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
         <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
+        <!-- START: New Screenshots Field for Editing -->
         <div class="form-group">
             <label>Screenshots (Paste one URL per line):</label>
             <textarea name="screenshots" rows="5">{{ movie.screenshots|join('\n') if movie.screenshots }}</textarea>
         </div>
+        <!-- END: New Screenshots Field for Editing -->
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
@@ -1400,6 +1467,10 @@ edit_html = """
 </body></html>
 """
 
+# =========================================================================================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES =============================================
+# =========================================================================================
+
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
@@ -1432,9 +1503,7 @@ class Pagination:
     @property
     def next_num(self): return self.page + 1
 
-# =======================================================================================
-# === [START] FLASK ROUTES ==============================================================
-# =======================================================================================
+# --- Flask Routes ---
 @app.route('/')
 def home():
     query = request.args.get('q', '').strip()
@@ -1497,12 +1566,9 @@ def movies_by_category():
     page = request.args.get('page', 1, type=int)
     
     query_filter = {}
-    if title == "Latest Movies":
-        query_filter = {"type": "movie"}
-    elif title == "Latest Series":
-        query_filter = {"type": "series"}
-    else:
-        query_filter = {"categories": title}
+    if title == "Latest Movies": query_filter = {"type": "movie"}
+    elif title == "Latest Series": query_filter = {"type": "series"}
+    else: query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
@@ -1513,9 +1579,7 @@ def request_content():
         content_name = request.form.get('content_name', '').strip()
         extra_info = request.form.get('extra_info', '').strip()
         if content_name:
-            requests_collection.insert_one({
-                "name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()
-            })
+            requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
@@ -1552,8 +1616,7 @@ def admin():
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
-                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(),
-                "view_count": 0
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0
             }
             tmdb_id = request.form.get("tmdb_id")
             if tmdb_id:
@@ -1569,11 +1632,9 @@ def admin():
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
             
-            # --- [START] ডাটাবেজে কনটেন্ট যোগ করা এবং নোটিফিকেশন পাঠানো ---
             result = movies.insert_one(movie_data)
             if result.inserted_id:
                 send_telegram_notification(movie_data, result.inserted_id)
-            # --- [END] ---
 
         return redirect(url_for('admin'))
     
