@@ -18,9 +18,9 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid270270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 
 # --- [START] টেলিগ্রাম নোটিফিকেশনের জন্য নতুন ভেরিয়েবল ---
-TELEGRAM_BOT_TOKEN = os.environ.get("7995209759:AAFqir3wFLcW5WODmM6DfqSsivMq3X_ibH4")
-TELEGRAM_CHANNEL_ID = os.environ.get("-1003188773719")
-WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://freemoviehub.vercel.app/") # আপনার লাইভ ওয়েবসাইটের URL এখানে দিন
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "http://127.0.0.1:3000") # আপনার লাইভ ওয়েবসাইটের URL এখানে দিন
 # --- [END] টেলিগ্রাম নোটিফিকেশনের জন্য নতুন ভেরিয়েবল ---
 
 # --- Validate Environment Variables ---
