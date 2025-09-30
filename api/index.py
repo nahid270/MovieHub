@@ -90,7 +90,7 @@ except Exception as e:
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
-# --- [START] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন ---
+# --- [START] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন (আপনার দেখানো ফরম্যাট অনুযায়ী) ---
 def send_telegram_notification(movie_data, inserted_id):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
@@ -104,15 +104,15 @@ def send_telegram_notification(movie_data, inserted_id):
         
         # Quality বের করা
         available_qualities = []
-        if movie_data.get('links'):
+        if movie_data.get('links'): # মুভির জন্য
             for link in movie_data['links']:
                 if link.get('quality'):
                     available_qualities.append(link['quality'])
+        if not available_qualities: # যদি কোনো কোয়ালিটি না পাওয়া যায়, ডিফল্ট
+            available_qualities.append("BLU-RAY")
         
-        if not available_qualities and movie_data.get('manual_links'):
-            available_qualities.append("480p, 720p, 1080p")
-            
-        quality_str = ", ".join(sorted(available_qualities)) if available_qualities else "N/A"
+        # ডুপ্লিকেট বাদ দিয়ে ইউনিক কোয়ালিটি লিস্ট তৈরি
+        quality_str = ", ".join(sorted(list(set(available_qualities))))
 
         # Language প্রস্তুত করা
         language_str = movie_data.get('language', 'N/A')
@@ -120,36 +120,36 @@ def send_telegram_notification(movie_data, inserted_id):
         # Genres প্রস্তুত করা
         genres_list = movie_data.get('genres', [])
         genres_str = ", ".join(genres_list) if genres_list else "N/A"
-
-        # Overview বা সংক্ষিপ্ত রিভিউ প্রস্তুত করা
-        overview = movie_data.get('overview', '').strip()
-        review_section = f"\n💬 {overview}\n" if overview else ""
+        
+        # ওয়েবসাইটের পরিষ্কার URL বাটনের জন্য
+        clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
         # --- সম্পূর্ণ ক্যাপশন তৈরি করা ---
-        caption = f"**🔥 NEW ADDED : {movie_data['title']}**\n"
-        caption += review_section
-        caption += f"\n🎞️ **Quality:** {quality_str}"
-        caption += f"\n🌐 **Language:** {language_str}"
-        caption += f"\n🎭 **Genres:** {genres_str}"
+        # টাইটেল এবং অতিরিক্ত তথ্য (যেমন ORG HINDI)
+        caption = f"🔥 **NEW ADDED : {movie_data['title']}**\n"
+        if language_str and not any(char.isdigit() for char in language_str):
+             caption += f"**{language_str.upper()}**\n"
+
+        # বিস্তারিত তথ্য
+        caption += f"\n🎞️ Quality: **{quality_str}**"
+        caption += f"\n🌐 Language: **{language_str}**"
+        caption += f"\n🎭 Genres: **{genres_str}**"
         
+        # ভিজিট লিঙ্ক এবং সতর্কবার্তা
+        caption += f"\n\n🔗 Visit : **{clean_url}**"
+        caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
+
         # --- বাটন তৈরি করা ---
-        # URL থেকে https:// এবং www. বাদ দেওয়া
-        clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
         inline_keyboard = {
             "inline_keyboard": [
-                [{"text": f"🔗 Visit : {clean_url}", "url": movie_url}]
+                [{"text": "📥👇 Download Now 👇📥", "url": movie_url}]
             ]
         }
         
-        # সতর্কবার্তা
-        warning_text = "⚠️ _অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!_"
-
         # --- টেলিগ্রাম API-এর জন্য ডেটা প্রস্তুত করা ---
-        # ফটো পোস্ট করার URL
-        api_url_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
         
-        # ফটো পোস্ট করার জন্য ডেটা
-        payload_photo = {
+        payload = {
             'chat_id': TELEGRAM_CHANNEL_ID,
             'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
             'caption': caption,
@@ -157,27 +157,14 @@ def send_telegram_notification(movie_data, inserted_id):
             'reply_markup': json.dumps(inline_keyboard)
         }
         
-        # প্রথম রিকোয়েস্ট: ফটো এবং মূল তথ্য পাঠানো
-        response_photo = requests.post(api_url_photo, data=payload_photo, timeout=15)
-        response_photo.raise_for_status()
+        # একটি মাত্র রিকোয়েস্ট পাঠানো
+        response = requests.post(api_url, data=payload, timeout=15)
+        response.raise_for_status()
         
-        if response_photo.json().get('ok'):
-            print(f"SUCCESS: Telegram photo notification sent for '{movie_data['title']}'.")
-            
-            # সতর্কবার্তা আলাদা মেসেজ হিসেবে পাঠানোর URL
-            api_url_message = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            # মেসেজ পাঠানোর জন্য ডেটা
-            payload_warning = {
-                'chat_id': TELEGRAM_CHANNEL_ID,
-                'text': warning_text,
-                'parse_mode': 'Markdown'
-            }
-            # দ্বিতীয় রিকোয়েস্ট: সতর্কবার্তা পাঠানো
-            response_warning = requests.post(api_url_message, data=payload_warning, timeout=10)
-            if not response_warning.json().get('ok'):
-                 print(f"WARNING: Could not send the warning message to Telegram: {response_warning.json().get('description')}")
+        if response.json().get('ok'):
+            print(f"SUCCESS: Telegram notification sent successfully for '{movie_data['title']}'.")
         else:
-            print(f"WARNING: Telegram API returned an error for photo post: {response_photo.json().get('description')}")
+            print(f"WARNING: Telegram API returned an error: {response.json().get('description')}")
 
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Failed to send Telegram notification: {e}")
@@ -313,7 +300,6 @@ index_html = """
     font-weight: bold;
   }
 
-  /* START: New Home Page Search Bar Styles */
   .home-search-section {
       padding: 10px 0 20px 0;
   }
@@ -354,7 +340,6 @@ index_html = """
   .home-search-button:hover {
       filter: brightness(1.1);
   }
-  /* END: New Home Page Search Bar Styles */
 
   @keyframes cyan-glow {
       0% { box-shadow: 0 0 15px 2px #00D1FF; } 50% { box-shadow: 0 0 25px 6px #00D1FF; } 100% { box-shadow: 0 0 15px 2px #00D1FF; }
@@ -400,15 +385,14 @@ index_html = """
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   
-  /* ## START: VIEW COUNT CSS CHANGE ## */
   .card-meta { 
     font-size: 0.75rem; 
     color: var(--text-dark); 
     display: flex; 
     align-items: center; 
-    justify-content: space-between; /* This creates the left/right alignment */
+    justify-content: space-between;
   }
-  .card-meta span { /* Style for the inner groups (time and views) */
+  .card-meta span {
       display: flex;
       align-items: center;
       gap: 5px;
@@ -416,7 +400,6 @@ index_html = """
   .card-meta i { 
       color: var(--cyan-accent); 
   }
-  /* ## END: VIEW COUNT CSS CHANGE ## */
 
   .type-tag, .language-tag {
     position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
@@ -504,12 +487,10 @@ index_html = """
           {{ m.title }}
           {% if m.release_date %} ({{ m.release_date.split('-')[0] }}){% endif %}
         </h4>
-        <!-- ## START: VIEW COUNT HTML CHANGE ## -->
         <p class="card-meta">
           <span><i class="fas fa-clock"></i> {{ m._id | time_ago }}</span>
           <span><i class="fas fa-eye"></i> {{ '{:,.0f}'.format(m.view_count or 0) }}</span>
         </p>
-        <!-- ## END: VIEW COUNT HTML CHANGE ## -->
       </div>
     </a>
   {% endmacro %}
@@ -556,7 +537,6 @@ index_html = """
         </div>
     </section>
 
-    <!-- START: New Search Bar Section -->
     <section class="home-search-section container">
         <form action="{{ url_for('home') }}" method="get" class="home-search-form">
             <input type="text" name="q" class="home-search-input" placeholder="সার্চ করে খুঁজে নিন আপনার পছন্দের ...">
@@ -565,7 +545,6 @@ index_html = """
             </button>
         </form>
     </section>
-    <!-- END: New Search Bar Section -->
 
     {% if slider_content %}
     <section class="hero-slider-section container">
@@ -761,7 +740,6 @@ detail_html = """
   .card-meta { font-size: 0.8rem; color: var(--text-dark); }
   .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; }
 
-  /* START: New Screenshot Gallery Styles */
   .screenshots-section { margin: 40px 0; }
   .screenshots-section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
   .gallery-top { border-radius: 10px; margin-bottom: 10px; background: #111; }
@@ -771,7 +749,6 @@ detail_html = """
   .gallery-thumbs .swiper-slide { width: 25%; height: 100%; opacity: 0.5; transition: opacity 0.3s; }
   .gallery-thumbs .swiper-slide-thumb-active { opacity: 1; border: 2px solid var(--primary-color); border-radius: 5px; }
   .gallery-thumbs .swiper-slide img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-  /* END: New Screenshot Gallery Styles */
 
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
@@ -916,7 +893,6 @@ detail_html = """
         </div>
     </div>
     
-    <!-- START: Screenshots Section -->
     {% if movie.screenshots %}
     <section class="screenshots-section">
         <h2><i class="fas fa-images"></i> Screenshots</h2>
@@ -942,7 +918,6 @@ detail_html = """
         </div>
     </section>
     {% endif %}
-    <!-- END: Screenshots Section -->
 
     {% if related_content %}
     <section class="category-section">
@@ -988,7 +963,6 @@ detail_html = """
         }
     });
 
-    // START: New Screenshot Gallery JS
     if (document.querySelector('.gallery-thumbs')) {
         var galleryThumbs = new Swiper('.gallery-thumbs', {
             spaceBetween: 10,
@@ -1008,7 +982,6 @@ detail_html = """
             }
         });
     }
-    // END: New Screenshot Gallery JS
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
@@ -1278,13 +1251,11 @@ admin_html = """
             <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster"></div>
             <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop"></div>
             <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview"></textarea></div>
-            <!-- START: New Screenshots Field -->
             <div class="form-group">
                 <label>Screenshots (Paste one URL per line):</label>
                 <textarea name="screenshots" rows="5"></textarea>
             </div>
-            <!-- END: New Screenshots Field -->
-            <div class="form-group"><label>Language:</label><input type="text" name="language" id="language" placeholder="e.g., Hindi"></div>
+            <div class="form-group"><label>Language:</label><input type="text" name="language" id="language" placeholder="e.g., Hindi, English, Dual Audio"></div>
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
@@ -1294,6 +1265,7 @@ admin_html = """
                 <div class="link-pair"><label>480p Watch Link:<input type="url" name="watch_link_480p"></label><label>480p Download Link:<input type="url" name="download_link_480p"></label></div>
                 <div class="link-pair"><label>720p Watch Link:<input type="url" name="watch_link_720p"></label><label>720p Download Link:<input type="url" name="download_link_720p"></label></div>
                 <div class="link-pair"><label>1080p Watch Link:<input type="url" name="watch_link_1080p"></label><label>1080p Download Link:<input type="url" name="download_link_1080p"></label></div>
+                 <div class="link-pair"><label>BLU-RAY Watch Link:<input type="url" name="watch_link_BLU-RAY"></label><label>BLU-RAY Download Link:<input type="url" name="download_link_BLU-RAY"></label></div>
             </fieldset>
         </div>
         <div id="episode_fields" style="display: none;">
@@ -1422,12 +1394,10 @@ edit_html = """
         <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
         <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
         <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
-        <!-- START: New Screenshots Field for Editing -->
         <div class="form-group">
             <label>Screenshots (Paste one URL per line):</label>
             <textarea name="screenshots" rows="5">{{ movie.screenshots|join('\n') if movie.screenshots }}</textarea>
         </div>
-        <!-- END: New Screenshots Field for Editing -->
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
@@ -1438,9 +1408,11 @@ edit_html = """
             {% set links_480p = movie.links|selectattr('quality', 'equalto', '480p')|first if movie.links else None %}
             {% set links_720p = movie.links|selectattr('quality', 'equalto', '720p')|first if movie.links else None %}
             {% set links_1080p = movie.links|selectattr('quality', 'equalto', '1080p')|first if movie.links else None %}
+            {% set links_bluray = movie.links|selectattr('quality', 'equalto', 'BLU-RAY')|first if movie.links else None %}
             <div class="link-pair"><label>480p Watch Link:<input type="url" name="watch_link_480p" value="{{ links_480p.watch_url if links_480p else '' }}"></label><label>480p Download Link:<input type="url" name="download_link_480p" value="{{ links_480p.download_url if links_480p else '' }}"></label></div>
             <div class="link-pair"><label>720p Watch Link:<input type="url" name="watch_link_720p" value="{{ links_720p.watch_url if links_720p else '' }}"></label><label>720p Download Link:<input type="url" name="download_link_720p" value="{{ links_720p.download_url if links_720p else '' }}"></label></div>
             <div class="link-pair"><label>1080p Watch Link:<input type="url" name="watch_link_1080p" value="{{ links_1080p.watch_url if links_1080p else '' }}"></label><label>1080p Download Link:<input type="url" name="download_link_1080p" value="{{ links_1080p.download_url if links_1080p else '' }}"></label></div>
+            <div class="link-pair"><label>BLU-RAY Watch Link:<input type="url" name="watch_link_BLU-RAY" value="{{ links_bluray.watch_url if links_bluray else '' }}"></label><label>BLU-RAY Download Link:<input type="url" name="download_link_BLU-RAY" value="{{ links_bluray.download_url if links_bluray else '' }}"></label></div>
         </fieldset>
     </div>
     <div id="episode_fields" style="display: none;">
@@ -1623,7 +1595,8 @@ def admin():
                 tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
             if content_type == "movie":
-                movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in ["480p", "720p", "1080p"] if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
+                qualities = ["480p", "720p", "1080p", "BLU-RAY"]
+                movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             else:
                 sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
@@ -1692,7 +1665,8 @@ def edit_movie(movie_id):
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         if content_type == "movie":
-            update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in ["480p", "720p", "1080p"] if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
+            qualities = ["480p", "720p", "1080p", "BLU-RAY"]
+            update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
         else:
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
