@@ -69,7 +69,7 @@ try:
         movies.create_index("type")
         movies.create_index("categories")
         movies.create_index("updated_at")
-        movies.create_index("tmdb_id") # [NEW] TMDB ID-এর জন্য ইনডেক্স
+        movies.create_index("tmdb_id")
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
@@ -183,7 +183,7 @@ def inject_globals():
 # =========================================================================================
 # === [START] HTML TEMPLATES ==============================================================
 # =========================================================================================
-# (index_html, detail_html, wait_page_html, request_html - কোনো পরিবর্তন নেই, তাই এখানে অন্তর্ভুক্ত করা হলো না)
+
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -647,6 +647,7 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -662,17 +663,62 @@ detail_html = """
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 {{ ad_settings.ad_header | safe }}
 <style>
-  :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #000000;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
+  :root {--primary-color: #E50914; --watch-color: #007bff; --bg-color: #121212;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0;}
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden;}
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
-  .detail-hero { position: relative; padding: 100px 0 50px; min-height: 60vh; display: flex; align-items: center; }
-  .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(15px) brightness(0.3); transform: scale(1.1); }
-  .detail-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, var(--bg-color) 0%, rgba(12,12,12,0.7) 40%, transparent 100%); }
-  .detail-content { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
-  .detail-poster { width: 60%; max-width: 250px; height: auto; flex-shrink: 0; border-radius: 12px; object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-  .detail-info { max-width: 700px; }
+  
+  /* --- [START] NEW HERO/HEADER DESIGN --- */
+  .detail-header-section {
+    position: relative;
+    width: 100%;
+    height: 30vh; /* Adjust height for mobile */
+    background-color: var(--card-bg);
+  }
+  .hero-background-image {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+  .detail-header-section::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(to top, var(--bg-color) 5%, rgba(18, 18, 18, 0.7) 40%, transparent 100%);
+    z-index: 2;
+  }
+  .detail-main-content {
+    position: relative;
+    margin-top: -100px; /* Pull content up over the backdrop image */
+    z-index: 3;
+  }
+  .detail-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .detail-poster {
+    width: 60%;
+    max-width: 250px;
+    height: auto;
+    aspect-ratio: 2 / 3;
+    flex-shrink: 0;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .detail-info {
+    max-width: 700px;
+    text-align: center;
+  }
+  /* --- [END] NEW HERO/HEADER DESIGN --- */
+
   .detail-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
   .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; font-size: 0.9rem; justify-content: center;}
   .meta-item { display: flex; align-items: center; gap: 8px; }
@@ -681,6 +727,7 @@ detail_html = """
   .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 25px; border-radius: 50px; font-weight: 600; transition: all 0.2s ease; text-align: center; }
   .btn-download { background-color: var(--primary-color); } .btn-download:hover { transform: scale(1.05); }
   .btn-watch { background-color: var(--watch-color); } .btn-watch:hover { transform: scale(1.05); }
+  
   .tabs-container { margin: 40px 0; }
   .tabs-nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid #333; justify-content: center; }
   .tab-link { padding: 12px 15px; cursor: pointer; font-weight: 500; color: var(--text-dark); position: relative; font-size: 0.9rem;}
@@ -722,9 +769,11 @@ detail_html = """
 
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
-    .detail-hero { padding: 120px 0 60px; }
-    .detail-content { flex-direction: row; text-align: left; }
-    .detail-poster { width: 300px; height: 450px; }
+    .detail-header-section { height: 55vh; }
+    .detail-main-content { margin-top: -150px; }
+    .detail-body { flex-direction: row; align-items: flex-start; gap: 40px; }
+    .detail-poster { width: 300px; max-width: 300px; }
+    .detail-info { text-align: left; }
     .detail-title { font-size: 3rem; }
     .detail-meta { justify-content: flex-start; }
     .tabs-nav { justify-content: flex-start; }
@@ -738,9 +787,15 @@ detail_html = """
 <body>
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
-<div class="detail-hero">
-    <img src="{{ movie.backdrop or movie.poster }}" class="hero-background" alt="">
-    <div class="container detail-content">
+
+<!-- Main backdrop image header -->
+<div class="detail-header-section">
+    <img src="{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}" class="hero-background-image" alt="Backdrop of {{ movie.title }}">
+</div>
+
+<!-- Main content area with poster and details -->
+<div class="container detail-main-content">
+    <div class="detail-body">
         <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
         <div class="detail-info">
             <h1 class="detail-title">{{ movie.title }}</h1>
@@ -754,6 +809,7 @@ detail_html = """
         </div>
     </div>
 </div>
+
 <div class="container">
     <div class="tabs-container">
         {% set episode_seasons = movie.episodes | map(attribute='season') | list if movie.episodes else [] %}
@@ -956,6 +1012,7 @@ detail_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+
 wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1014,6 +1071,7 @@ wait_page_html = """
 </body>
 </html>
 """
+
 request_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1076,6 +1134,7 @@ request_html = """
 </body>
 </html>
 """
+
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1329,7 +1388,7 @@ admin_html = """
 </script>
 </body></html>
 """
-# --- [START CHANGE] edit_html টেমপ্লেট আপডেট করা হয়েছে ---
+
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1458,8 +1517,6 @@ edit_html = """
 </script>
 </body></html>
 """
-# --- [END CHANGE] ---
-
 
 # =========================================================================================
 # === [START] PYTHON FUNCTIONS & FLASK ROUTES =============================================
@@ -1468,7 +1525,6 @@ edit_html = """
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
-    # [FIX] media_type is 'series' or 'movie' from our app, map to 'tv' for TMDB
     search_type = "tv" if media_type == "series" else "movie"
     try:
         detail_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
@@ -1603,7 +1659,6 @@ def admin():
             screenshots_text = request.form.get("screenshots", "").strip()
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
             
-            # [NEW] TMDB ID সংরক্ষণ করা
             tmdb_id = request.form.get("tmdb_id")
             
             movie_data = {
@@ -1616,11 +1671,10 @@ def admin():
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
-                "tmdb_id": tmdb_id if tmdb_id else None # [NEW]
+                "tmdb_id": tmdb_id if tmdb_id else None
             }
 
             if tmdb_id:
-                # [CHANGE] Use 'series' or 'movie' for media type
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
             
@@ -1706,13 +1760,11 @@ def edit_movie(movie_id):
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         
-        # --- [START CHANGE] নোটিফিকেশন পাঠানোর শর্ত চেক করা ---
         send_notification = request.form.get('send_notification')
         if send_notification:
             notification_data = movie_obj.copy()
             notification_data.update(update_data)
             send_telegram_notification(notification_data, obj_id, notification_type='update')
-        # --- [END CHANGE] ---
         
         return redirect(url_for('admin'))
     
@@ -1756,17 +1808,15 @@ def api_search_tmdb():
 def api_get_details():
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
-    # [CHANGE] Use 'series' or 'movie' from our app
     details = get_tmdb_details(tmdb_id, "series" if media_type == "tv" else "movie")
     if details: return jsonify(details)
     else: return jsonify({"error": "Details not found on TMDb"}), 404
 
-# --- [START NEW ROUTE] TMDB থেকে তথ্য Re-sync করার জন্য নতুন API রুট ---
 @app.route('/admin/api/resync_tmdb')
 @requires_auth
 def api_resync_tmdb():
     tmdb_id = request.args.get('id')
-    media_type = request.args.get('type') # 'series' or 'movie'
+    media_type = request.args.get('type') 
     if not tmdb_id or not media_type:
         return jsonify({"error": "TMDB ID and media type are required"}), 400
     
@@ -1775,7 +1825,6 @@ def api_resync_tmdb():
         return jsonify(details)
     else:
         return jsonify({"error": "Could not fetch details from TMDB"}), 404
-# --- [END NEW ROUTE] ---
 
 @app.route('/api/search')
 def api_search():
