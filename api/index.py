@@ -2,7 +2,7 @@ import os
 import sys
 import requests
 import json
-from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify, flash
+from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
@@ -32,8 +32,6 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_very_secret_key_for_flashing")
-
 
 # --- Authentication ---
 def check_auth(username, password):
@@ -660,7 +658,7 @@ detail_html = """
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
 <meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 {{ ad_settings.ad_header | safe }}
@@ -669,262 +667,140 @@ detail_html = """
       --bg-color: #0d0d0d;
       --card-bg: #1a1a1a;
       --text-light: #ffffff;
-      --text-dark: #b3b3b3;
+      --text-dark: #8c8c8c;
       --primary-color: #E50914;
-      --accent-color-1: #00aaff;
-      --accent-color-2: #90ee90;
+      --cyan-accent: #00FFFF;
+      --lime-accent: #adff2f;
       --g-1: #ff00de; --g-2: #00ffff;
   }
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding:0; }
   a { text-decoration: none; color: inherit; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px 15px; }
   
-  /* --- [START] UPDATED HERO SECTION --- */
-  .detail-hero-wrapper {
+  /* --- [START] NEW HERO SECTION STYLES (AS PER SCREENSHOT) --- */
+  .hero-section {
       position: relative;
+      width: 100%;
+      max-width: 900px;
+      margin: 80px auto 20px;
+      aspect-ratio: 16 / 9;
       background-size: cover;
-      background-position: center 20%;
-      padding: 30px 0;
-  }
-  .detail-hero-wrapper::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(13, 13, 13, 0.7);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      z-index: 1;
-  }
-   .detail-hero-wrapper::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0;
-      width: 100%; height: 100%;
-      background: linear-gradient(to top, var(--bg-color) 5%, transparent 50%);
-      z-index: 2;
-  }
-  .detail-hero-content {
-      position: relative;
-      z-index: 3;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px 15px;
-      gap: 20px;
-  }
-  .detail-poster {
-      width: 180px;
-      flex-shrink: 0;
+      background-position: center;
       border-radius: 12px;
+      box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+      overflow: hidden;
+  }
+  .hero-poster {
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      bottom: 20px;
+      width: 30%;
+      min-width: 120px;
       object-fit: cover;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      border: 3px solid rgba(255, 255, 255, 0.1);
-  }
-  .detail-info {
-      flex-grow: 1;
-      text-align: center;
-      color: var(--text-light);
-  }
-  .detail-title {
-      font-size: 2.2rem;
-      font-weight: 700;
-      margin: 15px 0 10px 0;
-      text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
-  }
-  .detail-subtitle {
-      font-size: 1rem;
-      font-weight: 500;
-      margin: 0 0 20px 0;
-      color: var(--text-dark);
-  }
-  .detail-subtitle span:not(:last-child)::after {
-      content: '•';
-      margin: 0 10px;
-  }
-  .category-tags-container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-  }
-  .category-tag {
-      background-color: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: var(--text-dark);
-      padding: 5px 15px;
-      border-radius: 50px;
-      font-size: 0.8rem;
-      font-weight: 500;
-      transition: all 0.2s ease;
-  }
-  .category-tag:hover {
-      background-color: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
-  }
-  /* --- [END] UPDATED HERO SECTION --- */
-  
-  .tabs-nav {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin: 0 0 30px; /* Adjusted margin */
-  }
-  .tab-link {
-      flex: 1;
-      max-width: 200px;
-      padding: 12px;
-      background-color: var(--card-bg);
-      border: none;
-      color: var(--text-dark);
-      font-weight: 600;
-      font-size: 1rem;
       border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
   }
-  .tab-link.active {
-      background: linear-gradient(90deg, var(--g-1), var(--g-2));
-      color: black;
+  .badge-new, .badge-completed {
+      position: absolute;
+      padding: 6px 15px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      color: white;
+      border-radius: 5px;
+      text-transform: uppercase;
+      backdrop-filter: blur(5px);
+  }
+  .badge-new {
+      top: 20px;
+      right: 20px;
+      background-color: rgba(255, 30, 30, 0.8);
+  }
+  .badge-completed {
+      bottom: 20px;
+      right: 20px;
+      background-color: rgba(0, 255, 0, 0.8);
+      color: #000;
+  }
+  .content-title-section {
+      text-align: center;
+      padding: 10px 15px 30px;
+  }
+  .main-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
       font-weight: 700;
+      line-height: 1.4;
+      color: var(--cyan-accent);
+      text-transform: uppercase;
   }
+  .title-meta-info {
+      color: var(--lime-accent);
+      display: block; /* Makes it appear on a new line or wrap nicely */
+  }
+  /* --- [END] NEW HERO SECTION STYLES --- */
+
+  .tabs-nav { display: flex; justify-content: center; gap: 10px; margin: 20px 0 30px; }
+  .tab-link { flex: 1; max-width: 200px; padding: 12px; background-color: var(--card-bg); border: none; color: var(--text-dark); font-weight: 600; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+  .tab-link.active { background-color: var(--primary-color); color: var(--text-light); }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; animation: fadeIn 0.5s; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   
-  #info-pane p {
-      font-size: 0.95rem;
-      line-height: 1.8;
-      color: var(--text-dark);
-      text-align: justify;
-      background-color: var(--card-bg);
-      padding: 20px;
-      border-radius: 8px;
-  }
-
-  .link-group, .episode-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-width: 800px;
-      margin: 0 auto;
-  }
-  .link-group h3, .episode-list h3 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      margin-top: 20px;
-      margin-bottom: 10px;
-      color: var(--text-light);
-      text-align: center;
-      border-bottom: 2px solid var(--primary-color);
-      padding-bottom: 5px;
-      display: inline-block;
-  }
-  .episode-list h3 { border-bottom: none; text-align: left; margin-bottom: 15px; }
-
-  .action-btn {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-      padding: 15px 20px;
-      border-radius: 8px;
-      font-weight: 500;
-      font-size: 1rem;
-      color: white;
-      background: linear-gradient(90deg, rgba(255,0,222,0.2), rgba(0,255,255,0.2));
-      border: 1px solid rgba(255,255,255,0.2);
-      transition: all 0.3s ease;
-  }
-  .action-btn:hover {
-      background: linear-gradient(90deg, rgba(255,0,222,0.4), rgba(0,255,255,0.4));
-      border-color: rgba(255,255,255,0.5);
-      transform: translateY(-2px);
-  }
-  .action-btn i { color: white; font-size: 1.2rem; }
-  
+  #info-pane p { font-size: 0.95rem; line-height: 1.8; color: var(--text-dark); text-align: justify; background-color: var(--card-bg); padding: 20px; border-radius: 8px; }
+  .link-group, .episode-list { display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin: 0 auto; }
+  .link-group h3, .episode-list h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 10px; color: var(--text-dark); text-align: center; }
+  .action-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 15px 20px; border-radius: 8px; font-weight: 500; font-size: 1rem; color: white; background: linear-gradient(90deg, var(--g-1), var(--g-2), var(--g-1)); background-size: 200% 100%; transition: background-position 0.5s ease; }
+  .action-btn:hover { background-position: 100% 0; }
+  .action-btn i { color: white; }
   .category-section { margin: 50px 0; }
   .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
-
-  .movie-carousel .swiper-slide {
-      width: 140px;
-  }
-  .movie-card {
-      display: block;
-      position: relative;
-  }
-  .movie-card .movie-poster {
-      width: 100%;
-      aspect-ratio: 2/3;
-      object-fit: cover;
-      border-radius: 8px;
-  }
-
-  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
-  .ad-container > * { max-width: 100% !important; }
+  .movie-carousel .swiper-slide { width: 140px; }
+  .movie-card { display: block; position: relative; }
+  .movie-card .movie-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; }
 
   @media (min-width: 768px) {
-      .detail-hero-wrapper {
-          padding: 80px 0 60px;
-      }
-      .detail-hero-content {
-          flex-direction: row;
-          align-items: flex-end;
-          gap: 40px;
-      }
-      .detail-poster {
-          width: 220px;
-      }
-      .detail-info, .category-tags-container {
-          text-align: left;
-          justify-content: flex-start;
-      }
-      .detail-title { font-size: 3.5rem; margin-top: 0; }
-      .movie-carousel .swiper-slide {
-          width: 180px;
-      }
+      .movie-carousel .swiper-slide { width: 180px; }
   }
 </style>
 </head>
 <body>
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
-<div class="detail-hero-wrapper" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
-    <div class="container">
-        <div class="detail-hero-content">
-            <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
-            <div class="detail-info">
-                <h1 class="detail-title">{{ movie.title }}</h1>
-                <p class="detail-subtitle">
-                    {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
-                    {% set first_episode = movie.episodes|sort(attribute='episode_number')|first if movie.episodes else none %}
-                    {% if movie.type == 'series' %}
-                        <span>{{ movie.type|title }}</span>
-                        {% if first_episode and first_episode.season %}<span>Season {{ first_episode.season }}</span>{% endif %}
-                    {% else %}
-                        <span>{{ movie.type|title }}</span>
-                    {% endif %}
-                    {% if movie.language %}<span>{{ movie.language }}</span>{% endif %}
-                </p>
-                <div class="category-tags-container">
-                    {% for genre in movie.genres %}
-                        <span class="category-tag">{{ genre }}</span>
-                    {% endfor %}
-                    {% for category in movie.categories %}
-                        <a href="{{ url_for('movies_by_category', name=category) }}" class="category-tag">{{ category }}</a>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <main class="container">
+    
+    <!-- NEW HERO SECTION -->
+    <div class="hero-section" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
+        <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="hero-poster">
+        
+        {% if (datetime.utcnow() - movie._id.generation_time.replace(tzinfo=None)).days < 3 %}
+            <span class="badge-new">NEW</span>
+        {% endif %}
+        
+        {% if movie.is_completed %}
+            <span class="badge-completed">COMPLETED</span>
+        {% endif %}
+    </div>
+
+    <!-- NEW TITLE SECTION -->
+    <div class="content-title-section">
+        <h1 class="main-title">
+            {{ movie.title }}
+            <strong class="title-meta-info">
+                {% if movie.release_date %}({{ movie.release_date.split('-')[0] }}){% endif %}
+                {% if movie.type == 'series' and movie.episodes %}
+                    {% set season_num = movie.episodes|map(attribute='season')|unique|sort|first %}
+                    S{{ '%02d'|format(season_num|int) if season_num else '01' }}
+                {% endif %}
+                {{ movie.language or '' }}
+            </strong>
+        </h1>
+    </div>
+
     <nav class="tabs-nav">
+        <button class="tab-link" data-tab="info-pane">Info</button>
         <button class="tab-link active" data-tab="downloads-pane">Download Links</button>
-        <button class="tab-link" data-tab="info-pane">Storyline</button>
     </nav>
 
     <div class="tabs-content">
@@ -974,13 +850,13 @@ detail_html = """
         </div>
     </div>
     
-    {% if movie.screenshots and movie.screenshots|length > 0 %}
+    {% if movie.screenshots %}
     <section class="category-section">
         <h2 class="category-title">Screenshots</h2>
         <div class="swiper gallery-thumbs">
             <div class="swiper-wrapper">
                 {% for ss in movie.screenshots %}
-                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; width:100%; object-fit: cover;"></div>
+                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; object-fit: cover;"></div>
                 {% endfor %}
             </div>
         </div>
@@ -1010,30 +886,17 @@ detail_html = """
     document.addEventListener('DOMContentLoaded', function () {
         const tabLinks = document.querySelectorAll('.tab-link');
         const tabPanes = document.querySelectorAll('.tab-pane');
-
         tabLinks.forEach(link => {
             link.addEventListener('click', () => {
                 const tabId = link.getAttribute('data-tab');
-                
                 tabLinks.forEach(item => item.classList.remove('active'));
                 tabPanes.forEach(pane => pane.classList.remove('active'));
-                
                 link.classList.add('active');
                 document.getElementById(tabId).classList.add('active');
             });
         });
-
-        new Swiper('.movie-carousel', {
-            slidesPerView: 2.5, spaceBetween: 15,
-            breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } }
-        });
-
-        if (document.querySelector('.gallery-thumbs')) {
-            new Swiper('.gallery-thumbs', {
-                slidesPerView: 1.5, spaceBetween: 10,
-                breakpoints: { 640: { slidesPerView: 2.5 }, 1024: { slidesPerView: 3.5 } }
-            });
-        }
+        new Swiper('.movie-carousel', { slidesPerView: 3, spaceBetween: 15, breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } } });
+        if (document.querySelector('.gallery-thumbs')) { new Swiper('.gallery-thumbs', { slidesPerView: 2, spaceBetween: 10, breakpoints: { 640: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } } }); }
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -1259,6 +1122,7 @@ admin_html = """
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
+            <div class="form-group"><div class="checkbox-group"><label><input type="checkbox" name="is_completed"> Mark as Completed?</label></div></div>
         </fieldset>
         <div id="movie_fields">
             <fieldset><legend>Movie Links</legend>
@@ -1475,6 +1339,7 @@ edit_html = """
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" id="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
+        <div class="form-group"><div class="checkbox-group"><label><input type="checkbox" name="is_completed" {% if movie.is_completed %}checked{% endif %}> Mark as Completed?</label></div></div>
     </fieldset>
     <div id="movie_fields">
         <fieldset><legend>Movie Links</legend>
@@ -1639,14 +1504,17 @@ def all_series():
 
 @app.route('/category')
 def movies_by_category():
-    name = request.args.get('name')
-    if not name: return redirect(url_for('home'))
+    title = request.args.get('name')
+    if not title: return redirect(url_for('home'))
     page = request.args.get('page', 1, type=int)
     
-    query_filter = {"categories": name}
+    query_filter = {}
+    if title == "Latest Movies": query_filter = {"type": "movie"}
+    elif title == "Latest Series": query_filter = {"type": "series"}
+    else: query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
-    return render_template_string(index_html, movies=content_list, query=name, is_full_page_list=True, pagination=pagination)
+    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
@@ -1655,9 +1523,6 @@ def request_content():
         extra_info = request.form.get('extra_info', '').strip()
         if content_name:
             requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
-            flash("Your request has been submitted successfully!", "success")
-        else:
-            flash("Content name is required.", "error")
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
@@ -1685,6 +1550,7 @@ def admin():
             content_type = request.form.get("content_type", "movie")
             screenshots_text = request.form.get("screenshots", "").strip()
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
+            is_completed = 'is_completed' in request.form
             
             tmdb_id = request.form.get("tmdb_id")
             
@@ -1698,7 +1564,8 @@ def admin():
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
-                "tmdb_id": tmdb_id if tmdb_id else None
+                "tmdb_id": tmdb_id if tmdb_id else None,
+                "is_completed": is_completed
             }
 
             if tmdb_id:
@@ -1764,6 +1631,7 @@ def edit_movie(movie_id):
         content_type = request.form.get("content_type")
         screenshots_text = request.form.get("screenshots", "").strip()
         screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
+        is_completed = 'is_completed' in request.form
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -1772,7 +1640,8 @@ def edit_movie(movie_id):
             "screenshots": screenshots_list,
             "language": request.form.get("language").strip() or None,
             "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
-            "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow()
+            "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(),
+            "is_completed": is_completed
         }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
