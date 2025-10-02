@@ -69,6 +69,7 @@ try:
         movies.create_index("type")
         movies.create_index("categories")
         movies.create_index("updated_at")
+        movies.create_index("tmdb_id") # [NEW] TMDB ID-এর জন্য ইনডেক্স
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
@@ -90,21 +91,15 @@ except Exception as e:
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
-# --- [START CHANGE] টেলিগ্রাম নোটিফিকেশন ফাংশন আপডেট করা হয়েছে ---
+# --- Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new'):
-    """
-    Sends a notification to Telegram.
-    notification_type can be 'new' or 'update'.
-    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
         return
 
     try:
-        # মুভির বিস্তারিত পেজের লিঙ্ক
         movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
         
-        # Quality বের করা
         available_qualities = []
         if movie_data.get('links'):
             for link in movie_data['links']:
@@ -119,13 +114,11 @@ def send_telegram_notification(movie_data, content_id, notification_type='new'):
         genres_str = ", ".join(genres_list) if genres_list else "N/A"
         clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
-        # নোটিফিকেশনের ধরন অনুযায়ী ক্যাপশনের হেডার পরিবর্তন
         if notification_type == 'update':
             caption_header = f"🔄 **UPDATED : {movie_data['title']}**\n"
-        else: # Default is 'new'
+        else:
             caption_header = f"🔥 **NEW ADDED : {movie_data['title']}**\n"
         
-        # সম্পূর্ণ ক্যাপশন তৈরি করা
         caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
              caption += f"**{language_str.upper()}**\n"
@@ -136,37 +129,21 @@ def send_telegram_notification(movie_data, content_id, notification_type='new'):
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
-        # বাটন তৈরি করা
-        inline_keyboard = {
-            "inline_keyboard": [
-                [{"text": "📥👇 Download Now 👇📥", "url": movie_url}]
-            ]
-        }
-        
+        inline_keyboard = {"inline_keyboard": [[{"text": "📥👇 Download Now 👇📥", "url": movie_url}]]}
         api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-        
-        payload = {
-            'chat_id': TELEGRAM_CHANNEL_ID,
-            'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
-            'caption': caption,
-            'parse_mode': 'Markdown',
-            'reply_markup': json.dumps(inline_keyboard)
-        }
+        payload = {'chat_id': TELEGRAM_CHANNEL_ID, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
         
         response = requests.post(api_url, data=payload, timeout=15)
         response.raise_for_status()
         
         if response.json().get('ok'):
-            print(f"SUCCESS: Telegram notification sent successfully for '{movie_data['title']}' (Type: {notification_type}).")
+            print(f"SUCCESS: Telegram notification sent for '{movie_data['title']}' (Type: {notification_type}).")
         else:
-            print(f"WARNING: Telegram API returned an error: {response.json().get('description')}")
-
+            print(f"WARNING: Telegram API error: {response.json().get('description')}")
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Failed to send Telegram notification: {e}")
     except Exception as e:
-        print(f"ERROR: An unexpected error occurred in send_telegram_notification: {e}")
-# --- [END CHANGE] ---
-
+        print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
 
 # --- Custom Jinja Filter for Relative Time ---
 def time_ago(obj_id):
@@ -201,15 +178,12 @@ def inject_globals():
         "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart",
         "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home"
     }
-
-    return dict(
-        website_name=WEBSITE_NAME, ad_settings=ad_settings or {}, predefined_categories=all_categories,
-        quote=quote, datetime=datetime, category_icons=category_icons
-    )
+    return dict(website_name=WEBSITE_NAME, ad_settings=ad_settings or {}, predefined_categories=all_categories, quote=quote, datetime=datetime, category_icons=category_icons)
 
 # =========================================================================================
 # === [START] HTML TEMPLATES ==============================================================
 # =========================================================================================
+# (index_html, detail_html, wait_page_html, request_html - কোনো পরিবর্তন নেই, তাই এখানে অন্তর্ভুক্ত করা হলো না)
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1102,7 +1076,6 @@ request_html = """
 </body>
 </html>
 """
-# --- [START CHANGE] Admin Panel HTML পুনর্বিন্যাস করা হয়েছে ---
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1356,7 +1329,7 @@ admin_html = """
 </script>
 </body></html>
 """
-# --- [END CHANGE] ---
+# --- [START CHANGE] edit_html টেমপ্লেট আপডেট করা হয়েছে ---
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1372,38 +1345,48 @@ edit_html = """
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); padding: 20px; }
         .admin-container { max-width: 800px; margin: 20px auto; }
         .back-link { display: inline-block; margin-bottom: 20px; color: #999; text-decoration: none; }
-        h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 10px; }
+        h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; margin: 0; }
         form { background: var(--dark-gray); padding: 25px; border-radius: 8px; }
         fieldset { border: 1px solid var(--light-gray); padding: 20px; margin-bottom: 20px; border-radius: 5px;}
         legend { font-weight: bold; color: var(--netflix-red); padding: 0 10px; font-size: 1.2rem; }
         .form-group { margin-bottom: 15px; } label { display: block; margin-bottom: 8px; font-weight: bold;}
         input, textarea, select { width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray); font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box; }
-        .btn { display: inline-block; color: white; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; }
+        .btn { display: inline-block; text-decoration: none; color: white; font-weight: 700; cursor: pointer; border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; }
         .btn-primary { background: var(--netflix-red); } .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
+        .btn-sync { background: #17a2b8; }
         .dynamic-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; position: relative; }
         .dynamic-item .btn-danger { position: absolute; top: 10px; right: 10px; padding: 4px 8px; font-size: 0.8rem; }
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; } .checkbox-group label { display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer; }
         .checkbox-group input { width: auto; }
         .link-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
+        .update-options { margin-top: 20px; padding: 15px; background: var(--light-gray); border-radius: 5px; display: flex; flex-direction: column; gap: 15px; }
     </style>
 </head>
 <body>
 <div class="admin-container">
   <a href="{{ url_for('admin') }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Admin Panel</a>
-  <h2>Edit: {{ movie.title }}</h2>
+  <div class="page-header">
+    <h2>Edit: {{ movie.title }}</h2>
+    {% if movie.tmdb_id %}
+    <button type="button" class="btn btn-sync" id="resync-btn" onclick="resyncTmdb('{{ movie.tmdb_id }}', '{{ movie.type }}')">
+        <i class="fas fa-sync-alt"></i> Re-sync with TMDB
+    </button>
+    {% endif %}
+  </div>
   <form method="post">
     <fieldset><legend>Core Details</legend>
-        <div class="form-group"><label>Title:</label><input type="text" name="title" value="{{ movie.title }}" required></div>
-        <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" value="{{ movie.poster or '' }}"></div>
-        <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" value="{{ movie.backdrop or '' }}"></div>
-        <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
+        <div class="form-group"><label>Title:</label><input type="text" name="title" id="title" value="{{ movie.title }}" required></div>
+        <div class="form-group"><label>Poster URL:</label><input type="url" name="poster" id="poster" value="{{ movie.poster or '' }}"></div>
+        <div class="form-group"><label>Backdrop URL:</label><input type="url" name="backdrop" id="backdrop" value="{{ movie.backdrop or '' }}"></div>
+        <div class="form-group"><label>Overview:</label><textarea name="overview" id="overview">{{ movie.overview or '' }}</textarea></div>
         <div class="form-group">
             <label>Screenshots (Paste one URL per line):</label>
             <textarea name="screenshots" rows="5">{{ movie.screenshots|join('\n') if movie.screenshots }}</textarea>
         </div>
         <div class="form-group"><label>Language:</label><input type="text" name="language" value="{{ movie.language or '' }}"></div>
-        <div class="form-group"><label>Genres:</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
+        <div class="form-group"><label>Genres:</label><input type="text" name="genres" id="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
     </fieldset>
@@ -1430,7 +1413,16 @@ edit_html = """
     <fieldset><legend>Manual Download Buttons</legend><div id="manual_links_container">
         {% if movie.manual_links %}{% for link in movie.manual_links %}<div class="dynamic-item"><button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" value="{{ link.name }}" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" value="{{ link.url }}" required></div></div></div>{% endfor %}{% endif %}
     </div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
-    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
+    
+    <div class="update-options">
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" name="send_notification" checked>
+                Send Update Notification to Telegram?
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
+    </div>
   </form>
 </div>
 <script>
@@ -1438,10 +1430,36 @@ edit_html = """
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
+    
+    async function resyncTmdb(tmdbId, mediaType) {
+        const btn = document.getElementById('resync-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+        try {
+            const response = await fetch(`/admin/api/resync_tmdb?id=${tmdbId}&type=${mediaType}`);
+            if (!response.ok) throw new Error('Failed to fetch data');
+            const data = await response.json();
+            document.getElementById('title').value = data.title || '';
+            document.getElementById('overview').value = data.overview || '';
+            document.getElementById('poster').value = data.poster || '';
+            document.getElementById('backdrop').value = data.backdrop || '';
+            document.getElementById('genres').value = data.genres ? data.genres.join(', ') : '';
+            alert('Data synced successfully from TMDB! Please review and save.');
+        } catch (e) {
+            console.error(e);
+            alert('Error syncing data from TMDB.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Re-sync with TMDB';
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', toggleFields);
 </script>
 </body></html>
 """
+# --- [END CHANGE] ---
+
 
 # =========================================================================================
 # === [START] PYTHON FUNCTIONS & FLASK ROUTES =============================================
@@ -1450,7 +1468,8 @@ edit_html = """
 # --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
-    search_type = "tv" if media_type == "tv" else "movie"
+    # [FIX] media_type is 'series' or 'movie' from our app, map to 'tv' for TMDB
+    search_type = "tv" if media_type == "series" else "movie"
     try:
         detail_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
         res = requests.get(detail_url, timeout=10)
@@ -1583,6 +1602,10 @@ def admin():
             content_type = request.form.get("content_type", "movie")
             screenshots_text = request.form.get("screenshots", "").strip()
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
+            
+            # [NEW] TMDB ID সংরক্ষণ করা
+            tmdb_id = request.form.get("tmdb_id")
+            
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -1592,12 +1615,15 @@ def admin():
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
-                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0
+                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
+                "tmdb_id": tmdb_id if tmdb_id else None # [NEW]
             }
-            tmdb_id = request.form.get("tmdb_id")
+
             if tmdb_id:
-                tmdb_details = get_tmdb_details(tmdb_id, "tv" if content_type == "series" else "movie")
+                # [CHANGE] Use 'series' or 'movie' for media type
+                tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
+            
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
                 movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
@@ -1606,12 +1632,13 @@ def admin():
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
                 s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
+            
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
             
             result = movies.insert_one(movie_data)
             if result.inserted_id:
-                send_telegram_notification(movie_data, result.inserted_id) # 'notification_type' ডিফল্ট হিসেবে 'new' থাকবে
+                send_telegram_notification(movie_data, result.inserted_id)
 
         return redirect(url_for('admin'))
     
@@ -1679,10 +1706,12 @@ def edit_movie(movie_id):
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
         
-        # --- [START CHANGE] আপডেট নোটিফিকেশন পাঠানোর কোড ---
-        notification_data = movie_obj.copy()
-        notification_data.update(update_data)
-        send_telegram_notification(notification_data, obj_id, notification_type='update')
+        # --- [START CHANGE] নোটিফিকেশন পাঠানোর শর্ত চেক করা ---
+        send_notification = request.form.get('send_notification')
+        if send_notification:
+            notification_data = movie_obj.copy()
+            notification_data.update(update_data)
+            send_telegram_notification(notification_data, obj_id, notification_type='update')
         # --- [END CHANGE] ---
         
         return redirect(url_for('admin'))
@@ -1727,9 +1756,26 @@ def api_search_tmdb():
 def api_get_details():
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
-    details = get_tmdb_details(tmdb_id, media_type)
+    # [CHANGE] Use 'series' or 'movie' from our app
+    details = get_tmdb_details(tmdb_id, "series" if media_type == "tv" else "movie")
     if details: return jsonify(details)
     else: return jsonify({"error": "Details not found on TMDb"}), 404
+
+# --- [START NEW ROUTE] TMDB থেকে তথ্য Re-sync করার জন্য নতুন API রুট ---
+@app.route('/admin/api/resync_tmdb')
+@requires_auth
+def api_resync_tmdb():
+    tmdb_id = request.args.get('id')
+    media_type = request.args.get('type') # 'series' or 'movie'
+    if not tmdb_id or not media_type:
+        return jsonify({"error": "TMDB ID and media type are required"}), 400
+    
+    details = get_tmdb_details(tmdb_id, media_type)
+    if details:
+        return jsonify(details)
+    else:
+        return jsonify({"error": "Could not fetch details from TMDB"}), 404
+# --- [END NEW ROUTE] ---
 
 @app.route('/api/search')
 def api_search():
