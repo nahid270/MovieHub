@@ -2,7 +2,7 @@ import os
 import sys
 import requests
 import json
-from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify, flash
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
@@ -32,6 +32,8 @@ if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_very_secret_key_for_flashing")
+
 
 # --- Authentication ---
 def check_auth(username, password):
@@ -664,51 +666,89 @@ detail_html = """
 {{ ad_settings.ad_header | safe }}
 <style>
   :root {
-      --bg-color: #0c1016;
-      --card-bg: #1e293b;
-      --text-light: #e2e8f0;
-      --text-dark: #94a3b8;
-      --primary-color: #e11d48;
-      --accent-color: #38bdf8;
+      --bg-color: #0d0d0d;
+      --card-bg: #1a1a1a;
+      --text-light: #ffffff;
+      --text-dark: #b3b3b3;
+      --primary-color: #E50914;
+      --accent-color-1: #00aaff;
+      --accent-color-2: #90ee90;
+      --g-1: #ff00de; --g-2: #00ffff;
   }
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
-  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding: 0 0 80px 0; }
+  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding:0; }
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
   
-  .image-container {
-      padding: 10px;
+  /* --- [START] NEW HERO SECTION --- */
+  .detail-hero-wrapper {
+      position: relative;
+      background-size: cover;
+      background-position: center 20%;
   }
-  .detail-backdrop-img, .detail-poster-img {
-      width: 100%;
-      display: block;
+  .detail-hero-wrapper::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(13, 13, 13, 0.7);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+  }
+  .detail-hero-wrapper::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: linear-gradient(to top, var(--bg-color) 5%, transparent 50%);
+  }
+  .detail-hero-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 80px 15px 40px;
+      gap: 20px;
+  }
+  .detail-poster {
+      width: 180px;
+      flex-shrink: 0;
       border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      object-fit: cover;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border: 3px solid rgba(255, 255, 255, 0.1);
   }
-  .detail-backdrop-img {
-      margin-bottom: 15px;
-  }
-
-  .detail-text-content {
-      padding: 10px 15px;
+  .detail-info {
+      flex-grow: 1;
       text-align: center;
+      color: var(--text-light);
   }
   .detail-title {
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: var(--accent-color);
+      font-size: 2.2rem;
+      font-weight: 700;
       margin: 0 0 10px 0;
-      line-height: 1.4;
+      text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
+  }
+  .detail-subtitle {
+      font-size: 1rem;
+      font-weight: 500;
+      margin: 0 0 20px 0;
+      color: var(--text-dark);
+  }
+  .detail-subtitle span:not(:last-child)::after {
+      content: '•';
+      margin: 0 10px;
   }
   .category-tags-container {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 8px;
-      margin-bottom: 25px;
   }
   .category-tag {
-      background-color: var(--card-bg);
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       color: var(--text-dark);
       padding: 5px 15px;
       border-radius: 50px;
@@ -719,20 +759,21 @@ detail_html = """
   .category-tag:hover {
       background-color: var(--primary-color);
       color: white;
+      border-color: var(--primary-color);
   }
+  /* --- [END] NEW HERO SECTION --- */
   
   .tabs-nav {
       display: flex;
       justify-content: center;
-      background-color: var(--card-bg);
-      border-radius: 10px;
-      padding: 5px;
-      margin-bottom: 20px;
+      gap: 10px;
+      margin: 20px 0 30px;
   }
   .tab-link {
       flex: 1;
-      padding: 10px;
-      background-color: transparent;
+      max-width: 200px;
+      padding: 12px;
+      background-color: var(--card-bg);
       border: none;
       color: var(--text-dark);
       font-weight: 600;
@@ -742,13 +783,13 @@ detail_html = """
       transition: all 0.2s ease;
   }
   .tab-link.active {
-      background-color: var(--primary-color);
-      color: var(--text-light);
-      box-shadow: 0 4px 15px rgba(225, 29, 72, 0.4);
+      background: linear-gradient(90deg, var(--g-1), var(--g-2));
+      color: black;
+      font-weight: 700;
   }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; animation: fadeIn 0.5s; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   
   #info-pane p {
       font-size: 0.95rem;
@@ -763,17 +804,23 @@ detail_html = """
   .link-group, .episode-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
       max-width: 800px;
       margin: 0 auto;
   }
   .link-group h3, .episode-list h3 {
-      font-size: 1.2rem;
-      font-weight: 500;
-      margin: 15px 0;
-      color: var(--text-dark);
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      color: var(--text-light);
       text-align: center;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 5px;
+      display: inline-block;
   }
+  .episode-list h3 { border-bottom: none; text-align: left; margin-bottom: 15px; }
+
   .action-btn {
       display: flex;
       justify-content: space-between;
@@ -783,124 +830,152 @@ detail_html = """
       border-radius: 8px;
       font-weight: 500;
       font-size: 1rem;
-      background-color: var(--card-bg);
-      transition: all 0.2s ease;
+      color: white;
+      background: linear-gradient(90deg, rgba(255,0,222,0.2), rgba(0,255,255,0.2));
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: all 0.3s ease;
   }
-  .action-btn:hover { background-color: #2b3a55; }
-  .action-btn i { color: var(--accent-color); }
+  .action-btn:hover {
+      background: linear-gradient(90deg, rgba(255,0,222,0.4), rgba(0,255,255,0.4));
+      border-color: rgba(255,255,255,0.5);
+      transform: translateY(-2px);
+  }
+  .action-btn i { color: white; font-size: 1.2rem; }
   
   .category-section { margin: 50px 0; }
   .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
-  .movie-carousel .swiper-slide { width: 140px; }
-  .movie-card .movie-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; }
 
-  .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 65px; background-color: #111827; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); z-index: 1000; justify-content: space-around; align-items: center; padding-top: 5px; }
-  .bottom-nav .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dark); background: none; border: none; font-size: 12px; flex-grow: 1; font-weight: 500; }
-  .bottom-nav .nav-item i { font-size: 22px; margin-bottom: 5px; }
-  .bottom-nav .nav-item.active, .bottom-nav .nav-item:hover { color: var(--primary-color); }
+  .movie-carousel .swiper-slide {
+      width: 140px;
+  }
+  .movie-card {
+      display: block;
+      position: relative;
+  }
+  .movie-card .movie-poster {
+      width: 100%;
+      aspect-ratio: 2/3;
+      object-fit: cover;
+      border-radius: 8px;
+  }
+
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
 
   @media (min-width: 768px) {
-      body { padding-bottom: 0; }
-      .detail-text-content, .detail-title { text-align: left; }
-      .category-tags-container { justify-content: flex-start; }
-      .tabs-nav { justify-content: flex-start; }
-      .movie-carousel .swiper-slide { width: 180px; }
-      .bottom-nav { display: none; }
+      .detail-hero-content {
+          flex-direction: row;
+          align-items: flex-end;
+          padding: 120px 15px 60px;
+          gap: 40px;
+      }
+      .detail-poster {
+          width: 220px;
+      }
+      .detail-info, .category-tags-container {
+          text-align: left;
+          justify-content: flex-start;
+      }
+      .detail-title { font-size: 3.5rem; }
+      .movie-carousel .swiper-slide {
+          width: 180px;
+      }
   }
 </style>
 </head>
 <body>
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
-
-<main>
-    <div class="image-container">
-        {% if movie.backdrop %}
-            <img src="{{ movie.backdrop }}" alt="{{ movie.title }} Backdrop" class="detail-backdrop-img">
-        {% endif %}
-        {% if movie.poster %}
-             <img src="{{ movie.poster }}" alt="{{ movie.title }} Poster" class="detail-poster-img">
-        {% endif %}
-    </div>
-
-    <div class="detail-text-content container">
-        {% set first_episode = movie.episodes|sort(attribute='episode_number')|first if movie.episodes else none %}
-        <h1 class="detail-title">
-            {{ movie.title }} 
-            {% if movie.release_date %}({{ movie.release_date.split('-')[0] }}){% endif %}
-            {% if first_episode and first_episode.season %}S0{{ first_episode.season }}{% endif %}
-            {% if movie.language %}{{ movie.language }}{% endif %}
-        </h1>
-        
-        <div class="category-tags-container">
-            {% for genre in movie.genres %}
-                <span class="category-tag">{{ genre }}</span>
-            {% endfor %}
-            {% for category in movie.categories %}
-                <a href="{{ url_for('movies_by_category', name=category) }}" class="category-tag">{{ category }}</a>
-            {% endfor %}
-        </div>
-
-        <nav class="tabs-nav">
-            <button class="tab-link" data-tab="info-pane">Info</button>
-            <button class="tab-link active" data-tab="downloads-pane">Download Links</button>
-        </nav>
-
-        <div class="tabs-content">
-            <div class="tab-pane" id="info-pane">
-                <p>{{ movie.overview or 'No description available.' }}</p>
-            </div>
-            <div class="tab-pane active" id="downloads-pane">
-                {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
-                
-                {% if movie.type == 'movie' and movie.links %}
-                    <div class="link-group">
-                        {% for link_item in movie.links %}
-                            {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn"><span>Download {{ link_item.quality }}</span><i class="fas fa-download"></i></a>{% endif %}
-                            {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-                
-                {% if movie.type == 'series' %}
-                    {% set all_seasons = ((movie.episodes | map(attribute='season') | list) + (movie.season_packs | map(attribute='season_number') | list)) | unique | sort %}
-                    {% for season_num in all_seasons %}
-                        <div class="episode-list" style="margin-bottom: 20px;">
-                            <h3>Season {{ season_num }}</h3>
-                            {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
-                            {% if season_pack and season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn"><span>Download All Episodes (ZIP)</span><i class="fas fa-file-archive"></i></a>{% endif %}
-                            
-                            {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
-                            {% for ep in episodes_for_season | sort(attribute='episode_number') %}
-                                {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn"><span>Episode {{ ep.episode_number }}: {{ ep.title or 'Watch/Download' }}</span><i class="fas fa-download"></i></a>{% endif %}
-                            {% endfor %}
-                        </div>
+<div class="detail-hero-wrapper" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
+    <div class="container">
+        <div class="detail-hero-content">
+            <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
+            <div class="detail-info">
+                <h1 class="detail-title">{{ movie.title }}</h1>
+                <p class="detail-subtitle">
+                    {% if movie.release_date %}<span>{{ movie.release_date.split('-')[0] }}</span>{% endif %}
+                    {% set first_episode = movie.episodes|sort(attribute='episode_number')|first if movie.episodes else none %}
+                    {% if movie.type == 'series' %}
+                        <span>{{ movie.type|title }}</span>
+                        {% if first_episode and first_episode.season %}<span>Season {{ first_episode.season }}</span>{% endif %}
+                    {% else %}
+                        <span>{{ movie.type|title }}</span>
+                    {% endif %}
+                    {% if movie.language %}<span>{{ movie.language }}</span>{% endif %}
+                </p>
+                <div class="category-tags-container">
+                    {% for genre in movie.genres %}
+                        <span class="category-tag">{{ genre }}</span>
                     {% endfor %}
-                {% endif %}
+                    {% for category in movie.categories %}
+                        <a href="{{ url_for('movies_by_category', name=category) }}" class="category-tag">{{ category }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-                {% if movie.manual_links %}
-                    <div class="link-group">
-                        <h3>More Links</h3>
-                        {% for link in movie.manual_links %}
-                            <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn"><span>{{ link.name }}</span><i class="fas fa-link"></i></a>
+<main class="container">
+    <nav class="tabs-nav">
+        <button class="tab-link active" data-tab="downloads-pane">Download Links</button>
+        <button class="tab-link" data-tab="info-pane">Storyline</button>
+    </nav>
+
+    <div class="tabs-content">
+        <div class="tab-pane" id="info-pane">
+            <p>{{ movie.overview or 'No description available.' }}</p>
+        </div>
+        <div class="tab-pane active" id="downloads-pane">
+            {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
+            
+            {% if movie.type == 'movie' and movie.links %}
+                <div class="link-group">
+                    {% for link_item in movie.links %}
+                        {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn"><span>Download {{ link_item.quality }}</span><i class="fas fa-download"></i></a>{% endif %}
+                        {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            {% if movie.type == 'series' %}
+                {% set all_seasons = ((movie.episodes | map(attribute='season') | list) + (movie.season_packs | map(attribute='season_number') | list)) | unique | sort %}
+                {% for season_num in all_seasons %}
+                    <div class="episode-list" style="margin-bottom: 20px;">
+                        <h3>Season {{ season_num }}</h3>
+                        {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
+                        {% if season_pack and season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn"><span>Download All Episodes (ZIP)</span><i class="fas fa-file-archive"></i></a>{% endif %}
+                        
+                        {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
+                        {% for ep in episodes_for_season | sort(attribute='episode_number') %}
+                            {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn"><span>Episode {{ ep.episode_number }}: {{ ep.title or 'Watch/Download' }}</span><i class="fas fa-download"></i></a>{% endif %}
                         {% endfor %}
                     </div>
-                {% endif %}
+                {% endfor %}
+            {% endif %}
 
-                {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
-                    <p style="text-align:center; color: var(--text-dark);">No download links available yet.</p>
-                {% endif %}
-            </div>
+            {% if movie.manual_links %}
+                <div class="link-group">
+                    <h3>More Links</h3>
+                    {% for link in movie.manual_links %}
+                        <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn"><span>{{ link.name }}</span><i class="fas fa-link"></i></a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
+                <p style="text-align:center; color: var(--text-dark);">No download links available yet.</p>
+            {% endif %}
         </div>
     </div>
     
-    {% if movie.screenshots %}
-    <section class="category-section container">
+    {% if movie.screenshots and movie.screenshots|length > 0 %}
+    <section class="category-section">
         <h2 class="category-title">Screenshots</h2>
         <div class="swiper gallery-thumbs">
             <div class="swiper-wrapper">
                 {% for ss in movie.screenshots %}
-                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; object-fit: cover;"></div>
+                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; width:100%; object-fit: cover;"></div>
                 {% endfor %}
             </div>
         </div>
@@ -908,7 +983,7 @@ detail_html = """
     {% endif %}
 
     {% if related_content %}
-    <section class="category-section container">
+    <section class="category-section">
         <h2 class="category-title">You Might Also Like</h2>
         <div class="swiper movie-carousel">
             <div class="swiper-wrapper">
@@ -924,14 +999,6 @@ detail_html = """
     </section>
     {% endif %}
 </main>
-
-<nav class="bottom-nav">
-  <a href="{{ url_for('home') }}" class="nav-item"><i class="fas fa-home"></i><span>Home</span></a>
-  <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-film"></i><span>Movies</span></a>
-  <a href="{{ url_for('all_series') }}" class="nav-item"><i class="fas fa-tv"></i><span>Series</span></a>
-  <a href="{{ url_for('request_content') }}" class="nav-item"><i class="fas fa-plus"></i><span>Request</span></a>
-</nav>
-
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
@@ -952,14 +1019,14 @@ detail_html = """
         });
 
         new Swiper('.movie-carousel', {
-            slidesPerView: 3, spaceBetween: 15,
+            slidesPerView: 2.5, spaceBetween: 15,
             breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } }
         });
 
         if (document.querySelector('.gallery-thumbs')) {
             new Swiper('.gallery-thumbs', {
-                slidesPerView: 2, spaceBetween: 10,
-                breakpoints: { 640: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } }
+                slidesPerView: 1.5, spaceBetween: 10,
+                breakpoints: { 640: { slidesPerView: 2.5 }, 1024: { slidesPerView: 3.5 } }
             });
         }
     });
@@ -1567,17 +1634,14 @@ def all_series():
 
 @app.route('/category')
 def movies_by_category():
-    title = request.args.get('name')
-    if not title: return redirect(url_for('home'))
+    name = request.args.get('name')
+    if not name: return redirect(url_for('home'))
     page = request.args.get('page', 1, type=int)
     
-    query_filter = {}
-    if title == "Latest Movies": query_filter = {"type": "movie"}
-    elif title == "Latest Series": query_filter = {"type": "series"}
-    else: query_filter = {"categories": title}
+    query_filter = {"categories": name}
     
     content_list, pagination = get_paginated_content(query_filter, page)
-    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
+    return render_template_string(index_html, movies=content_list, query=name, is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
@@ -1586,6 +1650,9 @@ def request_content():
         extra_info = request.form.get('extra_info', '').strip()
         if content_name:
             requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
+            flash("Your request has been submitted successfully!", "success")
+        else:
+            flash("Content name is required.", "error")
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
