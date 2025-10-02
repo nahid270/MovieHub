@@ -680,11 +680,12 @@ detail_html = """
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
   
-  /* --- [START] NEW HERO SECTION --- */
+  /* --- [START] UPDATED HERO SECTION --- */
   .detail-hero-wrapper {
       position: relative;
       background-size: cover;
       background-position: center 20%;
+      padding: 30px 0;
   }
   .detail-hero-wrapper::before {
       content: '';
@@ -692,23 +693,25 @@ detail_html = """
       top: 0; left: 0;
       width: 100%; height: 100%;
       background: rgba(13, 13, 13, 0.7);
-      backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      z-index: 1;
   }
-  .detail-hero-wrapper::after {
+   .detail-hero-wrapper::after {
       content: '';
       position: absolute;
-      top: 0; left: 0;
+      bottom: 0; left: 0;
       width: 100%; height: 100%;
       background: linear-gradient(to top, var(--bg-color) 5%, transparent 50%);
+      z-index: 2;
   }
   .detail-hero-content {
       position: relative;
-      z-index: 2;
+      z-index: 3;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 80px 15px 40px;
+      padding: 20px 15px;
       gap: 20px;
   }
   .detail-poster {
@@ -727,7 +730,7 @@ detail_html = """
   .detail-title {
       font-size: 2.2rem;
       font-weight: 700;
-      margin: 0 0 10px 0;
+      margin: 15px 0 10px 0;
       text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
   }
   .detail-subtitle {
@@ -761,13 +764,13 @@ detail_html = """
       color: white;
       border-color: var(--primary-color);
   }
-  /* --- [END] NEW HERO SECTION --- */
+  /* --- [END] UPDATED HERO SECTION --- */
   
   .tabs-nav {
       display: flex;
       justify-content: center;
       gap: 10px;
-      margin: 20px 0 30px;
+      margin: 0 0 30px; /* Adjusted margin */
   }
   .tab-link {
       flex: 1;
@@ -863,10 +866,12 @@ detail_html = """
   .ad-container > * { max-width: 100% !important; }
 
   @media (min-width: 768px) {
+      .detail-hero-wrapper {
+          padding: 80px 0 60px;
+      }
       .detail-hero-content {
           flex-direction: row;
           align-items: flex-end;
-          padding: 120px 15px 60px;
           gap: 40px;
       }
       .detail-poster {
@@ -876,7 +881,7 @@ detail_html = """
           text-align: left;
           justify-content: flex-start;
       }
-      .detail-title { font-size: 3.5rem; }
+      .detail-title { font-size: 3.5rem; margin-top: 0; }
       .movie-carousel .swiper-slide {
           width: 180px;
       }
