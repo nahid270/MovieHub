@@ -694,13 +694,13 @@ detail_html = """
   .hero-poster {
       position: absolute;
       left: 20px;
-      top: 20px;
       bottom: 20px;
-      width: 30%;
-      min-width: 120px;
+      height: 85%;
+      aspect-ratio: 2 / 3;
       object-fit: cover;
       border-radius: 8px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      border: 2px solid rgba(255, 255, 255, 0.1);
   }
   .badge-new, .badge-completed {
       position: absolute;
