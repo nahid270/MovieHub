@@ -90,63 +90,59 @@ except Exception as e:
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
-# --- [START] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন (আপনার দেখানো ফরম্যাট অনুযায়ী) ---
-def send_telegram_notification(movie_data, inserted_id):
+# --- [START CHANGE] টেলিগ্রাম নোটিফিকেশন ফাংশন আপডেট করা হয়েছে ---
+def send_telegram_notification(movie_data, content_id, notification_type='new'):
+    """
+    Sends a notification to Telegram.
+    notification_type can be 'new' or 'update'.
+    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
         return
 
     try:
         # মুভির বিস্তারিত পেজের লিঙ্ক
-        movie_url = f"{WEBSITE_URL}/movie/{str(inserted_id)}"
-        
-        # --- নতুন ফরম্যাটের জন্য তথ্য প্রস্তুত করা ---
+        movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
         
         # Quality বের করা
         available_qualities = []
-        if movie_data.get('links'): # মুভির জন্য
+        if movie_data.get('links'):
             for link in movie_data['links']:
                 if link.get('quality'):
                     available_qualities.append(link['quality'])
-        if not available_qualities: # যদি কোনো কোয়ালিটি না পাওয়া যায়, ডিফল্ট
+        if not available_qualities:
             available_qualities.append("BLU-RAY")
         
-        # ডুপ্লিকেট বাদ দিয়ে ইউনিক কোয়ালিটি লিস্ট তৈরি
         quality_str = ", ".join(sorted(list(set(available_qualities))))
-
-        # Language প্রস্তুত করা
         language_str = movie_data.get('language', 'N/A')
-
-        # Genres প্রস্তুত করা
         genres_list = movie_data.get('genres', [])
         genres_str = ", ".join(genres_list) if genres_list else "N/A"
-        
-        # ওয়েবসাইটের পরিষ্কার URL বাটনের জন্য
         clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
-        # --- সম্পূর্ণ ক্যাপশন তৈরি করা ---
-        # টাইটেল এবং অতিরিক্ত তথ্য (যেমন ORG HINDI)
-        caption = f"🔥 **NEW ADDED : {movie_data['title']}**\n"
+        # নোটিফিকেশনের ধরন অনুযায়ী ক্যাপশনের হেডার পরিবর্তন
+        if notification_type == 'update':
+            caption_header = f"🔄 **UPDATED : {movie_data['title']}**\n"
+        else: # Default is 'new'
+            caption_header = f"🔥 **NEW ADDED : {movie_data['title']}**\n"
+        
+        # সম্পূর্ণ ক্যাপশন তৈরি করা
+        caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
              caption += f"**{language_str.upper()}**\n"
 
-        # বিস্তারিত তথ্য
         caption += f"\n🎞️ Quality: **{quality_str}**"
         caption += f"\n🌐 Language: **{language_str}**"
         caption += f"\n🎭 Genres: **{genres_str}**"
-        
-        # ভিজিট লিঙ্ক এবং সতর্কবার্তা
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
-        # --- বাটন তৈরি করা ---
+        # বাটন তৈরি করা
         inline_keyboard = {
             "inline_keyboard": [
                 [{"text": "📥👇 Download Now 👇📥", "url": movie_url}]
             ]
         }
         
-        # --- টেলিগ্রাম API-এর জন্য ডেটা প্রস্তুত করা ---
         api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
         
         payload = {
@@ -157,12 +153,11 @@ def send_telegram_notification(movie_data, inserted_id):
             'reply_markup': json.dumps(inline_keyboard)
         }
         
-        # একটি মাত্র রিকোয়েস্ট পাঠানো
         response = requests.post(api_url, data=payload, timeout=15)
         response.raise_for_status()
         
         if response.json().get('ok'):
-            print(f"SUCCESS: Telegram notification sent successfully for '{movie_data['title']}'.")
+            print(f"SUCCESS: Telegram notification sent successfully for '{movie_data['title']}' (Type: {notification_type}).")
         else:
             print(f"WARNING: Telegram API returned an error: {response.json().get('description')}")
 
@@ -170,7 +165,8 @@ def send_telegram_notification(movie_data, inserted_id):
         print(f"ERROR: Failed to send Telegram notification: {e}")
     except Exception as e:
         print(f"ERROR: An unexpected error occurred in send_telegram_notification: {e}")
-# --- [END] চূড়ান্ত টেলিগ্রাম নোটিফিকেশন ফাংশন ---
+# --- [END CHANGE] ---
+
 
 # --- Custom Jinja Filter for Relative Time ---
 def time_ago(obj_id):
@@ -1106,6 +1102,7 @@ request_html = """
 </body>
 </html>
 """
+# --- [START CHANGE] Admin Panel HTML পুনর্বিন্যাস করা হয়েছে ---
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1176,6 +1173,7 @@ admin_html = """
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
     
+    <!-- ================== START: TOP SECTION (DAILY USE) ================== -->
     <h2><i class="fas fa-tachometer-alt"></i> At a Glance</h2>
     <div class="dashboard-stats">
         <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
@@ -1185,63 +1183,6 @@ admin_html = """
     </div>
     <hr>
     
-    <h2><i class="fas fa-inbox"></i> Manage Requests</h2>
-    <div class="table-container">
-        <table>
-            <thead><tr><th>Content Name</th><th>Extra Info</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-            {% for req in requests_list %}
-            <tr>
-                <td>{{ req.name }}</td>
-                <td style="white-space: pre-wrap; min-width: 200px;">{{ req.info }}</td>
-                <td><span class="status-badge status-{{ req.status|lower }}">{{ req.status }}</span></td>
-                <td class="action-buttons">
-                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Fulfilled') }}" class="btn btn-success" style="padding: 5px 10px;">Fulfilled</a>
-                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Rejected') }}" class="btn btn-secondary" style="padding: 5px 10px;">Rejected</a>
-                    <a href="{{ url_for('delete_request', req_id=req._id) }}" class="btn btn-danger" style="padding: 5px 10px;" onclick="return confirm('Are you sure?')">Delete</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" style="text-align:center;">No pending requests.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <hr>
-    
-    <h2><i class="fas fa-tags"></i> Category Management</h2>
-    <div class="category-management">
-        <form method="post" style="flex: 1; min-width: 300px;">
-            <input type="hidden" name="form_action" value="add_category">
-            <fieldset><legend>Add New Category</legend>
-                <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
-            </fieldset>
-        </form>
-        <div class="category-list">
-            <h3>Existing Categories</h3>
-            {% for cat in categories_list %}<div class="category-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
-        </div>
-    </div>
-    <hr>
-
-    <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
-    <form method="post">
-        <input type="hidden" name="form_action" value="update_ads">
-        <fieldset><legend>Global Ad Codes</legend>
-            <div class="form-group"><label>Header Script:</label><textarea name="ad_header" rows="4">{{ ad_settings.ad_header or '' }}</textarea></div>
-            <div class="form-group"><label>Body Top Script:</label><textarea name="ad_body_top" rows="4">{{ ad_settings.ad_body_top or '' }}</textarea></div>
-            <div class="form-group"><label>Footer Script:</label><textarea name="ad_footer" rows="4">{{ ad_settings.ad_footer or '' }}</textarea></div>
-        </fieldset>
-        <fieldset><legend>In-Page Ad Units</legend>
-             <div class="form-group"><label>Homepage Ad:</label><textarea name="ad_list_page" rows="4">{{ ad_settings.ad_list_page or '' }}</textarea></div>
-             <div class="form-group"><label>Details Page Ad:</label><textarea name="ad_detail_page" rows="4">{{ ad_settings.ad_detail_page or '' }}</textarea></div>
-             <div class="form-group"><label>Wait Page Ad:</label><textarea name="ad_wait_page" rows="4">{{ ad_settings.ad_wait_page or '' }}</textarea></div>
-        </fieldset>
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
-    </form>
-    <hr>
-
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method (Search TMDB)</legend><div class="form-group"><div class="tmdb-fetcher"><input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame"><button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button></div></div></fieldset>
     <form method="post">
@@ -1306,6 +1247,68 @@ admin_html = """
         </table></div>
         <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
     </form>
+    <hr>
+
+    <h2><i class="fas fa-inbox"></i> Manage Requests</h2>
+    <div class="table-container">
+        <table>
+            <thead><tr><th>Content Name</th><th>Extra Info</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for req in requests_list %}
+            <tr>
+                <td>{{ req.name }}</td>
+                <td style="white-space: pre-wrap; min-width: 200px;">{{ req.info }}</td>
+                <td><span class="status-badge status-{{ req.status|lower }}">{{ req.status }}</span></td>
+                <td class="action-buttons">
+                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Fulfilled') }}" class="btn btn-success" style="padding: 5px 10px;">Fulfilled</a>
+                    <a href="{{ url_for('update_request_status', req_id=req._id, status='Rejected') }}" class="btn btn-secondary" style="padding: 5px 10px;">Rejected</a>
+                    <a href="{{ url_for('delete_request', req_id=req._id) }}" class="btn btn-danger" style="padding: 5px 10px;" onclick="return confirm('Are you sure?')">Delete</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;">No pending requests.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <hr>
+    <!-- ================== END: TOP SECTION (DAILY USE) ================== -->
+
+    <!-- ================== START: BOTTOM SECTION (LESS FREQUENT USE) ================== -->
+    <h2><i class="fas fa-tags"></i> Category Management</h2>
+    <div class="category-management">
+        <form method="post" style="flex: 1; min-width: 300px;">
+            <input type="hidden" name="form_action" value="add_category">
+            <fieldset><legend>Add New Category</legend>
+                <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
+            </fieldset>
+        </form>
+        <div class="category-list">
+            <h3>Existing Categories</h3>
+            {% for cat in categories_list %}<div class="category-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+        </div>
+    </div>
+    <hr>
+
+    <h2><i class="fas fa-bullhorn"></i> Advertisement Management</h2>
+    <form method="post">
+        <input type="hidden" name="form_action" value="update_ads">
+        <fieldset><legend>Global Ad Codes</legend>
+            <div class="form-group"><label>Header Script:</label><textarea name="ad_header" rows="4">{{ ad_settings.ad_header or '' }}</textarea></div>
+            <div class="form-group"><label>Body Top Script:</label><textarea name="ad_body_top" rows="4">{{ ad_settings.ad_body_top or '' }}</textarea></div>
+            <div class="form-group"><label>Footer Script:</label><textarea name="ad_footer" rows="4">{{ ad_settings.ad_footer or '' }}</textarea></div>
+        </fieldset>
+        <fieldset><legend>In-Page Ad Units</legend>
+             <div class="form-group"><label>Homepage Ad:</label><textarea name="ad_list_page" rows="4">{{ ad_settings.ad_list_page or '' }}</textarea></div>
+             <div class="form-group"><label>Details Page Ad:</label><textarea name="ad_detail_page" rows="4">{{ ad_settings.ad_detail_page or '' }}</textarea></div>
+             <div class="form-group"><label>Wait Page Ad:</label><textarea name="ad_wait_page" rows="4">{{ ad_settings.ad_wait_page or '' }}</textarea></div>
+        </fieldset>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
+    </form>
+    <hr>
+    <!-- ================== END: BOTTOM SECTION (LESS FREQUENT USE) ================== -->
+
 </div>
 <div class="modal-overlay" id="search-modal"><div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"></div></div></div>
 <script>
@@ -1353,6 +1356,7 @@ admin_html = """
 </script>
 </body></html>
 """
+# --- [END CHANGE] ---
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1607,7 +1611,7 @@ def admin():
             
             result = movies.insert_one(movie_data)
             if result.inserted_id:
-                send_telegram_notification(movie_data, result.inserted_id)
+                send_telegram_notification(movie_data, result.inserted_id) # 'notification_type' ডিফল্ট হিসেবে 'new' থাকবে
 
         return redirect(url_for('admin'))
     
@@ -1674,6 +1678,13 @@ def edit_movie(movie_id):
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
+        
+        # --- [START CHANGE] আপডেট নোটিফিকেশন পাঠানোর কোড ---
+        notification_data = movie_obj.copy()
+        notification_data.update(update_data)
+        send_telegram_notification(notification_data, obj_id, notification_type='update')
+        # --- [END CHANGE] ---
+        
         return redirect(url_for('admin'))
     
     categories_list = list(categories_collection.find().sort("name", 1))
