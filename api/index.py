@@ -671,6 +671,7 @@ detail_html = """
       --primary-color: #E50914;
       --accent-color-1: #00aaff;
       --accent-color-2: #90ee90;
+      --g-1: #ff00de; --g-2: #00ffff;
   }
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding:0; }
@@ -805,6 +806,8 @@ detail_html = """
       color: var(--text-dark);
       text-align: center;
   }
+  
+  /* --- [START] NEW ACTION BUTTONS --- */
   .action-btn {
       display: flex;
       justify-content: space-between;
@@ -814,14 +817,35 @@ detail_html = """
       border-radius: 8px;
       font-weight: 500;
       font-size: 1rem;
-      background-color: var(--card-bg);
-      transition: background-color 0.2s ease;
+      color: white;
+      background: linear-gradient(90deg, var(--g-1), var(--g-2), var(--g-1));
+      background-size: 200% 100%;
+      transition: background-position 0.5s ease;
   }
-  .action-btn:hover { background-color: #252525; }
-  .action-btn i { color: var(--primary-color); }
-  
+  .action-btn:hover {
+      background-position: 100% 0;
+  }
+  .action-btn i { color: white; }
+  /* --- [END] NEW ACTION BUTTONS --- */
+
   .category-section { margin: 50px 0; }
   .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
+
+  /* --- [START] NEW MOVIE CAROUSEL --- */
+  .movie-carousel .swiper-slide {
+      width: 140px;
+  }
+  .movie-card {
+      display: block;
+      position: relative;
+  }
+  .movie-card .movie-poster {
+      width: 100%;
+      aspect-ratio: 2/3;
+      object-fit: cover;
+      border-radius: 8px;
+  }
+  /* --- [END] NEW MOVIE CAROUSEL --- */
 
   @media (min-width: 768px) {
       .detail-hero-content {
@@ -838,6 +862,9 @@ detail_html = """
           justify-content: flex-start;
       }
       .detail-title { font-size: 2.8rem; }
+      .movie-carousel .swiper-slide {
+          width: 180px;
+      }
   }
 </style>
 </head>
