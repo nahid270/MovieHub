@@ -658,159 +658,204 @@ detail_html = """
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
 <meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 {{ ad_settings.ad_header | safe }}
 <style>
-  :root {--primary-color: #E50914; --bg-color: #121212;--card-bg: #1a1a1a;--text-light: #ffffff;--text-dark: #a0a0a0; --button-bg: #333; --button-hover-bg: #444;}
+  :root {
+      --bg-color: #0d0d0d;
+      --card-bg: #1a1a1a;
+      --text-light: #ffffff;
+      --text-dark: #8c8c8c;
+      --primary-color: #E50914;
+      --accent-color-1: #00aaff;
+      --accent-color-2: #90ee90;
+  }
   html { box-sizing: border-box; } *, *:before, *:after { box-sizing: inherit; }
-  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden;}
+  body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding:0; }
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
   
-  .detail-hero {
+  .detail-hero-wrapper {
       position: relative;
-      padding-top: 50vh;
       background-size: cover;
-      background-position: center 20%;
+      background-position: center 10%;
   }
-  .detail-hero::after {
+  .detail-hero-wrapper::before {
       content: '';
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      background: linear-gradient(to top, var(--bg-color) 10%, rgba(18,18,18,0.8) 50%, rgba(18,18,18,0.2) 100%);
+      background: rgba(13, 13, 13, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
   }
-  .detail-content-wrapper {
+  .detail-hero-wrapper::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: linear-gradient(to top, var(--bg-color) 15%, transparent 50%);
+  }
+  .detail-hero-content {
       position: relative;
       z-index: 2;
-      margin-top: -200px;
-  }
-  .detail-content {
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding: 80px 15px 40px;
       gap: 20px;
   }
   .detail-poster {
-      width: 60%;
-      max-width: 200px;
-      height: auto;
+      width: 150px;
+      height: 225px;
       flex-shrink: 0;
       border-radius: 8px;
       object-fit: cover;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      box-shadow: 0 5px 25px rgba(0,0,0,0.5);
   }
   .detail-info {
-      max-width: 100%;
+      flex-grow: 1;
       text-align: center;
   }
-  .detail-title { font-size: 2.2rem; font-weight: 700; line-height: 1.2; margin-bottom: 10px; }
-  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 15px; font-size: 0.9rem; justify-content: center;}
-  .meta-item { display: flex; align-items: center; gap: 8px; }
-  .meta-item.rating { color: #f5c518; font-weight: 600; }
+  .detail-title {
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--text-light);
+      margin: 0 0 10px 0;
+  }
+  .detail-subtitle {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin: 0 0 15px 0;
+  }
+  .detail-subtitle .year { color: var(--accent-color-1); }
+  .detail-subtitle .lang { color: var(--accent-color-2); }
   .category-tags-container {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 8px;
-      margin-bottom: 20px;
   }
   .category-tag {
-      background-color: var(--card-bg);
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       color: var(--text-dark);
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
+      padding: 4px 12px;
+      border-radius: 50px;
+      font-size: 0.75rem;
       font-weight: 500;
       transition: all 0.2s ease;
   }
   .category-tag:hover {
       background-color: var(--primary-color);
       color: white;
+      border-color: var(--primary-color);
   }
-  .detail-overview { font-size: 0.95rem; line-height: 1.7; color: var(--text-dark); margin-bottom: 30px; }
   
-  .tabs-container { margin: 40px 0; }
-  .tabs-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 25px; }
-  .tab-link { padding: 10px 20px; cursor: pointer; font-weight: 500; color: var(--text-dark); position: relative; font-size: 1rem; background-color: var(--button-bg); border-radius: 8px; transition: all 0.2s ease;}
-  .tab-link.active { color: var(--text-light); background-color: var(--primary-color);}
+  .tabs-nav {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0 30px;
+  }
+  .tab-link {
+      flex: 1;
+      max-width: 200px;
+      padding: 12px;
+      background-color: var(--card-bg);
+      border: none;
+      color: var(--text-dark);
+      font-weight: 600;
+      font-size: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+  }
+  .tab-link.active {
+      background-color: var(--primary-color);
+      color: var(--text-light);
+  }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; animation: fadeIn 0.5s; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-  .link-group { margin-bottom: 30px; text-align: center; }
-  .link-buttons { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;}
-  .action-btn { 
-    display: inline-flex; align-items: center; justify-content: center; gap: 10px; 
-    padding: 12px 25px; border-radius: 8px; font-weight: 600; transition: all 0.2s ease; 
-    text-align: center; background-color: var(--button-bg);
+  
+  #info-pane p {
+      font-size: 0.95rem;
+      line-height: 1.8;
+      color: var(--text-dark);
+      text-align: justify;
+      background-color: var(--card-bg);
+      padding: 20px;
+      border-radius: 8px;
   }
-  .action-btn:hover { background-color: var(--button-hover-bg); transform: translateY(-2px); }
-  .action-btn.btn-watch { background-color: #007bff; }
-  .action-btn.btn-download { background-color: var(--primary-color); }
-  
-  .episode-list { display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin: 0 auto; }
-  .episode-item { display: flex; flex-direction: row; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
-  .episode-item:hover { background-color: #252525; }
-  .episode-name { font-weight: 500; }
-  
-  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
-  .ad-container > * { max-width: 100% !important; }
-  .category-section { margin: 50px 0; }
-  .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .category-title { font-size: 1.5rem; font-weight: 600; }
-  .movie-carousel .swiper-slide { width: 150px; }
-  .movie-card { display: block; position: relative; }
-  .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }
-  .card-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card-meta { font-size: 0.8rem; color: var(--text-dark); }
-  .swiper-button-next, .swiper-button-prev { color: var(--text-light); display: none; }
 
-  .screenshots-section { margin: 40px 0; }
-  .screenshots-section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; text-align: center; }
-  .gallery-top { border-radius: 10px; margin-bottom: 10px; background: #111; }
-  .gallery-top .swiper-slide img { display: block; width: 100%; height: auto; object-fit: contain; }
-  .gallery-thumbs { height: 100px; }
-  .gallery-thumbs .swiper-slide { width: 25%; height: 100%; opacity: 0.5; transition: opacity 0.3s; }
-  .gallery-thumbs .swiper-slide-thumb-active { opacity: 1; border: 2px solid var(--primary-color); border-radius: 5px; }
-  .gallery-thumbs .swiper-slide img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+  .link-group, .episode-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 800px;
+      margin: 0 auto;
+  }
+  .link-group h3, .episode-list h3 {
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 10px;
+      color: var(--text-dark);
+      text-align: center;
+  }
+  .action-btn {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 15px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 1rem;
+      background-color: var(--card-bg);
+      transition: background-color 0.2s ease;
+  }
+  .action-btn:hover { background-color: #252525; }
+  .action-btn i { color: var(--primary-color); }
+  
+  .category-section { margin: 50px 0; }
+  .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
 
   @media (min-width: 768px) {
-    .container { padding: 0 40px; }
-    .detail-hero { padding-top: 45vh; }
-    .detail-content-wrapper { margin-top: -250px; }
-    .detail-content { flex-direction: row; align-items: flex-end; text-align: left; }
-    .detail-poster { width: 250px; max-width: 250px; }
-    .detail-info, .detail-meta, .category-tags-container { text-align: left; justify-content: flex-start; }
-    .detail-title { font-size: 3.2rem; }
-    .movie-carousel .swiper-slide { width: 220px; }
-    .swiper-button-next, .swiper-button-prev { display: flex; }
-    .gallery-thumbs { height: 150px; }
-    .screenshots-section h2 { text-align: left; }
+      .detail-hero-content {
+          flex-direction: row;
+          align-items: flex-end;
+          padding: 120px 15px 50px;
+      }
+      .detail-poster {
+          width: 200px;
+          height: 300px;
+      }
+      .detail-info, .category-tags-container {
+          text-align: left;
+          justify-content: flex-start;
+      }
+      .detail-title { font-size: 2.8rem; }
   }
 </style>
 </head>
 <body>
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
-
-<div class="detail-hero" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
-</div>
-
-<div class="detail-content-wrapper">
+<div class="detail-hero-wrapper" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
     <div class="container">
-        <div class="detail-content">
+        <div class="detail-hero-content">
             <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
             <div class="detail-info">
                 <h1 class="detail-title">{{ movie.title }}</h1>
-                <div class="detail-meta">
-                    {% if movie.vote_average %}<div class="meta-item rating"><i class="fas fa-star"></i> {{ "%.1f"|format(movie.vote_average) }}</div>{% endif %}
-                    {% if movie.release_date %}<div class="meta-item"><i class="fas fa-calendar-alt"></i> {{ movie.release_date.split('-')[0] }}</div>{% endif %}
-                    {% if movie.language %}<div class="meta-item"><i class="fas fa-language"></i> {{ movie.language }}</div>{% endif %}
-                </div>
-                {% if movie.genres or movie.categories %}
+                {% set first_episode = movie.episodes|sort(attribute='episode_number')|first if movie.episodes else none %}
+                <p class="detail-subtitle">
+                    {% if movie.release_date %}<span class="year">({{ movie.release_date.split('-')[0] }})</span>{% endif %}
+                    {% if first_episode and first_episode.season %}<span class="season">S0{{ first_episode.season }}</span>{% endif %}
+                    {% if movie.language %}<span class="lang">{{ movie.language }}</span>{% endif %}
+                </p>
                 <div class="category-tags-container">
                     {% for genre in movie.genres %}
                         <span class="category-tag">{{ genre }}</span>
@@ -819,102 +864,71 @@ detail_html = """
                         <a href="{{ url_for('movies_by_category', name=category) }}" class="category-tag">{{ category }}</a>
                     {% endfor %}
                 </div>
-                {% endif %}
-                <p class="detail-overview">{{ movie.overview }}</p>
             </div>
         </div>
     </div>
 </div>
 
-<div class="container">
-    <div class="tabs-container">
-        {% set episode_seasons = movie.episodes | map(attribute='season') | list if movie.episodes else [] %}
-        {% set pack_seasons = movie.season_packs | map(attribute='season_number') | list if movie.season_packs else [] %}
-        {% set all_seasons = (episode_seasons + pack_seasons) | unique | sort %}
-        <nav class="tabs-nav">
-            {% if movie.type == 'movie' or all_seasons %}
-                <div class="tab-link active" data-tab="downloads"><i class="fas fa-download"></i> Download Links</div>
-            {% else %}
-                 <div class="tab-link active" data-tab="no-links"><i class="fas fa-link"></i> Links</div>
+<main class="container">
+    <nav class="tabs-nav">
+        <button class="tab-link" data-tab="info-pane">Info</button>
+        <button class="tab-link active" data-tab="downloads-pane">Download Links</button>
+    </nav>
+
+    <div class="tabs-content">
+        <div class="tab-pane" id="info-pane">
+            <p>{{ movie.overview or 'No description available.' }}</p>
+        </div>
+        <div class="tab-pane active" id="downloads-pane">
+            {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
+            
+            {% if movie.type == 'movie' and movie.links %}
+                <div class="link-group">
+                    {% for link_item in movie.links %}
+                        {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn"><span>Download {{ link_item.quality }}</span><i class="fas fa-download"></i></a>{% endif %}
+                        {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
+                    {% endfor %}
+                </div>
             {% endif %}
-        </nav>
-        <div class="tabs-content">
-            <div class="tab-pane active" id="downloads">
-                {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
-                
-                {% if movie.type == 'movie' %}
-                    {% if movie.links %}
-                        <div class="link-group">
-                            <div class="link-buttons">
-                                {% for link_item in movie.links %}
-                                    {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn btn-watch"><i class="fas fa-play"></i> Watch {{ link_item.quality }}</a>{% endif %}
-                                    {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn btn-download"><i class="fas fa-download"></i> Download {{ link_item.quality }}</a>{% endif %}
-                                {% endfor %}
-                            </div>
-                        </div>
-                    {% endif %}
-                {% else %}
-                    {% for season_num in all_seasons %}
-                        {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else None %}
-                        {% if season_pack and (season_pack.watch_link or season_pack.download_link) %}
-                        <div class="link-group">
-                            <h3>Season {{ season_num }} Pack</h3>
-                            <div class="link-buttons">
-                                {% if season_pack.watch_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.watch_link)) }}" class="action-btn btn-watch"><i class="fas fa-play-circle"></i> Watch All</a>{% endif %}
-                                {% if season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn btn-download"><i class="fas fa-cloud-download-alt"></i> Download All</a>{% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
+            
+            {% if movie.type == 'series' %}
+                {% set all_seasons = ((movie.episodes | map(attribute='season') | list) + (movie.season_packs | map(attribute='season_number') | list)) | unique | sort %}
+                {% for season_num in all_seasons %}
+                    <div class="episode-list" style="margin-bottom: 20px;">
+                        <h3>Season {{ season_num }}</h3>
+                        {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
+                        {% if season_pack and season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn"><span>Download All Episodes (ZIP)</span><i class="fas fa-file-archive"></i></a>{% endif %}
                         
                         {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
-                        {% if episodes_for_season %}
-                        <div class="episode-list">
-                            <h3>Season {{ season_num }} Episodes</h3>
-                            {% for ep in episodes_for_season | sort(attribute='episode_number') %}
-                            <div class="episode-item">
-                                <span class="episode-name"><i class="fas fa-play-circle"></i> Episode {{ ep.episode_number }} {% if ep.title %}- {{ep.title}}{% endif %}</span>
-                                {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn"><i class="fas fa-download"></i> Download</a>{% endif %}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
-
-                {% if movie.manual_links %}
-                <div class="link-group">
-                    <h3>More Links</h3>
-                    <div class="link-buttons">
-                        {% for link in movie.manual_links %}
-                            <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn btn-download">{{ link.name }}</a>
+                        {% for ep in episodes_for_season | sort(attribute='episode_number') %}
+                            {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn"><span>Episode {{ ep.episode_number }}: {{ ep.title or 'Watch/Download' }}</span><i class="fas fa-download"></i></a>{% endif %}
                         {% endfor %}
                     </div>
-                </div>
-                {% endif %}
+                {% endfor %}
+            {% endif %}
 
-                {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
-                    <p style="text-align:center;">No links available yet.</p>
-                {% endif %}
-            </div>
+            {% if movie.manual_links %}
+                <div class="link-group">
+                    <h3>More Links</h3>
+                    {% for link in movie.manual_links %}
+                        <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn"><span>{{ link.name }}</span><i class="fas fa-link"></i></a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
+                <p style="text-align:center; color: var(--text-dark);">No download links available yet.</p>
+            {% endif %}
         </div>
     </div>
     
     {% if movie.screenshots %}
-    <section class="screenshots-section">
-        <h2><i class="fas fa-images"></i> Screenshots</h2>
-        <div class="swiper gallery-top">
-            <div class="swiper-wrapper">
-                {% for ss in movie.screenshots %}
-                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Screenshot of {{ movie.title }}"></div>
-                {% endfor %}
-            </div>
-            <div class="swiper-button-next"></div>
-            <div class="swiper-button-prev"></div>
-        </div>
+    <section class="category-section">
+        <h2 class="category-title">Screenshots</h2>
         <div class="swiper gallery-thumbs">
             <div class="swiper-wrapper">
                 {% for ss in movie.screenshots %}
-                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}"></div>
+                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; object-fit: cover;"></div>
                 {% endfor %}
             </div>
         </div>
@@ -923,42 +937,52 @@ detail_html = """
 
     {% if related_content %}
     <section class="category-section">
-        <div class="category-header"><h2 class="category-title">You Might Also Like</h2></div>
+        <h2 class="category-title">You Might Also Like</h2>
         <div class="swiper movie-carousel">
             <div class="swiper-wrapper">
                 {% for m in related_content %}
                 <div class="swiper-slide">
                     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
                         <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-                        <h4 class="card-title">{{ m.title }}</h4>
-                        <p class="card-meta">{{ m.release_date.split('-')[0] if m.release_date else '' }}</p>
                     </a>
                 </div>
                 {% endfor %}
             </div>
-            <div class="swiper-button-next"></div><div class="swiper-button-prev"></div>
         </div>
     </section>
     {% endif %}
-</div>
+</main>
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
-    document.querySelectorAll('.tab-link').forEach(link => { link.addEventListener('click', () => {
-        const tabId = link.getAttribute('data-tab');
-        document.querySelectorAll('.tab-link').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-        link.classList.add('active');
-        const targetPane = document.getElementById(tabId);
-        if(targetPane) targetPane.classList.add('active');
-    }); });
+    document.addEventListener('DOMContentLoaded', function () {
+        const tabLinks = document.querySelectorAll('.tab-link');
+        const tabPanes = document.querySelectorAll('.tab-pane');
 
-    new Swiper('.movie-carousel', { slidesPerView: 'auto', spaceBetween: 15, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' } });
+        tabLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                const tabId = link.getAttribute('data-tab');
+                
+                tabLinks.forEach(item => item.classList.remove('active'));
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                
+                link.classList.add('active');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
 
-    if (document.querySelector('.gallery-thumbs')) {
-        var galleryThumbs = new Swiper('.gallery-thumbs', { spaceBetween: 10, slidesPerView: 4, freeMode: true, watchSlidesVisibility: true, watchSlidesProgress: true });
-        var galleryTop = new Swiper('.gallery-top', { spaceBetween: 10, navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }, thumbs: { swiper: galleryThumbs } });
-    }
+        new Swiper('.movie-carousel', {
+            slidesPerView: 3, spaceBetween: 15,
+            breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } }
+        });
+
+        if (document.querySelector('.gallery-thumbs')) {
+            new Swiper('.gallery-thumbs', {
+                slidesPerView: 2, spaceBetween: 10,
+                breakpoints: { 640: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } }
+            });
+        }
+    });
 </script>
 {{ ad_settings.ad_footer | safe }}
 </body></html>
