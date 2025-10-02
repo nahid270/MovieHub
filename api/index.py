@@ -657,7 +657,6 @@ detail_html = """
 <title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
-<meta name="keywords" content="{{ movie.title }}, movie details, download {{ movie.title }}, {{ website_name }}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
@@ -678,24 +677,24 @@ detail_html = """
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 20px 15px; }
   
-  /* --- [START] NEW HERO SECTION STYLES (AS PER SCREENSHOT) --- */
+  /* --- [START] FINAL HERO SECTION STYLES --- */
   .hero-section {
       position: relative;
       width: 100%;
       max-width: 900px;
-      margin: 80px auto 20px;
+      margin: 20px auto 80px; /* Increased bottom margin for hanging poster */
       aspect-ratio: 16 / 9;
       background-size: cover;
       background-position: center;
       border-radius: 12px;
       box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
-      overflow: hidden;
+      overflow: visible; /* Allows poster to hang outside */
   }
   .hero-poster {
       position: absolute;
-      left: 20px;
-      bottom: 20px;
-      height: 85%;
+      left: 30px;
+      bottom: -60px; /* Pushes the poster below the container */
+      height: 95%;
       aspect-ratio: 2 / 3;
       object-fit: cover;
       border-radius: 8px;
@@ -726,6 +725,8 @@ detail_html = """
   .content-title-section {
       text-align: center;
       padding: 10px 15px 30px;
+      max-width: 900px;
+      margin: 0 auto;
   }
   .main-title {
       font-family: 'Oswald', sans-serif;
@@ -737,9 +738,9 @@ detail_html = """
   }
   .title-meta-info {
       color: var(--lime-accent);
-      display: block; /* Makes it appear on a new line or wrap nicely */
+      display: block;
   }
-  /* --- [END] NEW HERO SECTION STYLES --- */
+  /* --- [END] FINAL HERO SECTION STYLES --- */
 
   .tabs-nav { display: flex; justify-content: center; gap: 10px; margin: 20px 0 30px; }
   .tab-link { flex: 1; max-width: 200px; padding: 12px; background-color: var(--card-bg); border: none; color: var(--text-dark); font-weight: 600; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
@@ -758,7 +759,7 @@ detail_html = """
   .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
   .movie-carousel .swiper-slide { width: 140px; }
   .movie-card { display: block; position: relative; }
-  .movie-card .movie-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; }
+  .movie-card .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; }
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
@@ -770,7 +771,7 @@ detail_html = """
 {% if movie %}
 <main class="container">
     
-    <!-- NEW HERO SECTION -->
+    <!-- FINAL HERO SECTION -->
     <div class="hero-section" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
         <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="hero-poster">
         
@@ -783,7 +784,7 @@ detail_html = """
         {% endif %}
     </div>
 
-    <!-- NEW TITLE SECTION -->
+    <!-- TITLE SECTION -->
     <div class="content-title-section">
         <h1 class="main-title">
             {{ movie.title }}
