@@ -669,64 +669,87 @@ detail_html = """
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; }
   
-  /* --- [START] NEW HERO/HEADER DESIGN --- */
-  .detail-header-section {
-    position: relative;
-    width: 100%;
-    height: 30vh; /* Adjust height for mobile */
-    background-color: var(--card-bg);
+  /* --- [START] NEW HERO DESIGN --- */
+  .detail-hero {
+      position: relative;
+      padding: 100px 0 50px;
+      min-height: 50vh;
+      display: flex;
+      align-items: center;
   }
-  .hero-background-image {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    object-position: top;
+  .hero-background {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      filter: blur(8px) brightness(0.4);
+      transform: scale(1.1);
   }
-  .detail-header-section::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: linear-gradient(to top, var(--bg-color) 5%, rgba(18, 18, 18, 0.7) 40%, transparent 100%);
-    z-index: 2;
+  .detail-hero::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: linear-gradient(to top, var(--bg-color) 0%, rgba(18,18,18,0.7) 30%, transparent 100%);
   }
-  .detail-main-content {
-    position: relative;
-    margin-top: -100px; /* Pull content up over the backdrop image */
-    z-index: 3;
-  }
-  .detail-body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
+  .detail-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
   }
   .detail-poster {
-    width: 60%;
-    max-width: 250px;
-    height: auto;
-    aspect-ratio: 2 / 3;
-    flex-shrink: 0;
-    border-radius: 12px;
-    object-fit: cover;
-    border: 3px solid #fff;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      width: 60%;
+      max-width: 220px;
+      height: auto;
+      flex-shrink: 0;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 3px solid #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
   .detail-info {
-    max-width: 700px;
-    text-align: center;
+      max-width: 700px;
+      text-align: center;
   }
-  /* --- [END] NEW HERO/HEADER DESIGN --- */
+  /* --- [END] NEW HERO DESIGN --- */
 
   .detail-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
-  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 20px; font-size: 0.9rem; justify-content: center;}
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 10px 20px; color: var(--text-dark); margin-bottom: 15px; font-size: 0.9rem; justify-content: center;}
   .meta-item { display: flex; align-items: center; gap: 8px; }
   .meta-item.rating { color: #f5c518; font-weight: 600; }
+  
+  /* --- [START] NEW CATEGORY TAGS --- */
+  .category-tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+  }
+  .category-tag {
+      background-color: var(--card-bg);
+      border: 1px solid #333;
+      color: var(--text-dark);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+  }
+  .category-tag:hover {
+      background-color: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+  }
+  /* --- [END] NEW CATEGORY TAGS --- */
+
   .detail-overview { font-size: 1rem; line-height: 1.7; color: var(--text-dark); margin-bottom: 30px; }
   .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 25px; border-radius: 50px; font-weight: 600; transition: all 0.2s ease; text-align: center; }
   .btn-download { background-color: var(--primary-color); } .btn-download:hover { transform: scale(1.05); }
-  .btn-watch { background-color: var(--watch-color); } .btn-watch:hover { transform: scale(1.05); }
   
   .tabs-container { margin: 40px 0; }
   .tabs-nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid #333; justify-content: center; }
@@ -769,13 +792,12 @@ detail_html = """
 
   @media (min-width: 768px) {
     .container { padding: 0 40px; }
-    .detail-header-section { height: 55vh; }
-    .detail-main-content { margin-top: -150px; }
-    .detail-body { flex-direction: row; align-items: flex-start; gap: 40px; }
-    .detail-poster { width: 300px; max-width: 300px; }
+    .detail-hero { padding: 120px 0 60px; min-height: 60vh; }
+    .detail-content { flex-direction: row; text-align: left; }
+    .detail-poster { width: 280px; max-width: 280px; }
     .detail-info { text-align: left; }
     .detail-title { font-size: 3rem; }
-    .detail-meta { justify-content: flex-start; }
+    .detail-meta, .category-tags-container { justify-content: flex-start; }
     .tabs-nav { justify-content: flex-start; }
     .episode-item { flex-direction: row; justify-content: space-between; align-items: center; }
     .movie-carousel .swiper-slide { width: 220px; }
@@ -788,14 +810,9 @@ detail_html = """
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
 
-<!-- Main backdrop image header -->
-<div class="detail-header-section">
-    <img src="{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}" class="hero-background-image" alt="Backdrop of {{ movie.title }}">
-</div>
-
-<!-- Main content area with poster and details -->
-<div class="container detail-main-content">
-    <div class="detail-body">
+<div class="detail-hero">
+    <img src="{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}" class="hero-background" alt="">
+    <div class="container detail-content">
         <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="detail-poster">
         <div class="detail-info">
             <h1 class="detail-title">{{ movie.title }}</h1>
@@ -805,6 +822,13 @@ detail_html = """
                 {% if movie.language %}<div class="meta-item"><i class="fas fa-language"></i> {{ movie.language }}</div>{% endif %}
                 {% if movie.genres %}<div class="meta-item"><i class="fas fa-tag"></i> {{ movie.genres | join(' / ') }}</div>{% endif %}
             </div>
+            {% if movie.categories %}
+            <div class="category-tags-container">
+                {% for category in movie.categories %}
+                    <a href="{{ url_for('movies_by_category', name=category) }}" class="category-tag">{{ category }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
             <p class="detail-overview">{{ movie.overview }}</p>
         </div>
     </div>
