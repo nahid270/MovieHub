@@ -22,6 +22,15 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
+# --- OTT Platform Definitions ---
+OTT_PLATFORMS = ["None", "Chorki", "Hoichoi", "BongoBD", "Binge", "Netflix", "Amazon Prime Video"]
+OTT_LOGOS = {
+    "Chorki": "https://i.ibb.co/LQrY78K/chorki.png",
+    "Hoichoi": "https://i.ibb.co/3s3xBF0/hoichoi.png",
+    "BongoBD": "https://i.ibb.co/Q8b5TjB/bongo.png",
+    "Binge": "https://i.ibb.co/r7scpYq/binge.png"
+}
+
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
     print("FATAL: One or more required environment variables are missing.")
@@ -70,6 +79,7 @@ try:
         movies.create_index("categories")
         movies.create_index("updated_at")
         movies.create_index("tmdb_id")
+        movies.create_index("ott_platform") # New index for OTT platform
         categories_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
@@ -178,7 +188,15 @@ def inject_globals():
         "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart",
         "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home"
     }
-    return dict(website_name=WEBSITE_NAME, ad_settings=ad_settings or {}, predefined_categories=all_categories, quote=quote, datetime=datetime, category_icons=category_icons)
+    return dict(
+        website_name=WEBSITE_NAME, 
+        ad_settings=ad_settings or {}, 
+        predefined_categories=all_categories, 
+        quote=quote, 
+        datetime=datetime, 
+        category_icons=category_icons,
+        ott_logos=OTT_LOGOS
+    )
 
 # =========================================================================================
 # === [START] HTML TEMPLATES ==============================================================
@@ -326,6 +344,20 @@ index_html = """
   .hero-slider .swiper-pagination { position: absolute; bottom: 10px !important; left: 20px !important; width: auto !important; }
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
+  
+  /* --- [START] OTT PLATFORM STYLES --- */
+  .platform-section { margin: 40px 0; }
+  .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .platform-item { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--text-dark); transition: transform 0.2s ease, color 0.2s ease; }
+  .platform-item:hover { transform: scale(1.08); color: var(--text-light); }
+  .platform-logo-wrapper { width: 80px; height: 80px; border-radius: 50%; background-color: #fff; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 2px solid #444; }
+  .platform-logo-wrapper img { max-width: 70%; max-height: 70%; object-fit: contain; }
+  .platform-item span { font-weight: 500; font-size: 0.9rem; }
+  @media (max-width: 480px) {
+    .platform-grid { grid-template-columns: repeat(2, 1fr); gap: 30px; }
+    .platform-logo-wrapper { width: 100px; height: 100px; }
+  }
+  /* --- [END] OTT PLATFORM STYLES --- */
 
   .category-section { margin: 30px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -473,9 +505,17 @@ index_html = """
         <div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>
         {% if pagination and pagination.total_pages > 1 %}
         <div class="pagination">
-            {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, page=pagination.prev_num, name=query if 'category' in request.endpoint else None) }}">&laquo; Prev</a>{% endif %}
+            {% set url_args = {'page': pagination.prev_num} %}
+            {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
+            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, **url_args) }}">&laquo; Prev</a>{% endif %}
+            
             <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
-            {% if pagination.has_next %}<a href="{{ url_for(request.endpoint, page=pagination.next_num, name=query if 'category' in request.endpoint else None) }}">Next &raquo;</a>{% endif %}
+            
+            {% set url_args = {'page': pagination.next_num} %}
+            {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
+            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if pagination.has_next %}<a href="{{ url_for(request.endpoint, **url_args) }}">Next &raquo;</a>{% endif %}
         </div>
         {% endif %}
         {% endif %}
@@ -540,6 +580,23 @@ index_html = """
         </div>
     </section>
     {% endif %}
+
+    <!-- ================== START: OTT PLATFORM SECTION ================== -->
+    {% if ott_logos %}
+    <section class="platform-section container">
+        <div class="platform-grid">
+            {% for name, logo_url in ott_logos.items() %}
+                <a href="{{ url_for('movies_by_platform', platform_name=name) }}" class="platform-item">
+                    <div class="platform-logo-wrapper">
+                        <img src="{{ logo_url }}" alt="{{ name }} Logo">
+                    </div>
+                    <span>{{ name }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    <!-- ================== END: OTT PLATFORM SECTION ================== -->
 
     <div class="container">
       {% macro render_grid_section(title, movies_list, cat_name) %}
@@ -1123,6 +1180,13 @@ admin_html = """
             <div class="form-group"><label>Genres (comma-separated):</label><input type="text" name="genres" id="genres"></div>
             <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}"> {{ cat.name }}</label>{% endfor %}</div></div>
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
+            <div class="form-group"><label>OTT Platform:</label>
+                <select name="ott_platform">
+                    {% for platform in ott_platforms %}
+                    <option value="{{ platform }}">{{ platform }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="form-group"><div class="checkbox-group"><label><input type="checkbox" name="is_completed"> Mark as Completed?</label></div></div>
         </fieldset>
         <div id="movie_fields">
@@ -1340,6 +1404,13 @@ edit_html = """
         <div class="form-group"><label>Genres:</label><input type="text" name="genres" id="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}"></div>
         <div class="form-group"><label>Categories:</label><div class="checkbox-group">{% for cat in categories_list %}<label><input type="checkbox" name="categories" value="{{ cat.name }}" {% if movie.categories and cat.name in movie.categories %}checked{% endif %}> {{ cat.name }}</label>{% endfor %}</div></div>
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
+        <div class="form-group"><label>OTT Platform:</label>
+            <select name="ott_platform">
+                {% for platform in ott_platforms %}
+                <option value="{{ platform }}" {% if movie.ott_platform == platform %}selected{% endif %}>{{ platform }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="form-group"><div class="checkbox-group"><label><input type="checkbox" name="is_completed" {% if movie.is_completed %}checked{% endif %}> Mark as Completed?</label></div></div>
     </fieldset>
     <div id="movie_fields">
@@ -1479,10 +1550,13 @@ def movie_detail(movie_id):
             {"$inc": {"view_count": 1}},
             return_document=True
         )
-        if not movie: return "Content not found", 404
+        if not movie: 
+            return "Content not found", 404
         related_content = list(movies.find({"type": movie.get('type'), "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
-    except: return "Content not found", 404
+    except Exception as e:
+        print(f"Error in movie_detail: {e}")
+        return "Content not found", 404
 
 def get_paginated_content(query_filter, page):
     skip = (page - 1) * ITEMS_PER_PAGE
@@ -1516,6 +1590,14 @@ def movies_by_category():
     
     content_list, pagination = get_paginated_content(query_filter, page)
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
+
+@app.route('/platform/<platform_name>')
+def movies_by_platform(platform_name):
+    page = request.args.get('page', 1, type=int)
+    query_filter = {"ott_platform": platform_name}
+    
+    content_list, pagination = get_paginated_content(query_filter, page)
+    return render_template_string(index_html, movies=content_list, query=f"{platform_name} Originals", is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
@@ -1552,6 +1634,7 @@ def admin():
             screenshots_text = request.form.get("screenshots", "").strip()
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
             is_completed = 'is_completed' in request.form
+            ott_platform = request.form.get("ott_platform")
             
             tmdb_id = request.form.get("tmdb_id")
             
@@ -1568,6 +1651,9 @@ def admin():
                 "tmdb_id": tmdb_id if tmdb_id else None,
                 "is_completed": is_completed
             }
+
+            if ott_platform and ott_platform != "None":
+                movie_data["ott_platform"] = ott_platform
 
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
@@ -1596,7 +1682,7 @@ def admin():
     requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list)
+    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list, ott_platforms=OTT_PLATFORMS)
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
@@ -1633,6 +1719,7 @@ def edit_movie(movie_id):
         screenshots_text = request.form.get("screenshots", "").strip()
         screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
         is_completed = 'is_completed' in request.form
+        ott_platform = request.form.get("ott_platform")
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -1646,16 +1733,26 @@ def edit_movie(movie_id):
         }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
+        
+        update_query = {"$set": update_data}
         if content_type == "movie":
             qualities = ["480p", "720p", "1080p", "BLU-RAY"]
             update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}})
+            update_query.setdefault("$unset", {})["episodes"] = ""
+            update_query.setdefault("$unset", {})["season_packs"] = ""
         else:
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
             update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
-            movies.update_one({"_id": obj_id}, {"$set": update_data, "$unset": {"links": ""}})
+            update_query.setdefault("$unset", {})["links"] = ""
+
+        if ott_platform and ott_platform != "None":
+            update_query["$set"]["ott_platform"] = ott_platform
+        else:
+            update_query.setdefault("$unset", {})["ott_platform"] = ""
+
+        movies.update_one({"_id": obj_id}, update_query)
         
         send_notification = request.form.get('send_notification')
         if send_notification:
@@ -1666,7 +1763,7 @@ def edit_movie(movie_id):
         return redirect(url_for('admin'))
     
     categories_list = list(categories_collection.find().sort("name", 1))
-    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list)
+    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_platforms=OTT_PLATFORMS)
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
@@ -1737,4 +1834,4 @@ def api_search():
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 3000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app
