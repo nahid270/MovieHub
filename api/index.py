@@ -22,15 +22,6 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
-# --- OTT Platform Definitions ---
-OTT_PLATFORMS = ["None", "Chorki", "Hoichoi", "BongoBD", "Binge", "Netflix", "Amazon Prime Video"]
-OTT_LOGOS = {
-    "Chorki": "https://i.ibb.co/LQrY78K/chorki.png",
-    "Hoichoi": "https://i.ibb.co/3s3xBF0/hoichoi.png",
-    "BongoBD": "https://i.ibb.co/Q8b5TjB/bongo.png",
-    "Binge": "https://i.ibb.co/r7scpYq/binge.png"
-}
-
 # --- Validate Environment Variables ---
 if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
     print("FATAL: One or more required environment variables are missing.")
@@ -66,6 +57,7 @@ try:
     settings = db["settings"]
     categories_collection = db["categories"]
     requests_collection = db["requests"]
+    ott_collection = db["ott_platforms"] # New collection for OTT Platforms
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
@@ -79,8 +71,9 @@ try:
         movies.create_index("categories")
         movies.create_index("updated_at")
         movies.create_index("tmdb_id")
-        movies.create_index("ott_platform") # New index for OTT platform
+        movies.create_index("ott_platform")
         categories_collection.create_index("name", unique=True)
+        ott_collection.create_index("name", unique=True) # Index for OTT collection
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
@@ -180,6 +173,7 @@ app.jinja_env.filters['time_ago'] = time_ago
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
     category_icons = {
         "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film",
@@ -195,7 +189,7 @@ def inject_globals():
         quote=quote, 
         datetime=datetime, 
         category_icons=category_icons,
-        ott_logos=OTT_LOGOS
+        all_ott_platforms=all_ott_platforms
     )
 
 # =========================================================================================
@@ -345,19 +339,15 @@ index_html = """
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
   
-  /* --- [START] OTT PLATFORM STYLES --- */
-  .platform-section { margin: 40px 0; }
-  .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  /* --- [START] OTT PLATFORM SLIDER STYLES --- */
+  .platform-section { margin: 40px 0; overflow: hidden; }
+  .platform-slider .swiper-slide { width: 100px; }
   .platform-item { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--text-dark); transition: transform 0.2s ease, color 0.2s ease; }
   .platform-item:hover { transform: scale(1.08); color: var(--text-light); }
   .platform-logo-wrapper { width: 80px; height: 80px; border-radius: 50%; background-color: #fff; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 2px solid #444; }
   .platform-logo-wrapper img { max-width: 70%; max-height: 70%; object-fit: contain; }
-  .platform-item span { font-weight: 500; font-size: 0.9rem; }
-  @media (max-width: 480px) {
-    .platform-grid { grid-template-columns: repeat(2, 1fr); gap: 30px; }
-    .platform-logo-wrapper { width: 100px; height: 100px; }
-  }
-  /* --- [END] OTT PLATFORM STYLES --- */
+  .platform-item span { font-weight: 500; font-size: 0.8rem; text-align: center; }
+  /* --- [END] OTT PLATFORM SLIDER STYLES --- */
 
   .category-section { margin: 30px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -581,22 +571,26 @@ index_html = """
     </section>
     {% endif %}
 
-    <!-- ================== START: OTT PLATFORM SECTION ================== -->
-    {% if ott_logos %}
+    <!-- ================== START: OTT PLATFORM SLIDER ================== -->
+    {% if all_ott_platforms %}
     <section class="platform-section container">
-        <div class="platform-grid">
-            {% for name, logo_url in ott_logos.items() %}
-                <a href="{{ url_for('movies_by_platform', platform_name=name) }}" class="platform-item">
-                    <div class="platform-logo-wrapper">
-                        <img src="{{ logo_url }}" alt="{{ name }} Logo">
-                    </div>
-                    <span>{{ name }}</span>
-                </a>
-            {% endfor %}
+        <div class="swiper platform-slider">
+            <div class="swiper-wrapper">
+                {% for platform in all_ott_platforms %}
+                <div class="swiper-slide">
+                    <a href="{{ url_for('movies_by_platform', platform_name=platform.name) }}" class="platform-item">
+                        <div class="platform-logo-wrapper">
+                            <img src="{{ platform.logo_url }}" alt="{{ platform.name }} Logo">
+                        </div>
+                        <span>{{ platform.name }}</span>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
         </div>
     </section>
     {% endif %}
-    <!-- ================== END: OTT PLATFORM SECTION ================== -->
+    <!-- ================== END: OTT PLATFORM SLIDER ================== -->
 
     <div class="container">
       {% macro render_grid_section(title, movies_list, cat_name) %}
@@ -699,6 +693,10 @@ index_html = """
         loop: true, autoplay: { delay: 5000, disableOnInteraction: false },
         pagination: { el: '.swiper-pagination', clickable: true },
         effect: 'fade', fadeEffect: { crossFade: true },
+    });
+    new Swiper('.platform-slider', {
+        slidesPerView: 'auto',
+        spaceBetween: 20,
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -1128,7 +1126,7 @@ admin_html = """
         .modal-close { background: none; border: none; color: #fff; font-size: 2rem; cursor: pointer; }
         #search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
         .result-item { cursor: pointer; text-align: center; }
-        .result-item img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; border: 2px solid transparent; transition: all 0.2s; }
+        .result-item img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 5px; margin-bottom: 10px; border: 2px solid transparent; transition: all 0.2s; }
         .result-item:hover img { transform: scale(1.05); border-color: var(--netflix-red); }
         .result-item p { font-size: 0.9rem; }
         .season-pack-item { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; align-items: flex-end; }
@@ -1140,9 +1138,9 @@ admin_html = """
         .stat-card { background: var(--dark-gray); padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid var(--netflix-red); }
         .stat-card h3 { margin: 0 0 10px; font-size: 1.2rem; color: var(--text-light); }
         .stat-card p { font-size: 2.5rem; font-weight: 700; margin: 0; color: var(--netflix-red); }
-        .category-management { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
-        .category-list { flex: 1; min-width: 250px; }
-        .category-item { display: flex; justify-content: space-between; align-items: center; background: var(--dark-gray); padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
+        .management-section { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
+        .management-list { flex: 1; min-width: 250px; }
+        .management-item { display: flex; justify-content: space-between; align-items: center; background: var(--dark-gray); padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
         .status-badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 0.8rem; font-weight: bold; }
         .status-pending { background-color: #ffc107; color: black; }
         .status-fulfilled { background-color: #28a745; }
@@ -1182,8 +1180,9 @@ admin_html = """
             <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie">Movie</option><option value="series">Series</option></select></div>
             <div class="form-group"><label>OTT Platform:</label>
                 <select name="ott_platform">
-                    {% for platform in ott_platforms %}
-                    <option value="{{ platform }}">{{ platform }}</option>
+                    <option value="None">None</option>
+                    {% for platform in ott_list %}
+                    <option value="{{ platform.name }}">{{ platform.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -1263,18 +1262,35 @@ admin_html = """
     <!-- ================== END: TOP SECTION (DAILY USE) ================== -->
 
     <!-- ================== START: BOTTOM SECTION (LESS FREQUENT USE) ================== -->
-    <h2><i class="fas fa-tags"></i> Category Management</h2>
-    <div class="category-management">
-        <form method="post" style="flex: 1; min-width: 300px;">
-            <input type="hidden" name="form_action" value="add_category">
-            <fieldset><legend>Add New Category</legend>
-                <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
-            </fieldset>
-        </form>
-        <div class="category-list">
-            <h3>Existing Categories</h3>
-            {% for cat in categories_list %}<div class="category-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+    <div class="management-section">
+        <div style="flex: 1; min-width: 300px;">
+            <h2><i class="fas fa-tags"></i> Category Management</h2>
+            <form method="post">
+                <input type="hidden" name="form_action" value="add_category">
+                <fieldset><legend>Add New Category</legend>
+                    <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Category</button>
+                </fieldset>
+            </form>
+            <div class="management-list">
+                <h3>Existing Categories</h3>
+                {% for cat in categories_list %}<div class="management-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+            </div>
+        </div>
+        <div style="flex: 1; min-width: 300px;">
+            <h2><i class="fas fa-tv"></i> OTT Platform Management</h2>
+            <form method="post">
+                <input type="hidden" name="form_action" value="add_platform">
+                <fieldset><legend>Add New Platform</legend>
+                    <div class="form-group"><label>Platform Name:</label><input type="text" name="platform_name" required></div>
+                    <div class="form-group"><label>Logo URL:</label><input type="url" name="platform_logo_url" required></div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Platform</button>
+                </fieldset>
+            </form>
+            <div class="management-list">
+                <h3>Existing Platforms</h3>
+                {% for platform in ott_list %}<div class="management-item"><span>{{ platform.name }}</span><a href="{{ url_for('delete_platform', platform_id=platform._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+            </div>
         </div>
     </div>
     <hr>
@@ -1406,8 +1422,9 @@ edit_html = """
         <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>Series</option></select></div>
         <div class="form-group"><label>OTT Platform:</label>
             <select name="ott_platform">
-                {% for platform in ott_platforms %}
-                <option value="{{ platform }}" {% if movie.ott_platform == platform %}selected{% endif %}>{{ platform }}</option>
+                <option value="None">None</option>
+                {% for platform in ott_list %}
+                <option value="{{ platform.name }}" {% if movie.ott_platform == platform.name %}selected{% endif %}>{{ platform.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -1626,6 +1643,11 @@ def admin():
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
+        elif form_action == "add_platform":
+            platform_name = request.form.get("platform_name", "").strip()
+            logo_url = request.form.get("platform_logo_url", "").strip()
+            if platform_name and logo_url:
+                ott_collection.update_one({"name": platform_name}, {"$set": {"name": platform_name, "logo_url": logo_url}}, upsert=True)
         elif form_action == "bulk_delete":
             ids_to_delete = request.form.getlist("selected_ids")
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
@@ -1681,13 +1703,21 @@ def admin():
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     requests_list = list(requests_collection.find().sort("created_at", -1))
     categories_list = list(categories_collection.find().sort("name", 1))
+    ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list, ott_platforms=OTT_PLATFORMS)
+    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list, ott_list=ott_list)
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
 def delete_category(cat_id):
     try: categories_collection.delete_one({"_id": ObjectId(cat_id)})
+    except: pass
+    return redirect(url_for('admin'))
+
+@app.route('/admin/platform/delete/<platform_id>')
+@requires_auth
+def delete_platform(platform_id):
+    try: ott_collection.delete_one({"_id": ObjectId(platform_id)})
     except: pass
     return redirect(url_for('admin'))
 
@@ -1763,7 +1793,8 @@ def edit_movie(movie_id):
         return redirect(url_for('admin'))
     
     categories_list = list(categories_collection.find().sort("name", 1))
-    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_platforms=OTT_PLATFORMS)
+    ott_list = list(ott_collection.find().sort("name", 1))
+    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
@@ -1834,4 +1865,4 @@ def api_search():
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 3000))
-    app
+    app.run(debug=True, host='0.0.0.0', port=port)
