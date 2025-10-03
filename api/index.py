@@ -505,9 +505,17 @@ index_html = """
         <div class="full-page-grid">{% for m in movies %}{{ render_movie_card(m) }}{% endfor %}</div>
         {% if pagination and pagination.total_pages > 1 %}
         <div class="pagination">
-            {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, page=pagination.prev_num, platform_name=query.replace(' Originals', '') if 'platform' in request.endpoint else None, name=query if 'category' in request.endpoint else None) }}">&laquo; Prev</a>{% endif %}
+            {% set url_args = {'page': pagination.prev_num} %}
+            {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
+            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, **url_args) }}">&laquo; Prev</a>{% endif %}
+            
             <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
-            {% if pagination.has_next %}<a href="{{ url_for(request.endpoint, page=pagination.next_num, platform_name=query.replace(' Originals', '') if 'platform' in request.endpoint else None, name=query if 'category' in request.endpoint else None) }}">Next &raquo;</a>{% endif %}
+            
+            {% set url_args = {'page': pagination.next_num} %}
+            {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
+            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if pagination.has_next %}<a href="{{ url_for(request.endpoint, **url_args) }}">Next &raquo;</a>{% endif %}
         </div>
         {% endif %}
         {% endif %}
@@ -1565,13 +1573,16 @@ def all_series():
     all_series_content, pagination = get_paginated_content({"type": "series"}, page)
     return render_template_string(index_html, movies=all_series_content, query="Web Series & TV Shows", is_full_page_list=True, pagination=pagination)
 
-@app.route('/category/<name>')
-def movies_by_category(name):
-    title = name
+@app.route('/category')
+def movies_by_category():
+    title = request.args.get('name')
     if not title: return redirect(url_for('home'))
     page = request.args.get('page', 1, type=int)
     
-    query_filter = {"categories": title}
+    query_filter = {}
+    if title == "Latest Movies": query_filter = {"type": "movie"}
+    elif title == "Latest Series": query_filter = {"type": "series"}
+    else: query_filter = {"categories": title}
     
     content_list, pagination = get_paginated_content(query_filter, page)
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
@@ -1583,6 +1594,7 @@ def movies_by_platform(platform_name):
     
     content_list, pagination = get_paginated_content(query_filter, page)
     return render_template_string(index_html, movies=content_list, query=f"{platform_name} Originals", is_full_page_list=True, pagination=pagination)
+
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
@@ -1719,22 +1731,23 @@ def edit_movie(movie_id):
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         
+        update_query = {"$set": update_data}
         if content_type == "movie":
             qualities = ["480p", "720p", "1080p", "BLU-RAY"]
             update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
-            update_query = {"$set": update_data, "$unset": {"episodes": "", "season_packs": ""}}
+            update_query.setdefault("$unset", {})["episodes"] = ""
+            update_query.setdefault("$unset", {})["season_packs"] = ""
         else:
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
             update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
-            update_query = {"$set": update_data, "$unset": {"links": ""}}
+            update_query.setdefault("$unset", {})["links"] = ""
 
         if ott_platform and ott_platform != "None":
             update_query["$set"]["ott_platform"] = ott_platform
         else:
-            update_query["$unset"] = update_query.get("$unset", {})
-            update_query["$unset"]["ott_platform"] = ""
+            update_query.setdefault("$unset", {})["ott_platform"] = ""
 
         movies.update_one({"_id": obj_id}, update_query)
         
