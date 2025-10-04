@@ -57,7 +57,7 @@ try:
     settings = db["settings"]
     categories_collection = db["categories"]
     requests_collection = db["requests"]
-    ott_collection = db["ott_platforms"] # New collection for OTT Platforms
+    ott_collection = db["ott_platforms"]
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
@@ -73,29 +73,60 @@ try:
         movies.create_index("tmdb_id")
         movies.create_index("ott_platform")
         categories_collection.create_index("name", unique=True)
-        ott_collection.create_index("name", unique=True) # Index for OTT collection
+        ott_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
     except Exception as e:
         print(f"WARNING: Could not create MongoDB indexes: {e}")
 
-    print("INFO: Checking for documents missing 'updated_at' field for migration...")
     result = movies.update_many(
         {"updated_at": {"$exists": False}},
         [{"$set": {"updated_at": "$created_at"}}]
     )
     if result.modified_count > 0:
         print(f"SUCCESS: Migrated {result.modified_count} old documents to include 'updated_at' field.")
-    else:
-        print("INFO: All documents already have the 'updated_at' field.")
 
 except Exception as e:
     print(f"FATAL: Error connecting to MongoDB: {e}.")
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
+# --- [NEW] Helper function to format series info ---
+def format_series_info(episodes, season_packs):
+    """Generates a string like S01 [EP01-10 ADDED] & S02 [COMPLETE SEASON ADDED]"""
+    info_parts = []
+    
+    # Process Season Packs
+    if season_packs:
+        sorted_packs = sorted(season_packs, key=lambda p: p.get('season_number', 0))
+        for pack in sorted_packs:
+            season_num = pack.get('season_number')
+            if season_num is not None:
+                info_parts.append(f"S{season_num:02d} [COMPLETE SEASON]")
+
+    # Process Individual Episodes
+    if episodes:
+        episodes_by_season = {}
+        for ep in episodes:
+            season = ep.get('season')
+            ep_num = ep.get('episode_number')
+            if season is not None and ep_num is not None:
+                if season not in episodes_by_season:
+                    episodes_by_season[season] = []
+                episodes_by_season[season].append(ep_num)
+
+        for season in sorted(episodes_by_season.keys()):
+            ep_nums = sorted(episodes_by_season[season])
+            if not ep_nums: continue
+            
+            ep_range = f"EP{ep_nums[0]:02d}" if len(ep_nums) == 1 else f"EP{ep_nums[0]:02d}-{ep_nums[-1]:02d}"
+            info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
+
+    return " & ".join(info_parts)
+
+
 # --- Telegram Notification Function ---
-def send_telegram_notification(movie_data, content_id, notification_type='new', update_details=None):
+def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
         return
@@ -103,11 +134,15 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
     try:
         movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
         
-        # --- Build Title with Year ---
+        # Build title with year
         title_with_year = movie_data.get('title', 'N/A')
         if movie_data.get('release_date'):
             year = movie_data['release_date'].split('-')[0]
             title_with_year += f" ({year})"
+        
+        # Add series info if available
+        if series_update_info:
+            title_with_year += f" {series_update_info}"
 
         available_qualities = []
         if movie_data.get('links'):
@@ -115,7 +150,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
                 if link.get('quality'):
                     available_qualities.append(link['quality'])
         if not available_qualities:
-            available_qualities.append("BLU-RAY")
+             available_qualities.append("WEB-DL")
         
         quality_str = ", ".join(sorted(list(set(available_qualities))))
         language_str = movie_data.get('language', 'N/A')
@@ -131,10 +166,6 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
              caption += f"**{language_str.upper()}**\n"
-
-        # --- Add Update Details if available ---
-        if notification_type == 'update' and update_details:
-            caption += f"\n✨ **Update Info:** {update_details}\n"
 
         caption += f"\n🎞️ Quality: **{quality_str}**"
         caption += f"\n🌐 Language: **{language_str}**"
@@ -157,6 +188,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         print(f"ERROR: Failed to send Telegram notification: {e}")
     except Exception as e:
         print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
+
 
 # --- Custom Jinja Filter for Relative Time ---
 def time_ago(obj_id):
@@ -244,7 +276,7 @@ index_html = """
   a { text-decoration: none; color: inherit; } img { max-width: 100%; display: block; }
   .container { max-width: 1400px; margin: 0 auto; padding: 0 10px; }
   
-  .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
+  .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color: 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
   .header-content { display: flex; justify-content: space-between; align-items: center; width: 100%; }
   .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
   .menu-toggle { display: block; font-size: 1.8rem; cursor: pointer; background: none; border: none; color: white; z-index: 1001;}
@@ -1506,10 +1538,6 @@ edit_html = """
     </div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
     
     <div class="update-options">
-        <div class="form-group">
-            <label for="update_note">Update Note (for Telegram Notification)</label>
-            <textarea id="update_note" name="update_note" rows="2" placeholder="e.g., Added Season 2 (Complete) / Added Episodes 5-8"></textarea>
-        </div>
         <div class="checkbox-group">
             <label>
                 <input type="checkbox" name="send_notification" checked>
@@ -1712,30 +1740,22 @@ def admin():
             screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
             is_completed = 'is_completed' in request.form
             ott_platform = request.form.get("ott_platform")
-            
             tmdb_id = request.form.get("tmdb_id")
-            
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
                 "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(), 
-                "screenshots": screenshots_list,
+                "overview": request.form.get("overview").strip(), "screenshots": screenshots_list,
                 "language": request.form.get("language").strip() or None,
                 "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
-                "tmdb_id": tmdb_id if tmdb_id else None,
-                "is_completed": is_completed
+                "tmdb_id": tmdb_id if tmdb_id else None, "is_completed": is_completed
             }
-
-            if ott_platform and ott_platform != "None":
-                movie_data["ott_platform"] = ott_platform
-
+            if ott_platform and ott_platform != "None": movie_data["ott_platform"] = ott_platform
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
-            
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
                 movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
@@ -1744,14 +1764,14 @@ def admin():
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
                 s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
-            
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
-            
             result = movies.insert_one(movie_data)
             if result.inserted_id:
-                send_telegram_notification(movie_data, result.inserted_id)
-
+                series_info = None
+                if movie_data['type'] == 'series':
+                    series_info = format_series_info(movie_data.get('episodes', []), movie_data.get('season_packs', []))
+                send_telegram_notification(movie_data, result.inserted_id, series_update_info=series_info)
         return redirect(url_for('admin'))
     
     content_list = list(movies.find({}).sort('updated_at', -1))
@@ -1818,20 +1838,34 @@ def edit_movie(movie_id):
         }
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
-        
         update_query = {"$set": update_data}
-        if content_type == "movie":
-            qualities = ["480p", "720p", "1080p", "BLU-RAY"]
-            update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
-            update_query.setdefault("$unset", {})["episodes"] = ""
-            update_query.setdefault("$unset", {})["season_packs"] = ""
-        else:
+        
+        # --- [NEW] Logic to detect new episodes/packs for notification ---
+        series_update_info_str = None
+        if content_type == "series":
+            # Get new episodes and packs from form
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
             update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             update_query.setdefault("$unset", {})["links"] = ""
 
+            # Compare old vs new to find what was added
+            old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
+            old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
+            
+            newly_added_eps = [ep for ep in update_data["episodes"] if (ep.get('season'), ep.get('episode_number')) not in old_ep_ids]
+            newly_added_packs = [p for p in update_data["season_packs"] if p.get('season_number') not in old_pack_ids]
+            
+            if newly_added_eps or newly_added_packs:
+                series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
+
+        else: # It's a movie
+            qualities = ["480p", "720p", "1080p", "BLU-RAY"]
+            update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
+            update_query.setdefault("$unset", {})["episodes"] = ""
+            update_query.setdefault("$unset", {})["season_packs"] = ""
+        
         if ott_platform and ott_platform != "None":
             update_query["$set"]["ott_platform"] = ott_platform
         else:
@@ -1839,20 +1873,14 @@ def edit_movie(movie_id):
 
         movies.update_one({"_id": obj_id}, update_query)
         
-        send_notification = request.form.get('send_notification')
-        if send_notification:
-            # Get the update note from the form
-            update_note = request.form.get('update_note', '').strip()
-            
+        if request.form.get('send_notification'):
             notification_data = movie_obj.copy()
             notification_data.update(update_data)
-            
-            # Pass the note to the notification function
             send_telegram_notification(
                 notification_data, 
                 obj_id, 
                 notification_type='update', 
-                update_details=update_note if update_note else None
+                series_update_info=series_update_info_str
             )
         
         return redirect(url_for('admin'))
