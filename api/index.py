@@ -95,7 +95,7 @@ except Exception as e:
         sys.exit(1)
 
 # --- Telegram Notification Function ---
-def send_telegram_notification(movie_data, content_id, notification_type='new'):
+def send_telegram_notification(movie_data, content_id, notification_type='new', update_details=None):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
         print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
         return
@@ -103,6 +103,12 @@ def send_telegram_notification(movie_data, content_id, notification_type='new'):
     try:
         movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
         
+        # --- Build Title with Year ---
+        title_with_year = movie_data.get('title', 'N/A')
+        if movie_data.get('release_date'):
+            year = movie_data['release_date'].split('-')[0]
+            title_with_year += f" ({year})"
+
         available_qualities = []
         if movie_data.get('links'):
             for link in movie_data['links']:
@@ -118,13 +124,17 @@ def send_telegram_notification(movie_data, content_id, notification_type='new'):
         clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
         if notification_type == 'update':
-            caption_header = f"🔄 **UPDATED : {movie_data['title']}**\n"
+            caption_header = f"🔄 **UPDATED : {title_with_year}**\n"
         else:
-            caption_header = f"🔥 **NEW ADDED : {movie_data['title']}**\n"
+            caption_header = f"🔥 **NEW ADDED : {title_with_year}**\n"
         
         caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
              caption += f"**{language_str.upper()}**\n"
+
+        # --- Add Update Details if available ---
+        if notification_type == 'update' and update_details:
+            caption += f"\n✨ **Update Info:** {update_details}\n"
 
         caption += f"\n🎞️ Quality: **{quality_str}**"
         caption += f"\n🌐 Language: **{language_str}**"
@@ -1496,6 +1506,10 @@ edit_html = """
     </div><button type="button" onclick="addManualLinkField()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Manual Button</button></fieldset>
     
     <div class="update-options">
+        <div class="form-group">
+            <label for="update_note">Update Note (for Telegram Notification)</label>
+            <textarea id="update_note" name="update_note" rows="2" placeholder="e.g., Added Season 2 (Complete) / Added Episodes 5-8"></textarea>
+        </div>
         <div class="checkbox-group">
             <label>
                 <input type="checkbox" name="send_notification" checked>
@@ -1827,9 +1841,19 @@ def edit_movie(movie_id):
         
         send_notification = request.form.get('send_notification')
         if send_notification:
+            # Get the update note from the form
+            update_note = request.form.get('update_note', '').strip()
+            
             notification_data = movie_obj.copy()
             notification_data.update(update_data)
-            send_telegram_notification(notification_data, obj_id, notification_type='update')
+            
+            # Pass the note to the notification function
+            send_telegram_notification(
+                notification_data, 
+                obj_id, 
+                notification_type='update', 
+                update_details=update_note if update_note else None
+            )
         
         return redirect(url_for('admin'))
     
