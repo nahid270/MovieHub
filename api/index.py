@@ -731,6 +731,25 @@ detail_html = """
   body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); overflow-x: hidden; margin:0; padding:0; }
   a { text-decoration: none; color: inherit; }
   .container { max-width: 1200px; margin: 0 auto; padding: 20px 15px; }
+
+  .back-link { 
+      display: inline-block; 
+      margin-bottom: 20px; 
+      padding: 8px 15px; 
+      background-color: var(--card-bg); 
+      color: var(--text-dark);
+      border-radius: 50px; 
+      text-decoration: none; 
+      font-size: 0.9rem; 
+      transition: all 0.2s ease; 
+  }
+  .back-link:hover { 
+      color: var(--text-light);
+      background-color: #333;
+  }
+  .back-link i { 
+      margin-right: 8px; 
+  }
   
   /* --- [START] FINAL HERO SECTION STYLES --- */
   .hero-section {
@@ -825,6 +844,9 @@ detail_html = """
 {{ ad_settings.ad_body_top | safe }}
 {% if movie %}
 <main class="container">
+    <a href="#" onclick="window.history.back(); return false;" class="back-link">
+        <i class="fas fa-arrow-left"></i> Go Back
+    </a>
     
     <!-- FINAL HERO SECTION -->
     <div class="hero-section" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
@@ -1034,7 +1056,24 @@ request_html = """
         :root { --primary-color: #E50914; --bg-color: #000000; --card-bg: #1a1a1a; --text-light: #ffffff; --text-dark: #a0a0a0; }
         body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
         .container { max-width: 600px; width: 100%; padding: 0 15px; }
-        .back-link { align-self: flex-start; margin-bottom: 20px; color: var(--text-dark); text-decoration: none; font-size: 0.9rem;}
+        .back-link {
+            align-self: flex-start;
+            margin-bottom: 20px;
+            color: var(--text-dark);
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 8px 15px;
+            background-color: var(--card-bg);
+            border-radius: 50px;
+            transition: all 0.2s ease;
+        }
+        .back-link:hover {
+            background-color: #333;
+            color: var(--text-light);
+        }
+        .back-link i {
+            margin-right: 8px;
+        }
         .request-container { background-color: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         h1 { font-size: 2rem; color: var(--primary-color); margin-bottom: 10px; text-align: center; }
         p { text-align: center; color: var(--text-dark); margin-bottom: 30px; }
@@ -1052,7 +1091,9 @@ request_html = """
 <body>
     {{ ad_settings.ad_body_top | safe }}
     <div class="container">
-        <a href="{{ url_for('home') }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+        <a href="#" onclick="window.history.back(); return false;" class="back-link">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </a>
         <div class="request-container">
             <h1>Request Content</h1>
             <p>Can't find what you're looking for? Let us know!</p>
