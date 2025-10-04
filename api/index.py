@@ -2,7 +2,7 @@ import os
 import sys
 import requests
 import json
-from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify, flash
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from functools import wraps
@@ -22,16 +22,13 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
-# --- Validate Environment Variables ---
-if not all([MONGO_URI, TMDB_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD]):
-    print("FATAL: One or more required environment variables are missing.")
-    if os.environ.get('VERCEL') != '1':
-        sys.exit(1)
-
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
 app = Flask(__name__)
+# For flash messages
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_secret_key_for_flash_messages")
+
 
 # --- Authentication ---
 def check_auth(username, password):
@@ -1429,6 +1426,7 @@ admin_html = """
 </body></html>
 """
 
+# === UPDATED HTML TEMPLATE ===
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1782,6 +1780,9 @@ def request_content():
         extra_info = request.form.get('extra_info', '').strip()
         if content_name:
             requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
+            flash('Your request has been submitted successfully!', 'success')
+        else:
+            flash('Content name is required.', 'error')
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
@@ -1897,6 +1898,7 @@ def delete_request(req_id):
     except: pass
     return redirect(url_for('admin'))
 
+# === UPDATED FUNCTION ===
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
@@ -1941,16 +1943,16 @@ def edit_movie(movie_id):
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             update_query.setdefault("$unset", {})["links"] = ""
 
-            old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
-            old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
-            
-            newly_added_eps = [ep for ep in update_data["episodes"] if (ep.get('season'), ep.get('episode_number')) not in old_ep_ids]
-            newly_added_packs = [p for p in update_data["season_packs"] if p.get('season_number') not in old_pack_ids]
-            
-            if newly_added_eps or newly_added_packs:
-                if custom_notification_text:
-                    series_update_info_str = custom_notification_text
-                else:
+            if custom_notification_text:
+                series_update_info_str = custom_notification_text
+            else:
+                old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
+                old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
+                
+                newly_added_eps = [ep for ep in update_data["episodes"] if (ep.get('season'), ep.get('episode_number')) not in old_ep_ids]
+                newly_added_packs = [p for p in update_data["season_packs"] if p.get('season_number') not in old_pack_ids]
+                
+                if newly_added_eps or newly_added_packs:
                     series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
 
         else: # Movie
