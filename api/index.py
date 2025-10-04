@@ -134,13 +134,11 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
     try:
         movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
         
-        # Build title with year
         title_with_year = movie_data.get('title', 'N/A')
         if movie_data.get('release_date'):
             year = movie_data['release_date'].split('-')[0]
             title_with_year += f" ({year})"
         
-        # Add series info if available
         if series_update_info:
             title_with_year += f" {series_update_info}"
 
@@ -381,7 +379,6 @@ index_html = """
   .hero-slider .swiper-pagination-bullet { background: rgba(255, 255, 255, 0.5); width: 8px; height: 8px; opacity: 0.7; transition: all 0.2s ease; }
   .hero-slider .swiper-pagination-bullet-active { background: var(--text-light); width: 24px; border-radius: 5px; opacity: 1; }
   
-  /* --- [START] OTT PLATFORM SLIDER STYLES --- */
   .platform-section { margin: 40px 0; overflow: hidden; }
   .platform-slider .swiper-slide { width: 100px; }
   .platform-item { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--text-dark); transition: transform 0.2s ease, color 0.2s ease; }
@@ -389,7 +386,6 @@ index_html = """
   .platform-logo-wrapper { width: 80px; height: 80px; border-radius: 50%; background-color: #fff; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 2px solid #444; }
   .platform-logo-wrapper img { max-width: 70%; max-height: 70%; object-fit: contain; }
   .platform-item span { font-weight: 500; font-size: 0.8rem; text-align: center; }
-  /* --- [END] OTT PLATFORM SLIDER STYLES --- */
 
   .category-section { margin: 30px 0; }
   .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -613,7 +609,6 @@ index_html = """
     </section>
     {% endif %}
 
-    <!-- ================== START: OTT PLATFORM SLIDER ================== -->
     {% if all_ott_platforms %}
     <section class="platform-section container">
         <div class="swiper platform-slider">
@@ -632,7 +627,6 @@ index_html = """
         </div>
     </section>
     {% endif %}
-    <!-- ================== END: OTT PLATFORM SLIDER ================== -->
 
     <div class="container">
       {% macro render_grid_section(title, movies_list, cat_name) %}
@@ -793,23 +787,22 @@ detail_html = """
       margin-right: 8px; 
   }
   
-  /* --- [START] FINAL HERO SECTION STYLES --- */
   .hero-section {
       position: relative;
       width: 100%;
       max-width: 900px;
-      margin: 20px auto 80px; /* Increased bottom margin for hanging poster */
+      margin: 20px auto 80px;
       aspect-ratio: 16 / 9;
       background-size: cover;
       background-position: center;
       border-radius: 12px;
       box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
-      overflow: visible; /* Allows poster to hang outside */
+      overflow: visible;
   }
   .hero-poster {
       position: absolute;
       left: 30px;
-      bottom: -60px; /* Pushes the poster below the container */
+      bottom: -60px;
       height: 95%;
       aspect-ratio: 2 / 3;
       object-fit: cover;
@@ -856,7 +849,6 @@ detail_html = """
       color: var(--lime-accent);
       display: block;
   }
-  /* --- [END] FINAL HERO SECTION STYLES --- */
 
   .tabs-nav { display: flex; justify-content: center; gap: 10px; margin: 20px 0 30px; }
   .tab-link { flex: 1; max-width: 200px; padding: 12px; background-color: var(--card-bg); border: none; color: var(--text-dark); font-weight: 600; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
@@ -889,7 +881,6 @@ detail_html = """
         <i class="fas fa-arrow-left"></i> Go Back
     </a>
     
-    <!-- FINAL HERO SECTION -->
     <div class="hero-section" style="background-image: url('{{ movie.backdrop or movie.poster or 'https://via.placeholder.com/1280x720.png?text=No+Backdrop' }}');">
         <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}" class="hero-poster">
         
@@ -902,7 +893,6 @@ detail_html = """
         {% endif %}
     </div>
 
-    <!-- TITLE SECTION -->
     <div class="content-title-section">
         <h1 class="main-title">
             {{ movie.title }}
@@ -1233,7 +1223,6 @@ admin_html = """
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
     
-    <!-- ================== START: TOP SECTION (DAILY USE) ================== -->
     <h2><i class="fas fa-tachometer-alt"></i> At a Glance</h2>
     <div class="dashboard-stats">
         <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
@@ -1243,31 +1232,6 @@ admin_html = """
     </div>
     <hr>
     
-    <!-- ================== START: Quick Series Update ================== -->
-    <h2><i class="fas fa-rocket"></i> Quick Series Update & Notify</h2>
-    <form method="post">
-        <input type="hidden" name="form_action" value="quick_telegram_update">
-        <fieldset>
-            <legend>Send Telegram Notification for Series Update</legend>
-            <div class="form-group">
-                <label for="series_id">Select Series:</label>
-                <select name="series_id" id="series_id" required>
-                    <option value="" disabled selected>-- Choose a series --</option>
-                    {% for series in series_list %}
-                    <option value="{{ series._id }}">{{ series.title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="update_text">Update Information:</label>
-                <input type="text" name="update_text" id="update_text" placeholder="e.g., S01 [EP 05-08 ADDED]" required>
-            </div>
-            <button type="submit" class="btn btn-primary"><i class="fab fa-telegram-plane"></i> Send Notification</button>
-        </fieldset>
-    </form>
-    <hr>
-    <!-- ================== END: Quick Series Update ================== -->
-
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method (Search TMDB)</legend><div class="form-group"><div class="tmdb-fetcher"><input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame"><button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button></div></div></fieldset>
     <form method="post">
@@ -1366,9 +1330,7 @@ admin_html = """
         </table>
     </div>
     <hr>
-    <!-- ================== END: TOP SECTION (DAILY USE) ================== -->
-
-    <!-- ================== START: BOTTOM SECTION (LESS FREQUENT USE) ================== -->
+    
     <div class="management-section">
         <div style="flex: 1; min-width: 300px;">
             <h2><i class="fas fa-tags"></i> Category Management</h2>
@@ -1418,7 +1380,6 @@ admin_html = """
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
     </form>
     <hr>
-    <!-- ================== END: BOTTOM SECTION (LESS FREQUENT USE) ================== -->
 
 </div>
 <div class="modal-overlay" id="search-modal"><div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"></div></div></div>
@@ -1568,7 +1529,7 @@ edit_html = """
                 Send Update Notification to Telegram?
             </label>
         </div>
-        <div class="form-group" id="notification_text_container">
+        <div class="form-group" id="notification_text_container" style="display: none;">
             <label for="custom_notification_text">Custom Notification Text (Optional):</label>
             <input type="text" name="custom_notification_text" id="custom_notification_text" placeholder="Auto-generated if left empty. e.g., S01 [EP 01-10 ADDED]">
         </div>
@@ -1577,7 +1538,18 @@ edit_html = """
   </form>
 </div>
 <script>
-    function toggleFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
+    function toggleFields() { 
+        var isSeries = document.getElementById('content_type').value === 'series'; 
+        document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; 
+        document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; 
+        const notificationContainer = document.getElementById('notification_text_container');
+        const sendNotificationCheckbox = document.getElementById('send_notification_checkbox');
+        if (isSeries && sendNotificationCheckbox.checked) {
+            notificationContainer.style.display = 'block';
+        } else {
+            notificationContainer.style.display = 'none';
+        }
+    }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
@@ -1605,7 +1577,6 @@ edit_html = """
         }
     }
 
-    // --- START: NEW JAVASCRIPT FOR CUSTOM NOTIFICATION ---
     function formatSeriesInfoJS(episodes, seasonPacks) {
         let infoParts = [];
         if (seasonPacks && seasonPacks.length > 0) {
@@ -1681,12 +1652,8 @@ edit_html = """
         toggleFields();
         setupMutationObserver();
         const checkbox = document.getElementById('send_notification_checkbox');
-        const container = document.getElementById('notification_text_container');
-        function toggleNotificationBox() { container.style.display = checkbox.checked ? 'block' : 'none'; }
-        checkbox.addEventListener('change', toggleNotificationBox);
-        toggleNotificationBox();
+        checkbox.addEventListener('change', toggleFields);
     });
-    // --- END: NEW JAVASCRIPT ---
 </script>
 </body></html>
 """
@@ -1830,21 +1797,7 @@ def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
-        if form_action == "quick_telegram_update":
-            series_id = request.form.get("series_id")
-            update_text = request.form.get("update_text", "").strip()
-            if series_id and update_text:
-                series_data = movies.find_one({"_id": ObjectId(series_id)})
-                if series_data:
-                    send_telegram_notification(
-                        series_data, 
-                        series_id, 
-                        notification_type='update', 
-                        series_update_info=update_text
-                    )
-            return redirect(url_for('admin'))
-
-        elif form_action == "update_ads":
+        if form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         elif form_action == "add_category":
@@ -1904,7 +1857,6 @@ def admin():
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    series_list = list(movies.find({"type": "series"}, {"_id": 1, "title": 1}).sort('title', 1))
     
     return render_template_string(
         admin_html, 
@@ -1913,8 +1865,7 @@ def admin():
         requests_list=requests_list, 
         ad_settings=ad_settings_data, 
         categories_list=categories_list, 
-        ott_list=ott_list,
-        series_list=series_list
+        ott_list=ott_list
     )
 
 @app.route('/admin/category/delete/<cat_id>')
@@ -1949,10 +1900,13 @@ def delete_request(req_id):
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    try: obj_id = ObjectId(movie_id)
-    except: return "Invalid ID", 400
+    try:
+        obj_id = ObjectId(movie_id)
+    except:
+        return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
-    if not movie_obj: return "Movie not found", 404
+    if not movie_obj:
+        return "Movie not found", 404
     
     if request.method == "POST":
         content_type = request.form.get("content_type")
@@ -1960,6 +1914,7 @@ def edit_movie(movie_id):
         screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
         is_completed = 'is_completed' in request.form
         ott_platform = request.form.get("ott_platform")
+        
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type,
             "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -1971,6 +1926,7 @@ def edit_movie(movie_id):
             "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(),
             "is_completed": is_completed
         }
+        
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         update_query = {"$set": update_data}
@@ -1997,7 +1953,7 @@ def edit_movie(movie_id):
                 else:
                     series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
 
-        else: # It's a movie
+        else: # Movie
             qualities = ["480p", "720p", "1080p", "BLU-RAY"]
             update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             update_query.setdefault("$unset", {})["episodes"] = ""
@@ -2025,6 +1981,7 @@ def edit_movie(movie_id):
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
     return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
+
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
