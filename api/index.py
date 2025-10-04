@@ -91,7 +91,7 @@ except Exception as e:
     if os.environ.get('VERCEL') != '1':
         sys.exit(1)
 
-# --- [NEW] Helper function to format series info ---
+# --- Helper function to format series info ---
 def format_series_info(episodes, season_packs):
     """Generates a string like S01 [EP01-10 ADDED] & S02 [COMPLETE SEASON ADDED]"""
     info_parts = []
@@ -870,7 +870,6 @@ detail_html = """
   .link-group h3, .episode-list h3 { font-size: 1.2rem; font-weight: 500; margin-bottom: 10px; color: var(--text-dark); text-align: center; }
   .action-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 15px 20px; border-radius: 8px; font-weight: 500; font-size: 1rem; color: white; background: linear-gradient(90deg, var(--g-1), var(--g-2), var(--g-1)); background-size: 200% 100%; transition: background-position 0.5s ease; }
   .action-btn:hover { background-position: 100% 0; }
-  .action-btn i { color: white; }
   .category-section { margin: 50px 0; }
   .category-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; }
   .movie-carousel .swiper-slide { width: 140px; }
@@ -1244,6 +1243,31 @@ admin_html = """
     </div>
     <hr>
     
+    <!-- ================== START: Quick Series Update ================== -->
+    <h2><i class="fas fa-rocket"></i> Quick Series Update & Notify</h2>
+    <form method="post">
+        <input type="hidden" name="form_action" value="quick_telegram_update">
+        <fieldset>
+            <legend>Send Telegram Notification for Series Update</legend>
+            <div class="form-group">
+                <label for="series_id">Select Series:</label>
+                <select name="series_id" id="series_id" required>
+                    <option value="" disabled selected>-- Choose a series --</option>
+                    {% for series in series_list %}
+                    <option value="{{ series._id }}">{{ series.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="update_text">Update Information:</label>
+                <input type="text" name="update_text" id="update_text" placeholder="e.g., S01 [EP 05-08 ADDED]" required>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fab fa-telegram-plane"></i> Send Notification</button>
+        </fieldset>
+    </form>
+    <hr>
+    <!-- ================== END: Quick Series Update ================== -->
+
     <h2><i class="fas fa-plus-circle"></i> Add New Content</h2>
     <fieldset><legend>Automatic Method (Search TMDB)</legend><div class="form-group"><div class="tmdb-fetcher"><input type="text" id="tmdb_search_query" placeholder="e.g., Avengers Endgame"><button type="button" id="tmdb_search_btn" class="btn btn-primary" onclick="searchTmdb()">Search</button></div></div></fieldset>
     <form method="post">
@@ -1540,9 +1564,13 @@ edit_html = """
     <div class="update-options">
         <div class="checkbox-group">
             <label>
-                <input type="checkbox" name="send_notification" checked>
+                <input type="checkbox" name="send_notification" id="send_notification_checkbox" checked>
                 Send Update Notification to Telegram?
             </label>
+        </div>
+        <div class="form-group" id="notification_text_container">
+            <label for="custom_notification_text">Custom Notification Text (Optional):</label>
+            <input type="text" name="custom_notification_text" id="custom_notification_text" placeholder="Auto-generated if left empty. e.g., S01 [EP 01-10 ADDED]">
         </div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Content</button>
     </div>
@@ -1577,7 +1605,88 @@ edit_html = """
         }
     }
 
-    document.addEventListener('DOMContentLoaded', toggleFields);
+    // --- START: NEW JAVASCRIPT FOR CUSTOM NOTIFICATION ---
+    function formatSeriesInfoJS(episodes, seasonPacks) {
+        let infoParts = [];
+        if (seasonPacks && seasonPacks.length > 0) {
+            const sortedPacks = seasonPacks.sort((a, b) => a.season_number - b.season_number);
+            sortedPacks.forEach(pack => {
+                const seasonNum = String(pack.season_number).padStart(2, '0');
+                infoParts.push(`S${seasonNum} [COMPLETE SEASON]`);
+            });
+        }
+        if (episodes && episodes.length > 0) {
+            const episodesBySeason = {};
+            episodes.forEach(ep => {
+                if (!episodesBySeason[ep.season]) episodesBySeason[ep.season] = [];
+                episodesBySeason[ep.season].push(ep.episode_number);
+            });
+            Object.keys(episodesBySeason).sort((a, b) => a - b).forEach(season => {
+                const epNums = episodesBySeason[season].sort((a, b) => a - b);
+                if (epNums.length === 0) return;
+                const seasonNum = String(season).padStart(2, '0');
+                const firstEp = String(epNums[0]).padStart(2, '0');
+                const lastEp = String(epNums[epNums.length - 1]).padStart(2, '0');
+                const epRange = (firstEp === lastEp) ? `EP${firstEp}` : `EP${firstEp}-${lastEp}`;
+                infoParts.push(`S${seasonNum} [${epRange} ADDED]`);
+            });
+        }
+        return infoParts.join(' & ');
+    }
+
+    function autoGenerateNotificationText() {
+        if (document.getElementById('content_type').value !== 'series') {
+            document.getElementById('custom_notification_text').value = '';
+            return;
+        }
+        const oldEpisodes = JSON.parse('{{ movie.episodes|tojson|safe }}' || '[]');
+        const oldSeasonPacks = JSON.parse('{{ movie.season_packs|tojson|safe }}' || '[]');
+        const oldEpIds = new Set(oldEpisodes.map(ep => `${ep.season}-${ep.episode_number}`));
+        const oldPackIds = new Set(oldSeasonPacks.map(p => p.season_number));
+        const currentEps = [];
+        document.querySelectorAll('#episodes_container .dynamic-item').forEach(item => {
+            const season = item.querySelector('[name="episode_season[]"]').value;
+            const episode = item.querySelector('[name="episode_number[]"]').value;
+            if (season && episode) currentEps.push({ season: parseInt(season), episode_number: parseInt(episode) });
+        });
+        const currentPacks = [];
+        document.querySelectorAll('#season_packs_container .dynamic-item').forEach(item => {
+            const season = item.querySelector('[name="season_pack_number[]"]').value;
+            if (season) currentPacks.push({ season_number: parseInt(season) });
+        });
+        const newlyAddedEps = currentEps.filter(ep => !oldEpIds.has(`${ep.season}-${ep.episode_number}`));
+        const newlyAddedPacks = currentPacks.filter(p => !oldPackIds.has(p.season_number));
+        const generatedText = formatSeriesInfoJS(newlyAddedEps, newlyAddedPacks);
+        document.getElementById('custom_notification_text').value = generatedText;
+    }
+
+    function setupMutationObserver() {
+        const episodesContainer = document.getElementById('episodes_container');
+        const packsContainer = document.getElementById('season_packs_container');
+        const observerCallback = (mutationsList, observer) => {
+            for(const mutation of mutationsList) { if (mutation.type === 'childList') autoGenerateNotificationText(); }
+        };
+        const observer = new MutationObserver(observerCallback);
+        const config = { childList: true };
+        if (episodesContainer) observer.observe(episodesContainer, config);
+        if (packsContainer) observer.observe(packsContainer, config);
+        document.body.addEventListener('input', (event) => {
+            if (event.target.matches('[name="episode_season[]"], [name="episode_number[]"], [name="season_pack_number[]"]')) {
+                autoGenerateNotificationText();
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleFields();
+        setupMutationObserver();
+        const checkbox = document.getElementById('send_notification_checkbox');
+        const container = document.getElementById('notification_text_container');
+        function toggleNotificationBox() { container.style.display = checkbox.checked ? 'block' : 'none'; }
+        checkbox.addEventListener('change', toggleNotificationBox);
+        toggleNotificationBox();
+    });
+    // --- END: NEW JAVASCRIPT ---
 </script>
 </body></html>
 """
@@ -1720,7 +1829,22 @@ def wait_page():
 def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
-        if form_action == "update_ads":
+        
+        if form_action == "quick_telegram_update":
+            series_id = request.form.get("series_id")
+            update_text = request.form.get("update_text", "").strip()
+            if series_id and update_text:
+                series_data = movies.find_one({"_id": ObjectId(series_id)})
+                if series_data:
+                    send_telegram_notification(
+                        series_data, 
+                        series_id, 
+                        notification_type='update', 
+                        series_update_info=update_text
+                    )
+            return redirect(url_for('admin'))
+
+        elif form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         elif form_action == "add_category":
@@ -1780,7 +1904,18 @@ def admin():
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    return render_template_string(admin_html, content_list=content_list, stats=stats, requests_list=requests_list, ad_settings=ad_settings_data, categories_list=categories_list, ott_list=ott_list)
+    series_list = list(movies.find({"type": "series"}, {"_id": 1, "title": 1}).sort('title', 1))
+    
+    return render_template_string(
+        admin_html, 
+        content_list=content_list, 
+        stats=stats, 
+        requests_list=requests_list, 
+        ad_settings=ad_settings_data, 
+        categories_list=categories_list, 
+        ott_list=ott_list,
+        series_list=series_list
+    )
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
@@ -1840,17 +1975,16 @@ def edit_movie(movie_id):
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         update_query = {"$set": update_data}
         
-        # --- [NEW] Logic to detect new episodes/packs for notification ---
         series_update_info_str = None
+        custom_notification_text = request.form.get("custom_notification_text", "").strip()
+
         if content_type == "series":
-            # Get new episodes and packs from form
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
             update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
             s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             update_query.setdefault("$unset", {})["links"] = ""
 
-            # Compare old vs new to find what was added
             old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
             old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
             
@@ -1858,7 +1992,10 @@ def edit_movie(movie_id):
             newly_added_packs = [p for p in update_data["season_packs"] if p.get('season_number') not in old_pack_ids]
             
             if newly_added_eps or newly_added_packs:
-                series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
+                if custom_notification_text:
+                    series_update_info_str = custom_notification_text
+                else:
+                    series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
 
         else: # It's a movie
             qualities = ["480p", "720p", "1080p", "BLU-RAY"]
