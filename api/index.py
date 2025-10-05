@@ -16,6 +16,8 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819"
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid270270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
+# --- [নতুন] ডেভেলপার টেলিগ্রাম আইডি ---
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/ctgmovies23") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
 
 # --- Telegram Notification Variables (from Vercel Environment Variables) ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -206,6 +208,7 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
+# --- [আপডেট করা হয়েছে] ---
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
@@ -226,13 +229,15 @@ def inject_globals():
         quote=quote, 
         datetime=datetime, 
         category_icons=category_icons,
-        all_ott_platforms=all_ott_platforms
+        all_ott_platforms=all_ott_platforms,
+        developer_telegram_id=DEVELOPER_TELEGRAM_ID # নতুন ভেরিয়েবল যোগ করা হয়েছে
     )
 
 # =========================================================================================
 # === [START] HTML TEMPLATES ==============================================================
 # =========================================================================================
 
+# --- [index_html টেমপ্লেট আপডেট করা হয়েছে] ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -487,17 +492,18 @@ index_html = """
         <button class="menu-toggle"><i class="fas fa-bars"></i></button>
     </div>
 </header>
+<!-- [START] মোবাইল মেনু আপডেট করা হয়েছে -->
 <div class="mobile-nav-menu">
     <button class="close-btn">&times;</button>
     <div class="mobile-links">
         <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('all_series') }}">All Web Series</a>
         <a href="{{ url_for('all_movies') }}">All Movies</a>
-        <a href="{{ url_for('all_series') }}">All Series</a>
-        <a href="{{ url_for('request_content') }}">Request Content</a>
         <hr>
-        {% for cat in predefined_categories %}<a href="{{ url_for('movies_by_category', name=cat) }}">{{ cat }}</a>{% endfor %}
+        <a href="https://t.me/{{ developer_telegram_id }}" target="_blank">How to Create Website</a>
     </div>
 </div>
+<!-- [END] মোবাইল মেনু আপডেট করা হয়েছে -->
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
@@ -1550,7 +1556,7 @@ edit_html = """
     }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
-    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
+    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     
     async function resyncTmdb(tmdbId, mediaType) {
         const btn = document.getElementById('resync-btn');
