@@ -17,7 +17,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid270270")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 # --- [নতুন] ডেভেলপার টেলিগ্রাম আইডি ---
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/ctgmovies23") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "@ctgmovies23") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
 
 # --- Telegram Notification Variables (from Vercel Environment Variables) ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
