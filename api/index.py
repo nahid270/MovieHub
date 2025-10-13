@@ -9,6 +9,7 @@ from functools import wraps
 from urllib.parse import unquote, quote
 from datetime import datetime, timedelta
 import math
+import re  # <-- এই মডিউলটি সার্চ ফাংশনের জন্য প্রয়োজন
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -17,7 +18,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 # --- [নতুন] ডেভেলপার টেলিগ্রাম আইডি ---
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "@ctgmovies23") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
 
 # --- Telegram Notification Variables (from Vercel Environment Variables) ---
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -2009,19 +2010,88 @@ def admin_api_live_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+### [পরিবর্তিত ফাংশন] ###
+# এই ফাংশনটি আপনার সার্চের সমস্যা সমাধান করবে
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
-    query = request.args.get('query')
-    if not query: return jsonify({"error": "Query parameter is missing"}), 400
+    query = request.args.get('query', '').strip()
+    if not query:
+        return jsonify({"error": "Query parameter is missing"}), 400
+
+    search_title = query
+    search_year = None
+    
+    # রেগুলার এক্সপ্রেশন ব্যবহার করে কোয়েরি থেকে সাল (year) আলাদা করার চেষ্টা
+    match = re.search(r'^(.*?)\s*\(?(\d{4})\)?$', query)
+    if match:
+        search_title = match.group(1).strip()
+        search_year = match.group(2)
+
+    all_results = []
+    seen_ids = set()
+
+    # TMDB থেকে আসা ফলাফলকে একটি স্ট্যান্ডার্ড ফরম্যাটে প্রসেস করার জন্য ফাংশন
+    def process_tmdb_results(items, media_type_fallback=None):
+        for item in items:
+            item_id = item.get('id')
+            # ডুপ্লিকেট বা পোস্টার ছাড়া ফলাফল বাদ দেওয়া
+            if item_id in seen_ids or not item.get('poster_path'):
+                continue
+            
+            media_type = item.get('media_type', media_type_fallback)
+            if media_type not in ['movie', 'tv']:
+                continue
+
+            year = (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0]
+            
+            all_results.append({
+                "id": item_id,
+                "title": item.get('title') or item.get('name'),
+                "year": year,
+                "poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}",
+                "media_type": media_type
+            })
+            seen_ids.add(item_id)
+
     try:
-        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}"
-        res = requests.get(search_url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
-        results = [{"id": item.get('id'),"title": item.get('title') or item.get('name'),"year": (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0],"poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}","media_type": item.get('media_type')} for item in data.get('results', []) if item.get('media_type') in ['movie', 'tv'] and item.get('poster_path')]
-        return jsonify(results)
-    except Exception as e: return jsonify({"error": str(e)}), 500
+        # API রিকোয়েস্টের জন্য সাধারণ প্যারামিটার
+        base_params = {
+            'api_key': TMDB_API_KEY,
+            'query': quote(search_title),
+            'language': 'en-US',      # <-- গুরুত্বপূর্ণ: ভাষাগত সমস্যা এড়ানোর জন্য
+            'include_adult': 'true'   # <-- গুরুত্বপূর্ণ: adult কন্টেন্ট অন্তর্ভুক্ত করার জন্য
+        }
+        
+        # যদি সাল পাওয়া যায়, তবে প্রথমে সুনির্দিষ্টভাবে সার্চ করা হবে
+        if search_year:
+            # মুভি সার্চ (সাল সহ)
+            movie_params = base_params.copy()
+            movie_params['primary_release_year'] = search_year
+            movie_res = requests.get("https://api.themoviedb.org/3/search/movie", params=movie_params, timeout=10)
+            if movie_res.ok:
+                process_tmdb_results(movie_res.json().get('results', []), 'movie')
+
+            # টিভি সিরিজ সার্চ (সাল সহ)
+            tv_params = base_params.copy()
+            tv_params['first_air_date_year'] = search_year
+            tv_res = requests.get("https://api.themoviedb.org/3/search/tv", params=tv_params, timeout=10)
+            if tv_res.ok:
+                process_tmdb_results(tv_res.json().get('results', []), 'tv')
+
+        # ফলব্যাক হিসেবে সাধারণ 'multi' সার্চ (এখানে পুরো কোয়েরি ব্যবহার করা হয়)
+        multi_params = base_params.copy()
+        multi_params['query'] = quote(query) 
+        multi_res = requests.get("https://api.themoviedb.org/3/search/multi", params=multi_params, timeout=10)
+        if multi_res.ok:
+            process_tmdb_results(multi_res.json().get('results', []))
+        
+        return jsonify(all_results)
+    
+    except Exception as e:
+        print(f"ERROR in api_search_tmdb: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/admin/api/details')
 @requires_auth
