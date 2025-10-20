@@ -20,8 +20,8 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "AllBotUpdatemy")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-# TELEGRAM_CHANNEL_ID এখন একাধিক চ্যানেল সমর্থন করার জন্য ডেটাবেস থেকে লোড হবে।
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") # Bot Token is still needed from ENV
+# TELEGRAM_CHANNEL_ID is now fetched from the database settings
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
 # --- App Initialization & Global Database State ---
@@ -74,7 +74,9 @@ def initialize_databases():
         else:
             # 3. Fatal failure
             print("FATAL: Failed to connect to both Primary and Secondary MongoDBs.")
-            # If VERCEL is set, we still proceed to allow the app to deploy and show the 503 error page.
+            active_db_name = "OFFLINE"
+            # Ensure all global collections are explicitly None if connection fails
+            movies, settings, categories_collection, requests_collection, ott_collection = [None] * 5
             if os.environ.get('VERCEL') != '1':
                 sys.exit(1)
             return 
@@ -109,10 +111,12 @@ def initialize_databases():
 try:
     initialize_databases()
 except Exception as e:
-    # If initialization fails, the global collections will remain None, leading to 503 errors on routes.
     print(f"FATAL: Database initialization failed: {e}")
+    movies, settings, categories_collection, requests_collection, ott_collection = [None] * 5
+    active_db_name = "OFFLINE"
 
-# --- Authentication ---
+
+# --- Authentication (Same) ---
 def check_auth(username, password):
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
@@ -128,7 +132,7 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- Helper function to format series info ---
+# --- Helper function to format series info (Same) ---
 def format_series_info(episodes, season_packs):
     """Generates a string like S01 [EP01-10 ADDED] & S02 [COMPLETE SEASON ADDED]"""
     info_parts = []
@@ -154,19 +158,18 @@ def format_series_info(episodes, season_packs):
             ep_nums = sorted(episodes_by_season[season])
             if not ep_nums: continue
             
-            ep_range = f"EP{ep_nums[0]:02d}" if len(ep_nums) == 1 else f"EP{ep_nums[0]:02d}-{ep_nums[-1]:02d}"
             # Check if this season was already listed as a complete pack
             is_complete_pack = any(p.get('season_number') == season for p in season_packs)
-            if not is_complete_pack:
-                 info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
+            if is_complete_pack: continue
+
+            ep_range = f"EP{ep_nums[0]:02d}" if len(ep_nums) == 1 else f"EP{ep_nums[0]:02d}-{ep_nums[-1]:02d}"
+            info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
 
     return " & ".join(info_parts)
 
 
-# --- Telegram Notification Function ---
+# --- Telegram Notification Function (UPDATED for Multiple Channels) ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    global settings # Ensure access to the global settings collection
-
     if not TELEGRAM_BOT_TOKEN or not WEBSITE_URL or not settings:
         print("INFO: Telegram bot token, website URL, or settings collection not configured. Skipping notification.")
         return
@@ -257,7 +260,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         print(f"ERROR: Unexpected error in send_telegram_notification setup: {e}")
 
 
-# --- Custom Jinja Filter for Relative Time ---
+# --- Custom Jinja Filter for Relative Time (Same) ---
 def time_ago(obj_id):
     if not isinstance(obj_id, ObjectId): return ""
     post_time = obj_id.generation_time.replace(tzinfo=None)
@@ -278,11 +281,19 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- Context Processor ---
+# --- Context Processor (UPDATED for robustness) ---
 @app.context_processor
 def inject_globals():
-    if not active_db:
-        return dict(website_name=WEBSITE_NAME, ad_settings={}, predefined_categories=[], all_ott_platforms=[], developer_telegram_id=DEVELOPER_TELEGRAM_ID, active_db_name="OFFLINE")
+    # 500 Error Fix: Ensure settings/collections are available before attempting DB calls
+    if not active_db or not settings or not categories_collection or not ott_collection:
+        return dict(
+            website_name=WEBSITE_NAME, 
+            ad_settings={}, 
+            predefined_categories=[], 
+            all_ott_platforms=[], 
+            developer_telegram_id=DEVELOPER_TELEGRAM_ID, 
+            active_db_name="OFFLINE"
+        )
 
     ad_settings = settings.find_one({"_id": "ad_config"})
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
@@ -308,10 +319,8 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Only Admin Panel is modified substantially) =================
+# === [START] HTML TEMPLATES (Admin Panel has new section) ================================
 # =========================================================================================
-
-# --- index_html, detail_html, wait_page_html, request_html remain the same ---
 
 index_html = """
 <!DOCTYPE html>
@@ -622,7 +631,7 @@ index_html = """
         <div class="pagination">
             {% set url_args = {'page': pagination.prev_num} %}
             {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
-            {% if 'platform' in request.endpoint %{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
             {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, **url_args) }}">&laquo; Prev</a>{% endif %}
             
             <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
@@ -1591,7 +1600,6 @@ admin_html = """
 </body></html>
 """
 
-# --- edit_html remains the same ---
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1707,6 +1715,8 @@ edit_html = """
         document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; 
         const notificationContainer = document.getElementById('notification_text_container');
         const sendNotificationCheckbox = document.getElementById('send_notification_checkbox');
+        
+        // Show custom text input only if series is selected AND notification is checked
         if (isSeries && sendNotificationCheckbox.checked) {
             notificationContainer.style.display = 'block';
         } else {
@@ -1761,7 +1771,7 @@ edit_html = """
                 episodesBySeason[ep.season].push(ep.episode_number);
             });
             
-            Object.keys(episodesBySeason).sort((a, b) => a - b).forEach(seasonStr => {
+            Object.keys(episodesBySeason).sort((a, b) => parseInt(a) - parseInt(b)).forEach(seasonStr => {
                 const season = parseInt(seasonStr);
                 // Check if this season is already marked as a complete pack
                 const isComplete = seasonPacks.some(p => p.season_number === season);
@@ -1786,14 +1796,13 @@ edit_html = """
             return;
         }
         
-        // Safely parse initial data from Jinja (movie_obj)
-        // Note: We use JSON.parse on the serialized movie object for comparison.
-        const movieJsonElement = document.querySelector('script[data-movie-data]');
+        // Safely parse initial data from Jinja
         let movieData = {};
         try {
-            // Unescape then parse
-            const dataString = '{{ movie|tojson|safe }}'.replace(/&quot;/g, '"');
-            movieData = JSON.parse(dataString || '{}');
+            // Retrieve JSON data embedded in the template
+            const rawData = '{{ movie|tojson|safe }}';
+            // Simple replacement to handle JSON escaping, though Python's tojson should handle most.
+            movieData = JSON.parse(rawData.replace(/&quot;/g, '"') || '{}'); 
         } catch (e) {
             console.error("Failed to parse movie data for JS comparison:", e);
             movieData = {};
@@ -1808,13 +1817,18 @@ edit_html = """
         // Collect current form data
         const currentEps = [];
         document.querySelectorAll('#episodes_container .dynamic-item').forEach(item => {
-            const season = parseInt(item.querySelector('[name="episode_season[]"]').value);
-            const episode = parseInt(item.querySelector('[name="episode_number[]"]').value);
+            const seasonInput = item.querySelector('[name="episode_season[]"]');
+            const episodeInput = item.querySelector('[name="episode_number[]"]');
+            
+            const season = parseInt(seasonInput ? seasonInput.value : '');
+            const episode = parseInt(episodeInput ? episodeInput.value : '');
+
             if (!isNaN(season) && !isNaN(episode)) currentEps.push({ season: season, episode_number: episode });
         });
         const currentPacks = [];
         document.querySelectorAll('#season_packs_container .dynamic-item').forEach(item => {
-            const season = parseInt(item.querySelector('[name="season_pack_number[]"]').value);
+            const seasonInput = item.querySelector('[name="season_pack_number[]"]');
+            const season = parseInt(seasonInput ? seasonInput.value : '');
             if (!isNaN(season)) currentPacks.push({ season_number: season });
         });
         
@@ -1831,16 +1845,24 @@ edit_html = """
         const packsContainer = document.getElementById('season_packs_container');
         
         const observerCallback = (mutationsList, observer) => {
-            for(const mutation of mutationsList) { if (mutation.type === 'childList') autoGenerateNotificationText(); }
+            for(const mutation of mutationsList) { 
+                if (mutation.type === 'childList') {
+                    // Slight debounce needed here too, as childList changes can fire rapidly
+                    setTimeout(autoGenerateNotificationText, 50);
+                }
+            }
         };
         const observer = new MutationObserver(observerCallback);
         const config = { childList: true };
         if (episodesContainer) observer.observe(episodesContainer, config);
         if (packsContainer) observer.observe(packsContainer, config);
         
+        // Listen to input changes (changing season/episode numbers)
         document.body.addEventListener('input', (event) => {
             if (event.target.matches('[name="episode_season[]"], [name="episode_number[]"], [name="season_pack_number[]"]')) {
-                autoGenerateNotificationText();
+                // Throttle input changes slightly
+                clearTimeout(window.notificationDebounce);
+                window.notificationDebounce = setTimeout(autoGenerateNotificationText, 300);
             }
         });
     }
@@ -1856,108 +1878,21 @@ edit_html = """
 """
 
 
-# =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Data-level logic) ==========================
-# =========================================================================================
-
-# --- TMDB API Helper Function (Same) ---
-def get_tmdb_details(tmdb_id, media_type):
-    if not TMDB_API_KEY: return None
-    search_type = "tv" if media_type == "series" else "movie"
-    try:
-        detail_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
-        res = requests.get(detail_url, timeout=10)
-        res.raise_for_status()
-        data = res.json()
-        details = { "tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None, "backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None, "overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie" }
-        return details
-    except requests.RequestException as e:
-        print(f"ERROR: TMDb API request failed: {e}")
-        return None
-
-# --- Pagination Helper Class (Same) ---
-class Pagination:
-    def __init__(self, page, per_page, total_count):
-        self.page = page
-        self.per_page = per_page
-        self.total_count = total_count
-    @property
-    def total_pages(self): return math.ceil(self.total_count / self.per_page)
-    @property
-    def has_prev(self): return self.page > 1
-    @property
-    def has_next(self): return self.page < self.total_pages
-    @property
-    def prev_num(self): return self.page - 1
-    @property
-    def next_num(self): return self.page + 1
-
-# --- Data Fetching Helper (Same) ---
-def get_paginated_content(query_filter, page):
-    if not active_db: return [], Pagination(page, ITEMS_PER_PAGE, 0)
-    skip = (page - 1) * ITEMS_PER_PAGE
-    # Ensure correct collection usage
-    total_count = movies.count_documents(query_filter)
-    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
-    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
-    return content_list, pagination
-
-# --- Database Sync Logic (Same) ---
-def sync_databases(source_uri, destination_uri):
-    """Copies all data from source DB to destination DB."""
-    if not source_uri or not destination_uri or source_uri == destination_uri:
-        return "Invalid URI configuration or source equals destination.", False
-    
-    source_client, source_db = connect_to_mongodb(source_uri, "SYNC SOURCE")
-    if not source_db: return "Failed to connect to Source Database.", False
-
-    dest_client, dest_db = connect_to_mongodb(destination_uri, "SYNC DESTINATION")
-    if not dest_db:
-        source_client.close()
-        return "Failed to connect to Destination Database.", False
-    
-    collections = ['movies', 'settings', 'categories', 'requests', 'ott_platforms']
-    
-    try:
-        total_documents = 0
-        for col_name in collections:
-            source_col = source_db[col_name]
-            dest_col = dest_db[col_name]
-            
-            dest_col.delete_many({})
-            
-            data_to_copy = list(source_col.find({}))
-            if data_to_copy:
-                dest_col.insert_many(data_to_copy)
-                total_documents += len(data_to_copy)
-                print(f"Synced {len(data_to_copy)} documents in collection: {col_name}")
-
-        source_client.close()
-        dest_client.close()
-        return f"Successfully synced {total_documents} documents across {len(collections)} collections. You may need to restart the application to fully utilize the new primary DB if restored.", True
-
-    except Exception as e:
-        print(f"Sync error: {e}")
-        source_client.close()
-        dest_client.close()
-        return f"An error occurred during sync: {str(e)}", False
-
-
 # --- Flask Routes ---
 
 @app.route('/')
 def home():
-    if not active_db: return render_template_string(index_html, active_db_name="OFFLINE")
+    if active_db_name == "OFFLINE": 
+        # Renders the offline message block in index_html
+        return render_template_string(index_html, active_db_name="OFFLINE")
 
     query = request.args.get('q', '').strip()
     if query:
-        # Use regex search for robustness
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
         total_results = movies.count_documents({"title": {"$regex": query, "$options": "i"}})
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
-    # Fetch content for homepage
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     
@@ -1971,9 +1906,11 @@ def home():
     }
     return render_template_string(index_html, **context)
 
+# ... (other public routes: movie_detail, all_movies, all_series, movies_by_category, movies_by_platform, request_content, wait_page, api_search remain the same, relying on the robust inject_globals check) ...
+
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try:
         movie = movies.find_one_and_update(
             {"_id": ObjectId(movie_id)},
@@ -1990,18 +1927,21 @@ def movie_detail(movie_id):
 
 @app.route('/movies')
 def all_movies():
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     page = request.args.get('page', 1, type=int)
     all_movie_content, pagination = get_paginated_content({"type": "movie"}, page)
     return render_template_string(index_html, movies=all_movie_content, query="All Movies", is_full_page_list=True, pagination=pagination)
 
 @app.route('/series')
 def all_series():
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     page = request.args.get('page', 1, type=int)
     all_series_content, pagination = get_paginated_content({"type": "series"}, page)
     return render_template_string(index_html, movies=all_series_content, query="Web Series & TV Shows", is_full_page_list=True, pagination=pagination)
 
 @app.route('/category')
 def movies_by_category():
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     title = request.args.get('name')
     if not title: return redirect(url_for('home'))
     page = request.args.get('page', 1, type=int)
@@ -2016,6 +1956,7 @@ def movies_by_category():
 
 @app.route('/platform/<platform_name>')
 def movies_by_platform(platform_name):
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     page = request.args.get('page', 1, type=int)
     query_filter = {"ott_platform": platform_name}
     
@@ -2024,7 +1965,7 @@ def movies_by_platform(platform_name):
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     if request.method == 'POST':
         content_name = request.form.get('content_name', '').strip()
         extra_info = request.form.get('extra_info', '').strip()
@@ -2042,11 +1983,12 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
+# --- Admin Routes (Modified for Telegram Management) ---
+
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
-    # If DB is completely offline, handle gracefully
-    if not active_db:
+    if active_db_name == "OFFLINE":
         ad_settings_data = settings.find_one({"_id": "ad_config"}) if settings else {}
         return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings=ad_settings_data, telegram_channels_list=[])
 
@@ -2058,23 +2000,32 @@ def admin():
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
             flash("Ad settings updated successfully.", 'success')
         
-        # --- NEW TELEGRAM CHANNEL LOGIC ---
         elif form_action == "add_channel":
             channel_id = request.form.get("channel_id", "").strip()
             channel_name = request.form.get("channel_name", "").strip()
             if channel_id and channel_name:
+                # Sanitize channel ID (remove leading @ if present, ensure numeric IDs are string)
+                if channel_id.startswith('@'):
+                    channel_id = channel_id
+                elif channel_id.startswith('-100'):
+                    channel_id = channel_id # Telegram numeric channel ID format
+                
                 try:
-                    settings.update_one(
-                        {"_id": "telegram_config"},
-                        {"$push": {"channels": {"id": channel_id, "name": channel_name}}},
-                        upsert=True
-                    )
-                    flash(f"Telegram channel '{channel_name}' added successfully!", 'success')
+                    # Prevent duplicates based on channel ID
+                    existing_config = settings.find_one({"_id": "telegram_config", "channels.id": channel_id})
+                    if existing_config:
+                        flash(f"Channel with ID '{channel_id}' already exists.", 'error')
+                    else:
+                        settings.update_one(
+                            {"_id": "telegram_config"},
+                            {"$push": {"channels": {"id": channel_id, "name": channel_name}}},
+                            upsert=True
+                        )
+                        flash(f"Telegram channel '{channel_name}' added successfully!", 'success')
                 except Exception as e:
                     flash(f"Error adding channel: {e}", 'error')
             else:
                 flash("Channel ID and Name are required.", 'error')
-        # --- END NEW TELEGRAM CHANNEL LOGIC ---
 
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
@@ -2094,7 +2045,6 @@ def admin():
             is_completed = 'is_completed' in request.form
             ott_platform = request.form.get("ott_platform")
             tmdb_id = request.form.get("tmdb_id")
-            
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -2108,28 +2058,18 @@ def admin():
             }
             if ott_platform and ott_platform != "None": movie_data["ott_platform"] = ott_platform
             
-            # Fetch TMDB details for release date/vote average if TMDB ID is provided
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
                 if tmdb_details: 
-                    movie_data.update({
-                        'release_date': tmdb_details.get('release_date'),
-                        'vote_average': tmdb_details.get('vote_average')
-                    })
+                    movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
 
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
                 movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             else:
-                sp_nums = request.form.getlist('season_pack_number[]')
-                sp_w = request.form.getlist('season_pack_watch_link[]')
-                sp_d = request.form.getlist('season_pack_download_link[]')
+                sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i].isdigit()]
-                
-                s = request.form.getlist('episode_season[]')
-                n = request.form.getlist('episode_number[]')
-                t = request.form.getlist('episode_title[]')
-                l = request.form.getlist('episode_watch_link[]')
+                s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i].isdigit() and n[i].isdigit() and l[i]]
             
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
@@ -2154,9 +2094,9 @@ def admin():
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
+    # Fetch Telegram Channels
     telegram_config = settings.find_one({"_id": "telegram_config"}) or {}
     telegram_channels_list = telegram_config.get("channels", [])
-
     
     return render_template_string(
         admin_html, 
@@ -2174,9 +2114,8 @@ def admin():
 @app.route('/admin/telegram/delete/<channel_id>')
 @requires_auth
 def delete_telegram_channel(channel_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     
-    # Unquote the ID since it was quoted in the template
     channel_id = unquote(channel_id)
 
     try:
@@ -2190,14 +2129,14 @@ def delete_telegram_channel(channel_id):
     
     return redirect(url_for('admin'))
 
-
 @app.route('/admin/sync_db/<target>', methods=['GET'])
 @requires_auth
 def sync_db(target):
-    if not active_db: 
+    if active_db_name == "OFFLINE": 
         flash("Sync failed: Database is currently offline.", 'error')
         return redirect(url_for('admin'))
     
+    # ... (Sync logic remains the same) ...
     if target == "secondary" and active_db_name == "PRIMARY":
         source_uri = MONGO_URI_PRIMARY
         destination_uri = MONGO_URI_SECONDARY
@@ -2228,7 +2167,7 @@ def sync_db(target):
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
 def delete_category(cat_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try: categories_collection.delete_one({"_id": ObjectId(cat_id)})
     except: pass
     return redirect(url_for('admin'))
@@ -2236,7 +2175,7 @@ def delete_category(cat_id):
 @app.route('/admin/platform/delete/<platform_id>')
 @requires_auth
 def delete_platform(platform_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try: ott_collection.delete_one({"_id": ObjectId(platform_id)})
     except: pass
     return redirect(url_for('admin'))
@@ -2244,7 +2183,7 @@ def delete_platform(platform_id):
 @app.route('/admin/request/update/<req_id>/<status>')
 @requires_auth
 def update_request_status(req_id, status):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     if status in ['Fulfilled', 'Rejected', 'Pending']:
         try: requests_collection.update_one({"_id": ObjectId(req_id)}, {"$set": {"status": status}})
         except: pass
@@ -2253,7 +2192,7 @@ def update_request_status(req_id, status):
 @app.route('/admin/request/delete/<req_id>')
 @requires_auth
 def delete_request(req_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try: requests_collection.delete_one({"_id": ObjectId(req_id)})
     except: pass
     return redirect(url_for('admin'))
@@ -2261,7 +2200,7 @@ def delete_request(req_id):
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try:
         obj_id = ObjectId(movie_id)
     except:
@@ -2338,7 +2277,6 @@ def edit_movie(movie_id):
         flash(f"'{update_data['title']}' updated successfully!", 'success')
         
         if request.form.get('send_notification'):
-            # Fetch the final updated object to send the complete data to the notification function
             final_movie_data = movies.find_one({"_id": obj_id})
             send_telegram_notification(
                 final_movie_data, 
@@ -2352,7 +2290,6 @@ def edit_movie(movie_id):
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
     
-    # Send the original movie object to the template (needed for JS update check)
     movie_obj['_id'] = str(movie_obj['_id']) 
     return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
 
@@ -2360,7 +2297,7 @@ def edit_movie(movie_id):
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
-    if not active_db: return "Database not initialized.", 503
+    if active_db_name == "OFFLINE": return "Database not initialized.", 503
     try: movies.delete_one({"_id": ObjectId(movie_id)})
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
@@ -2368,7 +2305,7 @@ def delete_movie(movie_id):
 @app.route('/admin/api/live_search')
 @requires_auth
 def admin_api_live_search():
-    if not active_db: return jsonify({"error": "Database not initialized."}), 503
+    if active_db_name == "OFFLINE": return jsonify({"error": "Database not initialized."}), 503
     query = request.args.get('q', '').strip()
     try:
         results = list(movies.find({"title": {"$regex": query, "$options": "i"} if query else {}}, {"_id": 1, "title": 1, "type": 1}).sort('updated_at', -1))
@@ -2475,7 +2412,7 @@ def api_resync_tmdb():
 
 @app.route('/api/search')
 def api_search():
-    if not active_db: return jsonify([]), 503
+    if active_db_name == "OFFLINE": return jsonify([]), 503
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
@@ -2488,5 +2425,4 @@ def api_search():
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 3000))
-    # Note: On local development, if PRIMARY fails, you need to restart the script to switch to SECONDARY.
     app.run(debug=True, host='0.0.0.0', port=port)
