@@ -9,18 +9,18 @@ from functools import wraps
 from urllib.parse import unquote, quote
 from datetime import datetime, timedelta
 import math
-import re  # <-- এই মডিউলটি সার্চ ফাংশনের জন্য প্রয়োজন
+import re
 
 # --- Environment Variables ---
+# এগুলো এখন আর সরাসরি ব্যবহার না হলেও, fallback হিসেবে বা Vercel Deploy এর জন্য রাখা হলো।
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
-# --- [নতুন] ডেভেলপার টেলিগ্রাম আইডি ---
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") 
 
-# --- Telegram Notification Variables (from Vercel Environment Variables) ---
+# পুরনো টেলিগ্রাম ভ্যারিয়েবলগুলো এখন শুধু একটি সেটিং হিসেবে ব্যবহৃত হবে না, DB তে সেভ হবে।
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
@@ -29,7 +29,6 @@ WEBSITE_URL = os.environ.get("WEBSITE_URL")
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
 app = Flask(__name__)
-# For flash messages
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_secret_key_for_flash_messages")
 
 
@@ -125,11 +124,22 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- Telegram Notification Function ---
+# --- UPDATED: Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
-        print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
+    # 1. Fetch all channel configurations from DB
+    tele_configs = settings.find_one({"_id": "telegram_config"})
+    channels = tele_configs.get('channels', []) if tele_configs else []
+
+    if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
+        print("INFO: No Telegram channels configured in DB or ENV. Skipping notification.")
         return
+
+    # Add environment variables as a fallback/default channel if they exist
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
+        # Check if the environment config is already present in the list (to avoid duplicates if migrating)
+        if not any(c.get('channel_id') == TELEGRAM_CHANNEL_ID for c in channels):
+            channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
+
 
     try:
         movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
@@ -172,18 +182,40 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
         inline_keyboard = {"inline_keyboard": [[{"text": "📥👇 Download Now 👇📥", "url": movie_url}]]}
-        api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-        payload = {'chat_id': TELEGRAM_CHANNEL_ID, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
+
+        # 2. Iterate and send to all configured channels
+        sent_count = 0
+        for config in channels:
+            bot_token = config.get('token')
+            channel_id = config.get('channel_id')
+
+            if not bot_token or not channel_id:
+                continue
+
+            api_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+            payload = {
+                'chat_id': channel_id, 
+                'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 
+                'caption': caption, 
+                'parse_mode': 'Markdown', 
+                'reply_markup': json.dumps(inline_keyboard)
+            }
+            
+            try:
+                response = requests.post(api_url, data=payload, timeout=15)
+                response.raise_for_status()
+                
+                if response.json().get('ok'):
+                    print(f"SUCCESS: Telegram notification sent to channel '{channel_id}' (Type: {notification_type}).")
+                    sent_count += 1
+                else:
+                    print(f"WARNING: Telegram API error for channel '{channel_id}': {response.json().get('description')}")
+            except requests.exceptions.RequestException as e:
+                print(f"ERROR: Failed to send Telegram notification to channel '{channel_id}': {e}")
         
-        response = requests.post(api_url, data=payload, timeout=15)
-        response.raise_for_status()
-        
-        if response.json().get('ok'):
-            print(f"SUCCESS: Telegram notification sent for '{movie_data['title']}' (Type: {notification_type}).")
-        else:
-            print(f"WARNING: Telegram API error: {response.json().get('description')}")
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Failed to send Telegram notification: {e}")
+        if sent_count == 0:
+            print("WARNING: Notification attempt failed for all configured channels.")
+
     except Exception as e:
         print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
 
@@ -231,14 +263,12 @@ def inject_globals():
         datetime=datetime, 
         category_icons=category_icons,
         all_ott_platforms=all_ott_platforms,
-        developer_telegram_id=DEVELOPER_TELEGRAM_ID # নতুন ভেরিয়েবল যোগ করা হয়েছে
+        developer_telegram_id=DEVELOPER_TELEGRAM_ID
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES ==============================================================
+# === [START] HTML TEMPLATES (Only Admin HTML updated for brevity, others are unchanged) ===
 # =========================================================================================
-
-# --- [index_html টেমপ্লেট আপডেট করা হয়েছে] ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -742,7 +772,6 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1015,7 +1044,6 @@ detail_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-
 wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1074,7 +1102,6 @@ wait_page_html = """
 </body>
 </html>
 """
-
 request_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1156,7 +1183,7 @@ request_html = """
 </body>
 </html>
 """
-
+# --- UPDATED ADMIN HTML ---
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1281,36 +1308,62 @@ admin_html = """
     </form>
     <hr>
     
-    <div class="manage-content-header">
-        <h2><i class="fas fa-tasks"></i> Manage Content</h2>
-        <div class="search-form">
-            <input type="search" id="admin-live-search" placeholder="Type to search content live..." autocomplete="off">
+    <div class="management-content-section">
+        <div class="manage-content-header">
+            <h2><i class="fas fa-tasks"></i> Manage Content</h2>
+            <div class="search-form">
+                <input type="search" id="admin-live-search" placeholder="Type to search content live..." autocomplete="off">
+            </div>
         </div>
+        <form method="post" id="bulk-action-form">
+            <input type="hidden" name="form_action" value="bulk_delete">
+            <div class="table-container"><table>
+                <thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead>
+                <tbody id="content-table-body">
+                {% for movie in content_list %}
+                <tr>
+                    <td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td>
+                    <td>{{ movie.title }}</td>
+                    <td>{{ movie.type|title }}</td>
+                    <td class="action-buttons">
+                        <a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a>
+                        <a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" style="text-align:center;">No content found.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table></div>
+            <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
+        </form>
     </div>
-    <form method="post" id="bulk-action-form">
-        <input type="hidden" name="form_action" value="bulk_delete">
-        <div class="table-container"><table>
-            <thead><tr><th><input type="checkbox" id="select-all"></th><th>Title</th><th>Type</th><th>Actions</th></tr></thead>
-            <tbody id="content-table-body">
-            {% for movie in content_list %}
-            <tr>
-                <td><input type="checkbox" name="selected_ids" value="{{ movie._id }}" class="row-checkbox"></td>
-                <td>{{ movie.title }}</td>
-                <td>{{ movie.type|title }}</td>
-                <td class="action-buttons">
-                    <a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="btn btn-edit">Edit</a>
-                    <a href="{{ url_for('delete_movie', movie_id=movie._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" style="text-align:center;">No content found.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table></div>
-        <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
-    </form>
     <hr>
 
+    <h2><i class="fab fa-telegram-plane"></i> Telegram Notification Channels</h2>
+    <div class="management-section">
+        <form method="post" style="flex: 1; min-width: 300px; padding: 15px;">
+            <input type="hidden" name="form_action" value="add_telegram_channel">
+            <fieldset><legend>Add New Channel</legend>
+                <div class="form-group"><label>Bot Token:</label><input type="text" name="bot_token" required></div>
+                <div class="form-group"><label>Channel ID (e.g., @mychannel or -100xxxxxxxxxx):</label><input type="text" name="channel_id" required></div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
+            </fieldset>
+        </form>
+        <div class="management-list" style="flex: 1; min-width: 300px;">
+            <h3>Configured Channels</h3>
+            {% for channel in telegram_channels %}
+            <div class="management-item">
+                <span>{{ channel.channel_id }} ({{ channel.token[:10] }}...)</span>
+                <a href="{{ url_for('delete_telegram_channel', channel_id=channel.channel_id) }}" onclick="return confirm('Are you sure you want to delete this channel configuration?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
+            </div>
+            {% else %}
+            <p style="padding: 10px; color: #888;">No channels configured yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+    <hr>
+    
     <h2><i class="fas fa-inbox"></i> Manage Requests</h2>
     <div class="table-container">
         <table>
@@ -1432,8 +1485,6 @@ admin_html = """
 </script>
 </body></html>
 """
-
-# === UPDATED HTML TEMPLATE ===
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1632,7 +1683,7 @@ edit_html = """
         });
         const newlyAddedEps = currentEps.filter(ep => !oldEpIds.has(`${ep.season}-${ep.episode_number}`));
         const newlyAddedPacks = currentPacks.filter(p => !oldPackIds.has(p.season_number));
-        const generatedText = formatSeriesInfoJS(newlyAddedEps, newlyAddedPacks);
+        const generatedText = formatSeriesInfoJS(newlyAddedEps, newly_added_packs);
         document.getElementById('custom_notification_text').value = generatedText;
     }
 
@@ -1662,6 +1713,7 @@ edit_html = """
 </script>
 </body></html>
 """
+
 
 # =========================================================================================
 # === [START] PYTHON FUNCTIONS & FLASK ROUTES =============================================
@@ -1699,7 +1751,7 @@ class Pagination:
     @property
     def next_num(self): return self.page + 1
 
-# --- Flask Routes ---
+# --- Flask Routes (unchanged) ---
 @app.route('/')
 def home():
     query = request.args.get('q', '').strip()
@@ -1808,6 +1860,19 @@ def admin():
         if form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
+        
+        # --- NEW TELEGRAM LOGIC ---
+        elif form_action == "add_telegram_channel":
+            bot_token = request.form.get("bot_token", "").strip()
+            channel_id = request.form.get("channel_id", "").strip()
+            if bot_token and channel_id:
+                new_channel = {"token": bot_token, "channel_id": channel_id}
+                settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": new_channel}}, upsert=True)
+                flash(f"Channel {channel_id} added successfully!", 'success')
+            else:
+                 flash("Both Bot Token and Channel ID are required.", 'error')
+        # --- END NEW TELEGRAM LOGIC ---
+
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
@@ -1866,6 +1931,10 @@ def admin():
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
+    # --- GET TELEGRAM CHANNELS FOR DISPLAY ---
+    tele_config_data = settings.find_one({"_id": "telegram_config"})
+    telegram_channels = tele_config_data.get('channels', []) if tele_config_data else []
+    
     return render_template_string(
         admin_html, 
         content_list=content_list, 
@@ -1873,8 +1942,23 @@ def admin():
         requests_list=requests_list, 
         ad_settings=ad_settings_data, 
         categories_list=categories_list, 
-        ott_list=ott_list
+        ott_list=ott_list,
+        telegram_channels=telegram_channels # New context variable
     )
+
+@app.route('/admin/telegram/delete/<channel_id>')
+@requires_auth
+def delete_telegram_channel(channel_id):
+    channel_id = unquote(channel_id)
+    try:
+        settings.update_one(
+            {"_id": "telegram_config"},
+            {"$pull": {"channels": {"channel_id": channel_id}}}
+        )
+        flash(f"Channel {channel_id} successfully deleted.", 'success')
+    except Exception as e:
+        flash(f"Error deleting channel: {e}", 'error')
+    return redirect(url_for('admin'))
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
@@ -1976,10 +2060,10 @@ def edit_movie(movie_id):
         movies.update_one({"_id": obj_id}, update_query)
         
         if request.form.get('send_notification'):
-            notification_data = movie_obj.copy()
-            notification_data.update(update_data)
+            # Fetch the updated object to ensure notification has all current details
+            updated_movie = movies.find_one({"_id": obj_id})
             send_telegram_notification(
-                notification_data, 
+                updated_movie, 
                 obj_id, 
                 notification_type='update', 
                 series_update_info=series_update_info_str
@@ -2011,7 +2095,6 @@ def admin_api_live_search():
         return jsonify({"error": str(e)}), 500
 
 ### [পরিবর্তিত ফাংশন] ###
-# এই ফাংশনটি আপনার সার্চের সমস্যা সমাধান করবে
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
@@ -2022,7 +2105,6 @@ def api_search_tmdb():
     search_title = query
     search_year = None
     
-    # রেগুলার এক্সপ্রেশন ব্যবহার করে কোয়েরি থেকে সাল (year) আলাদা করার চেষ্টা
     match = re.search(r'^(.*?)\s*\(?(\d{4})\)?$', query)
     if match:
         search_title = match.group(1).strip()
@@ -2031,11 +2113,9 @@ def api_search_tmdb():
     all_results = []
     seen_ids = set()
 
-    # TMDB থেকে আসা ফলাফলকে একটি স্ট্যান্ডার্ড ফরম্যাটে প্রসেস করার জন্য ফাংশন
     def process_tmdb_results(items, media_type_fallback=None):
         for item in items:
             item_id = item.get('id')
-            # ডুপ্লিকেট বা পোস্টার ছাড়া ফলাফল বাদ দেওয়া
             if item_id in seen_ids or not item.get('poster_path'):
                 continue
             
@@ -2055,31 +2135,26 @@ def api_search_tmdb():
             seen_ids.add(item_id)
 
     try:
-        # API রিকোয়েস্টের জন্য সাধারণ প্যারামিটার
         base_params = {
             'api_key': TMDB_API_KEY,
             'query': quote(search_title),
-            'language': 'en-US',      # <-- গুরুত্বপূর্ণ: ভাষাগত সমস্যা এড়ানোর জন্য
-            'include_adult': 'true'   # <-- গুরুত্বপূর্ণ: adult কন্টেন্ট অন্তর্ভুক্ত করার জন্য
+            'language': 'en-US',
+            'include_adult': 'true'
         }
         
-        # যদি সাল পাওয়া যায়, তবে প্রথমে সুনির্দিষ্টভাবে সার্চ করা হবে
         if search_year:
-            # মুভি সার্চ (সাল সহ)
             movie_params = base_params.copy()
             movie_params['primary_release_year'] = search_year
             movie_res = requests.get("https://api.themoviedb.org/3/search/movie", params=movie_params, timeout=10)
             if movie_res.ok:
                 process_tmdb_results(movie_res.json().get('results', []), 'movie')
 
-            # টিভি সিরিজ সার্চ (সাল সহ)
             tv_params = base_params.copy()
             tv_params['first_air_date_year'] = search_year
             tv_res = requests.get("https://api.themoviedb.org/3/search/tv", params=tv_params, timeout=10)
             if tv_res.ok:
                 process_tmdb_results(tv_res.json().get('results', []), 'tv')
 
-        # ফলব্যাক হিসেবে সাধারণ 'multi' সার্চ (এখানে পুরো কোয়েরি ব্যবহার করা হয়)
         multi_params = base_params.copy()
         multi_params['query'] = quote(query) 
         multi_res = requests.get("https://api.themoviedb.org/3/search/multi", params=multi_params, timeout=10)
