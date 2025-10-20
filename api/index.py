@@ -20,8 +20,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "AllBotUpdatemy")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") # Bot Token is still needed from ENV
-# TELEGRAM_CHANNEL_ID is now fetched from the database settings
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") 
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
 # --- App Initialization & Global Database State ---
@@ -57,14 +56,12 @@ def initialize_databases():
     """Tries primary, then secondary, then fails."""
     global active_client, active_db, active_db_name, movies, settings, categories_collection, requests_collection, ott_collection
 
-    # 1. Try Primary
     client_primary, db_primary = connect_to_mongodb(MONGO_URI_PRIMARY, "PRIMARY")
     if db_primary:
         active_client = client_primary
         active_db = db_primary
         active_db_name = "PRIMARY"
     else:
-        # 2. Try Secondary
         client_secondary, db_secondary = connect_to_mongodb(MONGO_URI_SECONDARY, "SECONDARY (Backup)")
         if db_secondary:
             active_client = client_secondary
@@ -72,7 +69,6 @@ def initialize_databases():
             active_db_name = "SECONDARY"
             print("WARNING: Primary connection failed. Running on SECONDARY database.")
         else:
-            # 3. Fatal failure
             print("FATAL: Failed to connect to both Primary and Secondary MongoDBs.")
             active_db_name = "OFFLINE"
             # Ensure all global collections are explicitly None if connection fails
@@ -88,7 +84,7 @@ def initialize_databases():
     requests_collection = active_db["requests"]
     ott_collection = active_db["ott_platforms"]
 
-    # Initial setup checks (runs only if we successfully connected to *a* DB)
+    # Initial setup checks 
     if categories_collection.count_documents({}) == 0:
         default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
@@ -168,7 +164,7 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- Telegram Notification Function (UPDATED for Multiple Channels) ---
+# --- Telegram Notification Function (Same as last update) ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
     if not TELEGRAM_BOT_TOKEN or not WEBSITE_URL or not settings:
         print("INFO: Telegram bot token, website URL, or settings collection not configured. Skipping notification.")
@@ -233,9 +229,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         for channel_info in channel_list:
             channel_id = channel_info.get('id')
             channel_name = channel_info.get('name', 'Unknown')
-            if not channel_id:
-                print(f"WARNING: Skipping channel due to missing ID: {channel_name}")
-                continue
+            if not channel_id: continue
 
             payload = {
                 'chat_id': channel_id, 
@@ -281,11 +275,11 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- Context Processor (UPDATED for robustness) ---
+# --- Context Processor (Robust) ---
 @app.context_processor
 def inject_globals():
-    # 500 Error Fix: Ensure settings/collections are available before attempting DB calls
-    if not active_db or not settings or not categories_collection or not ott_collection:
+    # If DB is offline, return minimal context to prevent exceptions
+    if active_db_name == "OFFLINE":
         return dict(
             website_name=WEBSITE_NAME, 
             ad_settings={}, 
@@ -295,10 +289,20 @@ def inject_globals():
             active_db_name="OFFLINE"
         )
 
-    ad_settings = settings.find_one({"_id": "ad_config"})
-    all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
-    all_ott_platforms = list(ott_collection.find().sort("name", 1))
-    
+    # Proceed with DB calls only if connected
+    # Note: We must ensure all collections (settings, categories_collection, ott_collection) 
+    # are defined before calling them, although the "OFFLINE" check covers this.
+    try:
+        ad_settings = settings.find_one({"_id": "ad_config"})
+        all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+        all_ott_platforms = list(ott_collection.find().sort("name", 1))
+    except Exception as e:
+        print(f"FATAL ERROR in Context Processor (DB call): {e}")
+        return dict(
+            website_name=WEBSITE_NAME, ad_settings={}, predefined_categories=[], all_ott_platforms=[], 
+            developer_telegram_id=DEVELOPER_TELEGRAM_ID, active_db_name="ERROR"
+        )
+
     category_icons = {
         "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film",
         "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones",
@@ -319,8 +323,10 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Admin Panel has new section) ================================
+# === [START] HTML TEMPLATES (Included for completeness, logic remains the same) ===========
 # =========================================================================================
+
+# --- HTML TEMPLATES ---
 
 index_html = """
 <!DOCTYPE html>
@@ -1557,7 +1563,7 @@ admin_html = """
 <script>
     function toggleFields() { const isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
-    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Complete Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Complete Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
+    function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     function openModal() { document.getElementById('search-modal').style.display = 'flex'; }
     function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
@@ -1716,7 +1722,6 @@ edit_html = """
         const notificationContainer = document.getElementById('notification_text_container');
         const sendNotificationCheckbox = document.getElementById('send_notification_checkbox');
         
-        // Show custom text input only if series is selected AND notification is checked
         if (isSeries && sendNotificationCheckbox.checked) {
             notificationContainer.style.display = 'block';
         } else {
@@ -1750,11 +1755,9 @@ edit_html = """
         }
     }
 
-    // Functionality to auto-generate notification text for series updates
     function formatSeriesInfoJS(episodes, seasonPacks) {
         let infoParts = [];
         
-        // Include complete seasons first
         if (seasonPacks && seasonPacks.length > 0) {
             const sortedPacks = seasonPacks.sort((a, b) => a.season_number - b.season_number);
             sortedPacks.forEach(pack => {
@@ -1763,7 +1766,6 @@ edit_html = """
             });
         }
         
-        // Handle individual episodes, excluding seasons already covered by a complete pack
         if (episodes && episodes.length > 0) {
             const episodesBySeason = {};
             episodes.forEach(ep => {
@@ -1773,7 +1775,6 @@ edit_html = """
             
             Object.keys(episodesBySeason).sort((a, b) => parseInt(a) - parseInt(b)).forEach(seasonStr => {
                 const season = parseInt(seasonStr);
-                // Check if this season is already marked as a complete pack
                 const isComplete = seasonPacks.some(p => p.season_number === season);
                 if (isComplete) return; 
                 
@@ -1796,15 +1797,11 @@ edit_html = """
             return;
         }
         
-        // Safely parse initial data from Jinja
         let movieData = {};
         try {
-            // Retrieve JSON data embedded in the template
             const rawData = '{{ movie|tojson|safe }}';
-            // Simple replacement to handle JSON escaping, though Python's tojson should handle most.
             movieData = JSON.parse(rawData.replace(/&quot;/g, '"') || '{}'); 
         } catch (e) {
-            console.error("Failed to parse movie data for JS comparison:", e);
             movieData = {};
         }
 
@@ -1814,25 +1811,18 @@ edit_html = """
         const oldEpIds = new Set(oldEpisodes.map(ep => `${ep.season}-${ep.episode_number}`));
         const oldPackIds = new Set(oldSeasonPacks.map(p => p.season_number));
         
-        // Collect current form data
         const currentEps = [];
         document.querySelectorAll('#episodes_container .dynamic-item').forEach(item => {
-            const seasonInput = item.querySelector('[name="episode_season[]"]');
-            const episodeInput = item.querySelector('[name="episode_number[]"]');
-            
-            const season = parseInt(seasonInput ? seasonInput.value : '');
-            const episode = parseInt(episodeInput ? episodeInput.value : '');
-
+            const season = parseInt(item.querySelector('[name="episode_season[]"]').value);
+            const episode = parseInt(item.querySelector('[name="episode_number[]"]').value);
             if (!isNaN(season) && !isNaN(episode)) currentEps.push({ season: season, episode_number: episode });
         });
         const currentPacks = [];
         document.querySelectorAll('#season_packs_container .dynamic-item').forEach(item => {
-            const seasonInput = item.querySelector('[name="season_pack_number[]"]');
-            const season = parseInt(seasonInput ? seasonInput.value : '');
+            const season = parseInt(item.querySelector('[name="season_pack_number[]"]').value);
             if (!isNaN(season)) currentPacks.push({ season_number: season });
         });
         
-        // Compare to find newly added entries
         const newlyAddedEps = currentEps.filter(ep => !oldEpIds.has(`${ep.season}-${ep.episode_number}`));
         const newlyAddedPacks = currentPacks.filter(p => !oldPackIds.has(p.season_number));
         
@@ -1847,7 +1837,6 @@ edit_html = """
         const observerCallback = (mutationsList, observer) => {
             for(const mutation of mutationsList) { 
                 if (mutation.type === 'childList') {
-                    // Slight debounce needed here too, as childList changes can fire rapidly
                     setTimeout(autoGenerateNotificationText, 50);
                 }
             }
@@ -1857,10 +1846,8 @@ edit_html = """
         if (episodesContainer) observer.observe(episodesContainer, config);
         if (packsContainer) observer.observe(packsContainer, config);
         
-        // Listen to input changes (changing season/episode numbers)
         document.body.addEventListener('input', (event) => {
             if (event.target.matches('[name="episode_season[]"], [name="episode_number[]"], [name="season_pack_number[]"]')) {
-                // Throttle input changes slightly
                 clearTimeout(window.notificationDebounce);
                 window.notificationDebounce = setTimeout(autoGenerateNotificationText, 300);
             }
@@ -1877,22 +1864,84 @@ edit_html = """
 </body></html>
 """
 
+# =========================================================================================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Final Robust Logic) ========================
+# =========================================================================================
+
+# --- Data Fetching Helper (Same) ---
+def get_paginated_content(query_filter, page):
+    if active_db_name == "OFFLINE" or not movies: return [], Pagination(page, ITEMS_PER_PAGE, 0)
+    skip = (page - 1) * ITEMS_PER_PAGE
+    total_count = movies.count_documents(query_filter)
+    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
+    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
+    return content_list, pagination
+
+# --- Database Sync Logic (Same) ---
+def sync_databases(source_uri, destination_uri):
+    """Copies all data from source DB to destination DB."""
+    if not source_uri or not destination_uri or source_uri == destination_uri:
+        return "Invalid URI configuration or source equals destination.", False
+    
+    source_client, source_db = connect_to_mongodb(source_uri, "SYNC SOURCE")
+    if not source_db: return "Failed to connect to Source Database.", False
+
+    dest_client, dest_db = connect_to_mongodb(destination_uri, "SYNC DESTINATION")
+    if not dest_db:
+        source_client.close()
+        return "Failed to connect to Destination Database.", False
+    
+    collections = ['movies', 'settings', 'categories', 'requests', 'ott_platforms']
+    
+    try:
+        total_documents = 0
+        for col_name in collections:
+            source_col = source_db[col_name]
+            dest_col = dest_db[col_name]
+            
+            dest_col.delete_many({})
+            
+            data_to_copy = list(source_col.find({}))
+            if data_to_copy:
+                dest_col.insert_many(data_to_copy)
+                total_documents += len(data_to_copy)
+                print(f"Synced {len(data_to_copy)} documents in collection: {col_name}")
+
+        source_client.close()
+        dest_client.close()
+        return f"Successfully synced {total_documents} documents across {len(collections)} collections. You may need to restart the application to fully utilize the new primary DB if restored.", True
+
+    except Exception as e:
+        print(f"Sync error: {e}")
+        source_client.close()
+        dest_client.close()
+        return f"An error occurred during sync: {str(e)}", False
+
 
 # --- Flask Routes ---
 
 @app.route('/')
 def home():
-    if active_db_name == "OFFLINE": 
-        # Renders the offline message block in index_html
-        return render_template_string(index_html, active_db_name="OFFLINE")
+    # Immediate check and safe return if DB is offline
+    if active_db_name == "OFFLINE":
+        return render_template_string(index_html, 
+            active_db_name="OFFLINE",
+            movies=[], 
+            is_full_page_list=False,
+            slider_content=[], 
+            latest_content=[],
+            categorized_content={}
+        )
 
     query = request.args.get('q', '').strip()
     if query:
+        # DB calls here are safe because active_db_name is NOT OFFLINE
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
         total_results = movies.count_documents({"title": {"$regex": query, "$options": "i"}})
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
+    # Standard Home Load (DB calls)
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     
@@ -1905,8 +1954,6 @@ def home():
         "categorized_content": categorized_content, "is_full_page_list": False
     }
     return render_template_string(index_html, **context)
-
-# ... (other public routes: movie_detail, all_movies, all_series, movies_by_category, movies_by_platform, request_content, wait_page, api_search remain the same, relying on the robust inject_globals check) ...
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -1983,14 +2030,12 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
-# --- Admin Routes (Modified for Telegram Management) ---
-
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
     if active_db_name == "OFFLINE":
-        ad_settings_data = settings.find_one({"_id": "ad_config"}) if settings else {}
-        return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings=ad_settings_data, telegram_channels_list=[])
+        # We still need to find ad_settings manually if settings is None, but the context processor already handles this for rendering.
+        return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings={}, telegram_channels_list=[])
 
     if request.method == "POST":
         form_action = request.form.get("form_action")
@@ -2004,14 +2049,12 @@ def admin():
             channel_id = request.form.get("channel_id", "").strip()
             channel_name = request.form.get("channel_name", "").strip()
             if channel_id and channel_name:
-                # Sanitize channel ID (remove leading @ if present, ensure numeric IDs are string)
                 if channel_id.startswith('@'):
                     channel_id = channel_id
                 elif channel_id.startswith('-100'):
-                    channel_id = channel_id # Telegram numeric channel ID format
+                    channel_id = channel_id 
                 
                 try:
-                    # Prevent duplicates based on channel ID
                     existing_config = settings.find_one({"_id": "telegram_config", "channels.id": channel_id})
                     if existing_config:
                         flash(f"Channel with ID '{channel_id}' already exists.", 'error')
@@ -2045,6 +2088,7 @@ def admin():
             is_completed = 'is_completed' in request.form
             ott_platform = request.form.get("ott_platform")
             tmdb_id = request.form.get("tmdb_id")
+            
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -2094,9 +2138,9 @@ def admin():
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
-    # Fetch Telegram Channels
     telegram_config = settings.find_one({"_id": "telegram_config"}) or {}
     telegram_channels_list = telegram_config.get("channels", [])
+
     
     return render_template_string(
         admin_html, 
@@ -2129,6 +2173,7 @@ def delete_telegram_channel(channel_id):
     
     return redirect(url_for('admin'))
 
+
 @app.route('/admin/sync_db/<target>', methods=['GET'])
 @requires_auth
 def sync_db(target):
@@ -2136,7 +2181,6 @@ def sync_db(target):
         flash("Sync failed: Database is currently offline.", 'error')
         return redirect(url_for('admin'))
     
-    # ... (Sync logic remains the same) ...
     if target == "secondary" and active_db_name == "PRIMARY":
         source_uri = MONGO_URI_PRIMARY
         destination_uri = MONGO_URI_SECONDARY
@@ -2252,7 +2296,6 @@ def edit_movie(movie_id):
             if custom_notification_text:
                 series_update_info_str = custom_notification_text
             else:
-                # Calculate what was newly added by comparing against old object data
                 old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
                 old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
                 
