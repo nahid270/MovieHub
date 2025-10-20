@@ -12,6 +12,7 @@ import math
 import re
 
 # --- Environment Variables ---
+# এগুলো এখন আর সরাসরি ব্যবহার না হলেও, fallback হিসেবে বা Vercel Deploy এর জন্য রাখা হলো।
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
@@ -19,6 +20,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") 
 
+# পুরনো টেলিগ্রাম ভ্যারিয়েবলগুলো এখন শুধু একটি সেটিং হিসেবে ব্যবহৃত হবে না, DB তে সেভ হবে।
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
@@ -134,6 +136,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
 
     # Add environment variables as a fallback/default channel if they exist
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
+        # Check if the environment config is already present in the list (to avoid duplicates if migrating)
         if not any(c.get('channel_id') == TELEGRAM_CHANNEL_ID for c in channels):
             channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
 
@@ -169,13 +172,11 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             caption_header = f"🔥 **NEW ADDED : {title_with_year}**\n"
         
         caption = caption_header
-        
-        # --- Language Tag Inclusion ---
-        language_emoji = "🌐" if "english" in language_str.lower() else "🎤"
         if language_str and not any(char.isdigit() for char in language_str):
-             caption += f"**{language_emoji} Language:** **{language_str.upper()}**\n"
-        
+             caption += f"**{language_str.upper()}**\n"
+
         caption += f"\n🎞️ Quality: **{quality_str}**"
+        caption += f"\n🌐 Language: **{language_str}**"
         caption += f"\n🎭 Genres: **{genres_str}**"
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
@@ -266,10 +267,8 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (UI CSS UPDATED) =============================================
+# === [START] HTML TEMPLATES (Language Tag CSS Updated) ===================================
 # =========================================================================================
-
-# --- index_html টেমপ্লেট ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -465,33 +464,26 @@ index_html = """
       color: var(--cyan-accent); 
   }
 
-  /* --- UPDATED LANGUAGE TAG CSS --- */
   .type-tag, .language-tag {
-    position: absolute; 
-    color: white; 
-    padding: 4px 10px; 
-    font-size: 0.75rem; 
-    font-weight: 700; 
-    z-index: 2; 
-    text-transform: uppercase; 
-    border-radius: 4px;
+    position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
   }
+  
+  /* --- UPDATED LANGUAGE TAG STYLES --- */
   .language-tag { 
-    padding: 4px 10px; 
-    font-size: 0.8rem;
-    top: 8px; 
-    right: 8px; 
-    background-color: rgba(229, 9, 20, 0.8); 
-    border: 1px solid rgba(255, 255, 255, 0.5); 
-    box-shadow: 0 0 10px rgba(229, 9, 20, 0.8); 
+      padding: 4px 10px; 
+      font-size: 0.75rem; /* Slightly bigger */
+      top: 10px; 
+      right: 10px; 
+      background-color: #00ffaa; /* Bright color */
+      color: #111; /* Dark text for contrast */
+      font-weight: 700;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 255, 170, 0.7), 0 0 20px rgba(0, 255, 170, 0.5) inset;
+      z-index: 5;
   }
-  .type-tag { 
-    bottom: 8px; 
-    right: 8px; 
-    background-color: var(--type-color); 
-  }
-  /* --- END UPDATED LANGUAGE TAG CSS --- */
+  /* --- END UPDATED LANGUAGE TAG STYLES --- */
 
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
   .new-badge {
     position: absolute; top: 0; left: 0; background-color: var(--primary-color);
     color: white; padding: 4px 12px 4px 8px; font-size: 0.7rem; font-weight: 700;
@@ -795,8 +787,6 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-
-# --- detail_html টেমপ্লেট ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -925,32 +915,9 @@ detail_html = """
   .movie-carousel .swiper-slide { width: 140px; }
   .movie-card { display: block; position: relative; }
   .movie-card .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; }
-  
-  /* --- UPDATED LANGUAGE TAG CSS --- */
-  .language-tag { 
-    position: absolute; 
-    color: white; 
-    padding: 4px 10px; 
-    font-size: 0.8rem;
-    font-weight: 700; 
-    z-index: 5; /* নিশ্চিত করা হলো যেন উপরে থাকে */
-    text-transform: uppercase; 
-    border-radius: 4px;
-    top: 80px; /* পোস্টার থেকে নিচে নামানো হলো */
-    right: 8px; 
-    background-color: rgba(229, 9, 20, 0.9); /* উজ্জ্বল ব্যাকগ্রাউন্ড */
-    border: 2px solid white; 
-    box-shadow: 0 0 15px rgba(229, 9, 20, 1); 
-  }
-  .hero-poster {
-      /* শুধু এখানে ল্যাঙ্গুয়েজ ট্যাগ মুভির উপরে দেখা যাবে না, তাই CSS আগের মতোই রইলো */
-  }
-  /* --- END UPDATED LANGUAGE TAG CSS --- */
-
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
-      .language-tag { top: 8px; } /* বড় স্ক্রিনে উপরে রাখা হলো */
   }
 </style>
 </head>
@@ -972,7 +939,6 @@ detail_html = """
         {% if movie.is_completed %}
             <span class="badge-completed">COMPLETED</span>
         {% endif %}
-        {% if movie.language %}<span class="language-tag">{{ movie.language }}</span>{% endif %}
     </div>
 
     <div class="content-title-section">
@@ -1093,8 +1059,6 @@ detail_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-
-# (অন্যান্য HTML টেমপ্লেটগুলো অপরিবর্তিত আছে, যেমন: wait_page_html, request_html)
 wait_page_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1234,6 +1198,7 @@ request_html = """
 </body>
 </html>
 """
+# --- UPDATED ADMIN HTML ---
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1405,7 +1370,7 @@ admin_html = """
             {% for channel in telegram_channels %}
             <div class="management-item">
                 <span>{{ channel.channel_id }} ({{ channel.token[:10] }}...)</span>
-                <a href="{{ url_for('delete_telegram_channel', channel_id=quote(channel.channel_id)) }}" onclick="return confirm('Are you sure you want to delete this channel configuration?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
+                <a href="{{ url_for('delete_telegram_channel', channel_id=channel.channel_id) }}" onclick="return confirm('Are you sure you want to delete this channel configuration?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
             </div>
             {% else %}
             <p style="padding: 10px; color: #888;">No channels configured yet.</p>
@@ -1766,8 +1731,140 @@ edit_html = """
 
 
 # =========================================================================================
-# === [END] HTML TEMPLATES & [START] PYTHON ROUTES (Most are unchanged) ===================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Unchanged functional code) =================
 # =========================================================================================
+
+# --- TMDB API Helper Function ---
+def get_tmdb_details(tmdb_id, media_type):
+    if not TMDB_API_KEY: return None
+    search_type = "tv" if media_type == "series" else "movie"
+    try:
+        detail_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
+        res = requests.get(detail_url, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        details = { "tmdb_id": tmdb_id, "title": data.get("title") or data.get("name"), "poster": f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}" if data.get('poster_path') else None, "backdrop": f"https://image.tmdb.org/t/p/w1280{data.get('backdrop_path')}" if data.get('backdrop_path') else None, "overview": data.get("overview"), "release_date": data.get("release_date") or data.get("first_air_date"), "genres": [g['name'] for g in data.get("genres", [])], "vote_average": data.get("vote_average"), "type": "series" if search_type == "tv" else "movie" }
+        return details
+    except requests.RequestException as e:
+        print(f"ERROR: TMDb API request failed: {e}")
+        return None
+
+# --- Pagination Helper Class ---
+class Pagination:
+    def __init__(self, page, per_page, total_count):
+        self.page = page
+        self.per_page = per_page
+        self.total_count = total_count
+    @property
+    def total_pages(self): return math.ceil(self.total_count / self.per_page)
+    @property
+    def has_prev(self): return self.page > 1
+    @property
+    def has_next(self): return self.page < self.total_pages
+    @property
+    def prev_num(self): return self.page - 1
+    @property
+    def next_num(self): return self.page + 1
+
+# --- Flask Routes (unchanged) ---
+@app.route('/')
+def home():
+    query = request.args.get('q', '').strip()
+    if query:
+        movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
+        total_results = movies.count_documents({"title": {"$regex": query, "$options": "i"}})
+        pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
+        return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
+
+    slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
+    latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
+    
+    home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
+    
+    categorized_content = {k: v for k, v in categorized_content.items() if v}
+
+    context = {
+        "slider_content": slider_content, "latest_content": latest_content,
+        "categorized_content": categorized_content, "is_full_page_list": False
+    }
+    return render_template_string(index_html, **context)
+
+@app.route('/movie/<movie_id>')
+def movie_detail(movie_id):
+    try:
+        movie = movies.find_one_and_update(
+            {"_id": ObjectId(movie_id)},
+            {"$inc": {"view_count": 1}},
+            return_document=True
+        )
+        if not movie: 
+            return "Content not found", 404
+        related_content = list(movies.find({"type": movie.get('type'), "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
+        return render_template_string(detail_html, movie=movie, related_content=related_content)
+    except Exception as e:
+        print(f"Error in movie_detail: {e}")
+        return "Content not found", 404
+
+def get_paginated_content(query_filter, page):
+    skip = (page - 1) * ITEMS_PER_PAGE
+    total_count = movies.count_documents(query_filter)
+    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
+    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
+    return content_list, pagination
+
+@app.route('/movies')
+def all_movies():
+    page = request.args.get('page', 1, type=int)
+    all_movie_content, pagination = get_paginated_content({"type": "movie"}, page)
+    return render_template_string(index_html, movies=all_movie_content, query="All Movies", is_full_page_list=True, pagination=pagination)
+
+@app.route('/series')
+def all_series():
+    page = request.args.get('page', 1, type=int)
+    all_series_content, pagination = get_paginated_content({"type": "series"}, page)
+    return render_template_string(index_html, movies=all_series_content, query="Web Series & TV Shows", is_full_page_list=True, pagination=pagination)
+
+@app.route('/category')
+def movies_by_category():
+    title = request.args.get('name')
+    if not title: return redirect(url_for('home'))
+    page = request.args.get('page', 1, type=int)
+    
+    query_filter = {}
+    if title == "Latest Movies": query_filter = {"type": "movie"}
+    elif title == "Latest Series": query_filter = {"type": "series"}
+    else: query_filter = {"categories": title}
+    
+    content_list, pagination = get_paginated_content(query_filter, page)
+    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
+
+@app.route('/platform/<platform_name>')
+def movies_by_platform(platform_name):
+    page = request.args.get('page', 1, type=int)
+    query_filter = {"ott_platform": platform_name}
+    
+    content_list, pagination = get_paginated_content(query_filter, page)
+    return render_template_string(index_html, movies=content_list, query=f"{platform_name} Originals", is_full_page_list=True, pagination=pagination)
+
+@app.route('/request', methods=['GET', 'POST'])
+def request_content():
+    if request.method == 'POST':
+        content_name = request.form.get('content_name', '').strip()
+        extra_info = request.form.get('extra_info', '').strip()
+        if content_name:
+            requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
+            flash('Your request has been submitted successfully!', 'success')
+        else:
+            flash('Content name is required.', 'error')
+        return redirect(url_for('request_content'))
+    return render_template_string(request_html)
+
+@app.route('/wait')
+def wait_page():
+    encoded_target_url = request.args.get('target')
+    if not encoded_target_url: return redirect(url_for('home'))
+    return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
@@ -1779,6 +1876,7 @@ def admin():
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         
+        # --- NEW TELEGRAM LOGIC ---
         elif form_action == "add_telegram_channel":
             bot_token = request.form.get("bot_token", "").strip()
             channel_id = request.form.get("channel_id", "").strip()
@@ -1788,7 +1886,8 @@ def admin():
                 flash(f"Channel {channel_id} added successfully!", 'success')
             else:
                  flash("Both Bot Token and Channel ID are required.", 'error')
-        
+        # --- END NEW TELEGRAM LOGIC ---
+
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
@@ -1847,6 +1946,7 @@ def admin():
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
+    # --- GET TELEGRAM CHANNELS FOR DISPLAY ---
     tele_config_data = settings.find_one({"_id": "telegram_config"})
     telegram_channels = tele_config_data.get('channels', []) if tele_config_data else []
     
@@ -1858,7 +1958,7 @@ def admin():
         ad_settings=ad_settings_data, 
         categories_list=categories_list, 
         ott_list=ott_list,
-        telegram_channels=telegram_channels
+        telegram_channels=telegram_channels # New context variable
     )
 
 @app.route('/admin/telegram/delete/<channel_id>')
@@ -1904,6 +2004,7 @@ def delete_request(req_id):
     except: pass
     return redirect(url_for('admin'))
 
+# === UPDATED FUNCTION ===
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
@@ -1974,6 +2075,7 @@ def edit_movie(movie_id):
         movies.update_one({"_id": obj_id}, update_query)
         
         if request.form.get('send_notification'):
+            # Fetch the updated object to ensure notification has all current details
             updated_movie = movies.find_one({"_id": obj_id})
             send_telegram_notification(
                 updated_movie, 
@@ -2007,6 +2109,7 @@ def admin_api_live_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+### [পরিবর্তিত ফাংশন] ###
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
