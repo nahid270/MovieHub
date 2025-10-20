@@ -468,20 +468,20 @@ index_html = """
     position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
   }
   
-  /* --- UPDATED LANGUAGE TAG STYLES --- */
+  /* --- UPDATED Language Tag STYLES (Adjusted Size/Position) --- */
   .language-tag { 
-      padding: 4px 10px; 
-      font-size: 0.75rem; /* Slightly bigger */
-      top: 10px; 
-      right: 10px; 
+      padding: 3px 8px; 
+      font-size: 0.7rem; 
+      top: 8px; /* Slightly closer to corner */
+      right: 8px; /* Slightly closer to corner */
       background-color: #00ffaa; /* Bright color */
-      color: #111; /* Dark text for contrast */
+      color: #111; 
       font-weight: 700;
-      border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0, 255, 170, 0.7), 0 0 20px rgba(0, 255, 170, 0.5) inset;
+      border-radius: 4px;
+      box-shadow: 0 0 8px rgba(0, 255, 170, 0.5); /* Reduced shadow intensity */
       z-index: 5;
   }
-  /* --- END UPDATED LANGUAGE TAG STYLES --- */
+  /* --- END UPDATED Language Tag STYLES --- */
 
   .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
   .new-badge {
