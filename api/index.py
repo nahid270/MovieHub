@@ -9,29 +9,108 @@ from functools import wraps
 from urllib.parse import unquote, quote
 from datetime import datetime, timedelta
 import math
-import re  # <-- এই মডিউলটি সার্চ ফাংশনের জন্য প্রয়োজন
+import re
 
 # --- Environment Variables ---
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+# দুটি MongoDB URI প্রয়োজন: একটি প্রাইমারি এবং একটি ব্যাকআপের জন্য
+MONGO_URI_PRIMARY = os.environ.get("MONGO_URI_PRIMARY", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI_SECONDARY = os.environ.get("MONGO_URI_SECONDARY", "mongodb+srv://Demo270:Demo270@cluster0.ls1igsg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0") # <-- আপনার ব্যাকআপ MongoDB URI এখানে দিন
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
-# --- [নতুন] ডেভেলপার টেলিগ্রাম আইডি ---
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") # এখানে আপনার টেলিগ্রাম ইউজারনেম দিন
-
-# --- Telegram Notification Variables (from Vercel Environment Variables) ---
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "AllBotUpdatemy")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
-# --- App Initialization ---
+# --- App Initialization & Global Database State ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
 app = Flask(__name__)
-# For flash messages
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_secret_key_for_flash_messages")
 
+# Global collection variables (will be assigned in initialize_databases)
+movies, settings, categories_collection, requests_collection, ott_collection = [None] * 5
+active_client = None
+active_db = None
+active_db_name = "NONE"
+
+# --- Database Connection Logic (Primary/Secondary Failover) ---
+
+def connect_to_mongodb(uri, name):
+    """Attempts to connect to a MongoDB URI."""
+    if not uri:
+        return None, None
+    try:
+        # Short timeout for connection attempts
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+        client.admin.command('ismaster') 
+        db_instance = client["movie_db"]
+        print(f"SUCCESS: Connected to {name} MongoDB!")
+        return client, db_instance
+    except Exception as e:
+        print(f"FAILURE: Could not connect to {name} MongoDB. Error: {e}")
+        return None, None
+
+def initialize_databases():
+    """Tries primary, then secondary, then fails."""
+    global active_client, active_db, active_db_name, movies, settings, categories_collection, requests_collection, ott_collection
+
+    # 1. Try Primary
+    client_primary, db_primary = connect_to_mongodb(MONGO_URI_PRIMARY, "PRIMARY")
+    if db_primary:
+        active_client = client_primary
+        active_db = db_primary
+        active_db_name = "PRIMARY"
+    else:
+        # 2. Try Secondary
+        client_secondary, db_secondary = connect_to_mongodb(MONGO_URI_SECONDARY, "SECONDARY (Backup)")
+        if db_secondary:
+            active_client = client_secondary
+            active_db = db_secondary
+            active_db_name = "SECONDARY"
+            print("WARNING: Primary connection failed. Running on SECONDARY database.")
+        else:
+            # 3. Fatal failure
+            print("FATAL: Failed to connect to both Primary and Secondary MongoDBs.")
+            # If VERCEL is set, we still proceed to allow the app to deploy and show the 503 error page.
+            if os.environ.get('VERCEL') != '1':
+                sys.exit(1)
+            return 
+            
+    # Assign collections from the active DB
+    movies = active_db["movies"]
+    settings = active_db["settings"]
+    categories_collection = active_db["categories"]
+    requests_collection = active_db["requests"]
+    ott_collection = active_db["ott_platforms"]
+
+    # Initial setup checks (runs only if we successfully connected to *a* DB)
+    if categories_collection.count_documents({}) == 0:
+        default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
+        categories_collection.insert_many([{"name": cat} for cat in default_categories])
+        print("SUCCESS: Initialized default categories in the database.")
+
+    try:
+        movies.create_index("title")
+        movies.create_index("type")
+        movies.create_index("categories")
+        movies.create_index("updated_at")
+        movies.create_index("tmdb_id")
+        movies.create_index("ott_platform")
+        categories_collection.create_index("name", unique=True)
+        ott_collection.create_index("name", unique=True)
+        requests_collection.create_index("status")
+        print(f"SUCCESS: MongoDB indexes checked/created on {active_db_name}.")
+    except Exception as e:
+        print(f"WARNING: Could not create MongoDB indexes on {active_db_name}: {e}")
+
+try:
+    initialize_databases()
+except Exception as e:
+    # If initialization fails, the global collections will remain None, leading to 503 errors on routes.
+    print(f"FATAL: Database initialization failed: {e}")
 
 # --- Authentication ---
 def check_auth(username, password):
@@ -49,54 +128,11 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- Database Connection ---
-try:
-    client = MongoClient(MONGO_URI)
-    db = client["movie_db"]
-    movies = db["movies"]
-    settings = db["settings"]
-    categories_collection = db["categories"]
-    requests_collection = db["requests"]
-    ott_collection = db["ott_platforms"]
-    print("SUCCESS: Successfully connected to MongoDB!")
-
-    if categories_collection.count_documents({}) == 0:
-        default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
-        categories_collection.insert_many([{"name": cat} for cat in default_categories])
-        print("SUCCESS: Initialized default categories in the database.")
-
-    try:
-        movies.create_index("title")
-        movies.create_index("type")
-        movies.create_index("categories")
-        movies.create_index("updated_at")
-        movies.create_index("tmdb_id")
-        movies.create_index("ott_platform")
-        categories_collection.create_index("name", unique=True)
-        ott_collection.create_index("name", unique=True)
-        requests_collection.create_index("status")
-        print("SUCCESS: MongoDB indexes checked/created.")
-    except Exception as e:
-        print(f"WARNING: Could not create MongoDB indexes: {e}")
-
-    result = movies.update_many(
-        {"updated_at": {"$exists": False}},
-        [{"$set": {"updated_at": "$created_at"}}]
-    )
-    if result.modified_count > 0:
-        print(f"SUCCESS: Migrated {result.modified_count} old documents to include 'updated_at' field.")
-
-except Exception as e:
-    print(f"FATAL: Error connecting to MongoDB: {e}.")
-    if os.environ.get('VERCEL') != '1':
-        sys.exit(1)
-
 # --- Helper function to format series info ---
 def format_series_info(episodes, season_packs):
     """Generates a string like S01 [EP01-10 ADDED] & S02 [COMPLETE SEASON ADDED]"""
     info_parts = []
     
-    # Process Season Packs
     if season_packs:
         sorted_packs = sorted(season_packs, key=lambda p: p.get('season_number', 0))
         for pack in sorted_packs:
@@ -104,7 +140,6 @@ def format_series_info(episodes, season_packs):
             if season_num is not None:
                 info_parts.append(f"S{season_num:02d} [COMPLETE SEASON]")
 
-    # Process Individual Episodes
     if episodes:
         episodes_by_season = {}
         for ep in episodes:
@@ -209,9 +244,12 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- [আপডেট করা হয়েছে] ---
+# --- Context Processor ---
 @app.context_processor
 def inject_globals():
+    if not active_db:
+        return dict(website_name=WEBSITE_NAME, ad_settings={}, predefined_categories=[], all_ott_platforms=[], developer_telegram_id=DEVELOPER_TELEGRAM_ID, active_db_name="OFFLINE")
+
     ad_settings = settings.find_one({"_id": "ad_config"})
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
@@ -220,8 +258,8 @@ def inject_globals():
         "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film",
         "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones",
         "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost",
-        "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart",
-        "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home"
+        "Action": "fa-bolt", "Thriller": "fa-knife-v", "Anime": "fa-dragon", "Romance": "fa-heart",
+        "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv", "HOME": "fa-home"
     }
     return dict(
         website_name=WEBSITE_NAME, 
@@ -231,14 +269,14 @@ def inject_globals():
         datetime=datetime, 
         category_icons=category_icons,
         all_ott_platforms=all_ott_platforms,
-        developer_telegram_id=DEVELOPER_TELEGRAM_ID # নতুন ভেরিয়েবল যোগ করা হয়েছে
+        developer_telegram_id=DEVELOPER_TELEGRAM_ID,
+        active_db_name=active_db_name
     )
 
 # =========================================================================================
 # === [START] HTML TEMPLATES ==============================================================
 # =========================================================================================
 
-# --- [index_html টেমপ্লেট আপডেট করা হয়েছে] ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -473,6 +511,7 @@ index_html = """
   .pagination a, .pagination span { padding: 8px 15px; border-radius: 5px; background-color: var(--card-bg); color: var(--text-dark); font-weight: 500; }
   .pagination a:hover { background-color: #333; }
   .pagination .current { background-color: var(--primary-color); color: white; }
+  .offline-message { background: #330000; color: #ff9999; padding: 20px; margin-top: 80px; text-align: center; border-radius: 8px; border: 1px solid #ff0000; }
 
   @media (min-width: 769px) { 
     .container { padding: 0 40px; } .main-header { padding: 0 40px; }
@@ -493,7 +532,6 @@ index_html = """
         <button class="menu-toggle"><i class="fas fa-bars"></i></button>
     </div>
 </header>
-<!-- [START] মোবাইল মেনু আপডেট করা হয়েছে -->
 <div class="mobile-nav-menu">
     <button class="close-btn">&times;</button>
     <div class="mobile-links">
@@ -504,8 +542,17 @@ index_html = """
         <a href="https://t.me/{{ developer_telegram_id }}" target="_blank">How to Create Website</a>
     </div>
 </div>
-<!-- [END] মোবাইল মেনু আপডেট করা হয়েছে -->
 <main>
+  {% if active_db_name == "OFFLINE" %}
+    <div class="container">
+      <div class="offline-message">
+        <h2>Service Temporarily Unavailable</h2>
+        <p>We are currently experiencing database issues ({{ active_db_name }}). Please check back soon.</p>
+        <p>Database Status: OFFLINE</p>
+      </div>
+    </div>
+  {% else %}
+
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
       <div class="poster-wrapper">
@@ -678,7 +725,7 @@ index_html = """
   {% endif %}
 </main>
 <footer class="main-footer">
-    <p>&copy; 2024 {{ website_name }}. All Rights Reserved.</p>
+    <p>&copy; 2024 {{ website_name }}. All Rights Reserved. (DB: {{ active_db_name }})</p>
 </footer>
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
@@ -871,6 +918,8 @@ detail_html = """
   .movie-carousel .swiper-slide { width: 140px; }
   .movie-card { display: block; position: relative; }
   .movie-card .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; }
+  .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
+  .ad-container > * { max-width: 100% !important; }
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
@@ -927,7 +976,7 @@ detail_html = """
                 <div class="link-group">
                     {% for link_item in movie.links %}
                         {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn"><span>Download {{ link_item.quality }}</span><i class="fas fa-download"></i></a>{% endif %}
-                        {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
+                        {% if link_item.watch_url and not link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
                     {% endfor %}
                 </div>
             {% endif %}
@@ -939,6 +988,7 @@ detail_html = """
                         <h3>Season {{ season_num }}</h3>
                         {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
                         {% if season_pack and season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn"><span>Download All Episodes (ZIP)</span><i class="fas fa-file-archive"></i></a>{% endif %}
+                        {% if season_pack and season_pack.watch_link and not season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.watch_link)) }}" class="action-btn"><span>Watch Season (Playlist)</span><i class="fas fa-play"></i></a>{% endif %}
                         
                         {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
                         {% for ep in episodes_for_season | sort(attribute='episode_number') %}
@@ -1168,7 +1218,7 @@ admin_html = """
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
     <style>
-        :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
+        :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; --success-color: #28a745; --warning-color: #ffc107; }
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); margin: 0; padding: 20px; }
         .admin-container { max-width: 1200px; margin: 20px auto; }
         .admin-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--netflix-red); padding-bottom: 10px; margin-bottom: 30px; }
@@ -1184,7 +1234,7 @@ admin_html = """
         .btn:disabled { background-color: #555; cursor: not-allowed; }
         .btn-primary { background: var(--netflix-red); } .btn-primary:hover:not(:disabled) { background-color: #B20710; }
         .btn-secondary { background: #555; } .btn-danger { background: #dc3545; }
-        .btn-edit { background: #007bff; } .btn-success { background: #28a745; }
+        .btn-edit { background: #007bff; } .btn-success { background: var(--success-color); }
         .table-container { display: block; overflow-x: auto; white-space: nowrap; }
         table { width: 100%; border-collapse: collapse; } th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
         .action-buttons { display: flex; gap: 10px; }
@@ -1221,12 +1271,48 @@ admin_html = """
         .status-pending { background-color: #ffc107; color: black; }
         .status-fulfilled { background-color: #28a745; }
         .status-rejected { background-color: #6c757d; }
+
+        /* DB Status & Sync Styles */
+        .admin-status { background-color: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #444; }
+        .admin-status p { margin: 0; font-size: 1.1rem; }
+        .db-tag { padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+        .db-primary { background-color: var(--success-color); }
+        .db-secondary { background-color: var(--warning-color); color: var(--netflix-black); }
+        .sync-buttons { display: flex; gap: 10px; }
+        .btn-sync { background: #17a2b8; }
+        .flash-message { padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; font-weight: bold; }
+        .flash-success { background-color: var(--success-color); color: white; }
+        .flash-error { background-color: var(--netflix-red); color: white; }
     </style>
 </head>
 <body>
 <div class="admin-container">
     <header class="admin-header"><h1>Admin Panel</h1><a href="{{ url_for('home') }}" target="_blank">View Site</a></header>
     
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="admin-status">
+        <p>Active Database: <span class="db-tag db-{{ active_db_name | lower }}">{{ active_db_name }}</span></p>
+        {% if active_db_name == "PRIMARY" and MONGO_URI_SECONDARY %}
+            <div class="sync-buttons">
+                <a href="{{ url_for('sync_db', target='secondary') }}" onclick="return confirm('WARNING: This will overwrite ALL data on the SECONDARY database with data from PRIMARY. Continue?')" class="btn btn-sync"><i class="fas fa-database"></i> Backup to Secondary</a>
+            </div>
+        {% elif active_db_name == "SECONDARY" and MONGO_URI_PRIMARY %}
+            <div class="sync-buttons">
+                <a href="{{ url_for('sync_db', target='primary') }}" onclick="return confirm('CRITICAL: This will overwrite ALL data on the PRIMARY database with data from SECONDARY. Use only for restore! Continue?')" class="btn btn-danger"><i class="fas fa-undo"></i> Restore to Primary (DANGER)</a>
+            </div>
+        {% else %}
+             <p style="color: red;">Warning: Secondary URI missing or inactive. No backup capability.</p>
+        {% endif %}
+    </div>
+
+    {% if active_db_name != "OFFLINE" %}
     <h2><i class="fas fa-tachometer-alt"></i> At a Glance</h2>
     <div class="dashboard-stats">
         <div class="stat-card"><h3>Total Content</h3><p>{{ stats.total_content }}</p></div>
@@ -1384,6 +1470,7 @@ admin_html = """
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Ad Settings</button>
     </form>
     <hr>
+    {% endif %}
 
 </div>
 <div class="modal-overlay" id="search-modal"><div class="modal-content"><div class="modal-header"><h2>Select Content</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="search-results"></div></div></div>
@@ -1433,7 +1520,7 @@ admin_html = """
 </body></html>
 """
 
-# === UPDATED HTML TEMPLATE ===
+# ... (edit_html remains the same as provided in the previous response) ...
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1557,7 +1644,7 @@ edit_html = """
     }
     function addEpisodeField() { const c = document.getElementById('episodes_container'); const d = document.createElement('div'); d.className = 'dynamic-item'; d.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="form-group"><label>Season:</label><input type="number" name="episode_season[]" value="1" required></div><div class="form-group"><label>Episode:</label><input type="number" name="episode_number[]" required></div><div class="form-group"><label>Title:</label><input type="text" name="episode_title[]"></div><div class="form-group"><label>Download/Watch Link:</label><input type="url" name="episode_watch_link[]" required></div>`; c.appendChild(d); }
     function addSeasonPackField() { const container = document.getElementById('season_packs_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="season-pack-item"><div class="form-group"><label>Season No.</label><input type="number" name="season_pack_number[]" value="1" required></div><div class="form-group"><label>Watch Link</label><input type="url" name="season_pack_watch_link[]"></div><div class="form-group"><label>Download Link</label><input type="url" name="season_pack_download_link[]"></div></div>`; container.appendChild(newItem); }
-    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
+    function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     
     async function resyncTmdb(tmdbId, mediaType) {
         const btn = document.getElementById('resync-btn');
@@ -1582,6 +1669,7 @@ edit_html = """
         }
     }
 
+    // Functionality to auto-generate notification text for series updates
     function formatSeriesInfoJS(episodes, seasonPacks) {
         let infoParts = [];
         if (seasonPacks && seasonPacks.length > 0) {
@@ -1615,10 +1703,16 @@ edit_html = """
             document.getElementById('custom_notification_text').value = '';
             return;
         }
-        const oldEpisodes = JSON.parse('{{ movie.episodes|tojson|safe }}' || '[]');
-        const oldSeasonPacks = JSON.parse('{{ movie.season_packs|tojson|safe }}' || '[]');
+        // Safely parse initial data from Jinja (movie_obj)
+        const movieData = JSON.parse('{{ movie|tojson|safe }}'.replace(/&quot;/g, '"') || '{}');
+        
+        const oldEpisodes = movieData.episodes || [];
+        const oldSeasonPacks = movieData.season_packs || [];
+        
         const oldEpIds = new Set(oldEpisodes.map(ep => `${ep.season}-${ep.episode_number}`));
         const oldPackIds = new Set(oldSeasonPacks.map(p => p.season_number));
+        
+        // Collect current form data
         const currentEps = [];
         document.querySelectorAll('#episodes_container .dynamic-item').forEach(item => {
             const season = item.querySelector('[name="episode_season[]"]').value;
@@ -1630,8 +1724,11 @@ edit_html = """
             const season = item.querySelector('[name="season_pack_number[]"]').value;
             if (season) currentPacks.push({ season_number: parseInt(season) });
         });
+        
+        // Compare to find newly added entries
         const newlyAddedEps = currentEps.filter(ep => !oldEpIds.has(`${ep.season}-${ep.episode_number}`));
         const newlyAddedPacks = currentPacks.filter(p => !oldPackIds.has(p.season_number));
+        
         const generatedText = formatSeriesInfoJS(newlyAddedEps, newlyAddedPacks);
         document.getElementById('custom_notification_text').value = generatedText;
     }
@@ -1639,6 +1736,8 @@ edit_html = """
     function setupMutationObserver() {
         const episodesContainer = document.getElementById('episodes_container');
         const packsContainer = document.getElementById('season_packs_container');
+        
+        // Listen to structural changes (adding/removing items)
         const observerCallback = (mutationsList, observer) => {
             for(const mutation of mutationsList) { if (mutation.type === 'childList') autoGenerateNotificationText(); }
         };
@@ -1646,6 +1745,8 @@ edit_html = """
         const config = { childList: true };
         if (episodesContainer) observer.observe(episodesContainer, config);
         if (packsContainer) observer.observe(packsContainer, config);
+        
+        // Listen to input changes (changing season/episode numbers)
         document.body.addEventListener('input', (event) => {
             if (event.target.matches('[name="episode_season[]"], [name="episode_number[]"], [name="season_pack_number[]"]')) {
                 autoGenerateNotificationText();
@@ -1663,8 +1764,9 @@ edit_html = """
 </body></html>
 """
 
+
 # =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES =============================================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Data-level logic) ==========================
 # =========================================================================================
 
 # --- TMDB API Helper Function ---
@@ -1699,9 +1801,63 @@ class Pagination:
     @property
     def next_num(self): return self.page + 1
 
+# --- Data Fetching Helper ---
+def get_paginated_content(query_filter, page):
+    if not active_db: return [], Pagination(page, ITEMS_PER_PAGE, 0)
+    skip = (page - 1) * ITEMS_PER_PAGE
+    # Ensure correct collection usage
+    total_count = movies.count_documents(query_filter)
+    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
+    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
+    return content_list, pagination
+
+# --- Database Sync Logic ---
+def sync_databases(source_uri, destination_uri):
+    """Copies all data from source DB to destination DB."""
+    if not source_uri or not destination_uri or source_uri == destination_uri:
+        return "Invalid URI configuration or source equals destination.", False
+    
+    source_client, source_db = connect_to_mongodb(source_uri, "SYNC SOURCE")
+    if not source_db: return "Failed to connect to Source Database.", False
+
+    dest_client, dest_db = connect_to_mongodb(destination_uri, "SYNC DESTINATION")
+    if not dest_db:
+        source_client.close()
+        return "Failed to connect to Destination Database.", False
+    
+    collections = ['movies', 'settings', 'categories', 'requests', 'ott_platforms']
+    
+    try:
+        total_documents = 0
+        for col_name in collections:
+            source_col = source_db[col_name]
+            dest_col = dest_db[col_name]
+            
+            dest_col.delete_many({})
+            
+            data_to_copy = list(source_col.find({}))
+            if data_to_copy:
+                dest_col.insert_many(data_to_copy)
+                total_documents += len(data_to_copy)
+                print(f"Synced {len(data_to_copy)} documents in collection: {col_name}")
+
+        source_client.close()
+        dest_client.close()
+        return f"Successfully synced {total_documents} documents across {len(collections)} collections. You may need to restart the application to fully utilize the new primary DB if restored.", True
+
+    except Exception as e:
+        print(f"Sync error: {e}")
+        source_client.close()
+        dest_client.close()
+        return f"An error occurred during sync: {str(e)}", False
+
+
 # --- Flask Routes ---
+
 @app.route('/')
 def home():
+    if not active_db: return render_template_string(index_html, active_db_name="OFFLINE")
+
     query = request.args.get('q', '').strip()
     if query:
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
@@ -1714,7 +1870,6 @@ def home():
     
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
-    
     categorized_content = {k: v for k, v in categorized_content.items() if v}
 
     context = {
@@ -1725,6 +1880,7 @@ def home():
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
+    if not active_db: return "Database not initialized.", 503
     try:
         movie = movies.find_one_and_update(
             {"_id": ObjectId(movie_id)},
@@ -1738,13 +1894,6 @@ def movie_detail(movie_id):
     except Exception as e:
         print(f"Error in movie_detail: {e}")
         return "Content not found", 404
-
-def get_paginated_content(query_filter, page):
-    skip = (page - 1) * ITEMS_PER_PAGE
-    total_count = movies.count_documents(query_filter)
-    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ITEMS_PER_PAGE))
-    pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
-    return content_list, pagination
 
 @app.route('/movies')
 def all_movies():
@@ -1782,6 +1931,7 @@ def movies_by_platform(platform_name):
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
+    if not active_db: return "Database not initialized.", 503
     if request.method == 'POST':
         content_name = request.form.get('content_name', '').strip()
         extra_info = request.form.get('extra_info', '').strip()
@@ -1802,12 +1952,18 @@ def wait_page():
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
+    # If DB is completely offline, show only the status/header and flash messages
+    if not active_db:
+        ad_settings_data = settings.find_one({"_id": "ad_config"}) if settings else {}
+        return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings=ad_settings_data)
+
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
         if form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
+            flash("Ad settings updated successfully.", 'success')
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
@@ -1838,9 +1994,12 @@ def admin():
                 "tmdb_id": tmdb_id if tmdb_id else None, "is_completed": is_completed
             }
             if ott_platform and ott_platform != "None": movie_data["ott_platform"] = ott_platform
+            
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
-                if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
+                if tmdb_details: 
+                    movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
+
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
                 movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
@@ -1849,16 +2008,22 @@ def admin():
                 movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
                 s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
                 movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
+            
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
+            
             result = movies.insert_one(movie_data)
+            
             if result.inserted_id:
+                flash(f"'{movie_data['title']}' added successfully!", 'success')
                 series_info = None
                 if movie_data['type'] == 'series':
                     series_info = format_series_info(movie_data.get('episodes', []), movie_data.get('season_packs', []))
                 send_telegram_notification(movie_data, result.inserted_id, series_update_info=series_info)
+        
         return redirect(url_for('admin'))
     
+    # --- GET Request Logic ---
     content_list = list(movies.find({}).sort('updated_at', -1))
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     requests_list = list(requests_collection.find().sort("created_at", -1))
@@ -1873,12 +2038,49 @@ def admin():
         requests_list=requests_list, 
         ad_settings=ad_settings_data, 
         categories_list=categories_list, 
-        ott_list=ott_list
+        ott_list=ott_list,
+        MONGO_URI_SECONDARY=MONGO_URI_SECONDARY # Pass secondary URI existence status
     )
+
+
+@app.route('/admin/sync_db/<target>', methods=['GET'])
+@requires_auth
+def sync_db(target):
+    if not active_db: 
+        flash("Sync failed: Database is currently offline.", 'error')
+        return redirect(url_for('admin'))
+    
+    if target == "secondary" and active_db_name == "PRIMARY":
+        source_uri = MONGO_URI_PRIMARY
+        destination_uri = MONGO_URI_SECONDARY
+        success_msg = "Primary data backed up to Secondary DB successfully."
+        error_msg = "Failed to back up Primary data to Secondary DB."
+    elif target == "primary" and active_db_name == "SECONDARY":
+        source_uri = MONGO_URI_SECONDARY
+        destination_uri = MONGO_URI_PRIMARY
+        success_msg = "Secondary data restored to Primary DB successfully. App might need re-deployment/restart to switch back to Primary."
+        error_msg = "Failed to restore Secondary data to Primary DB."
+    else:
+        flash("Sync failed: Invalid target or current active database state.", 'error')
+        return redirect(url_for('admin'))
+    
+    if not destination_uri:
+        flash("Sync failed: Secondary URI is not configured in environment variables.", 'error')
+        return redirect(url_for('admin'))
+
+    message, success = sync_databases(source_uri, destination_uri)
+    
+    if success:
+        flash(success_msg, 'success')
+    else:
+        flash(f"{error_msg} Details: {message}", 'error')
+
+    return redirect(url_for('admin'))
 
 @app.route('/admin/category/delete/<cat_id>')
 @requires_auth
 def delete_category(cat_id):
+    if not active_db: return "Database not initialized.", 503
     try: categories_collection.delete_one({"_id": ObjectId(cat_id)})
     except: pass
     return redirect(url_for('admin'))
@@ -1886,6 +2088,7 @@ def delete_category(cat_id):
 @app.route('/admin/platform/delete/<platform_id>')
 @requires_auth
 def delete_platform(platform_id):
+    if not active_db: return "Database not initialized.", 503
     try: ott_collection.delete_one({"_id": ObjectId(platform_id)})
     except: pass
     return redirect(url_for('admin'))
@@ -1893,6 +2096,7 @@ def delete_platform(platform_id):
 @app.route('/admin/request/update/<req_id>/<status>')
 @requires_auth
 def update_request_status(req_id, status):
+    if not active_db: return "Database not initialized.", 503
     if status in ['Fulfilled', 'Rejected', 'Pending']:
         try: requests_collection.update_one({"_id": ObjectId(req_id)}, {"$set": {"status": status}})
         except: pass
@@ -1901,14 +2105,15 @@ def update_request_status(req_id, status):
 @app.route('/admin/request/delete/<req_id>')
 @requires_auth
 def delete_request(req_id):
+    if not active_db: return "Database not initialized.", 503
     try: requests_collection.delete_one({"_id": ObjectId(req_id)})
     except: pass
     return redirect(url_for('admin'))
 
-# === UPDATED FUNCTION ===
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
+    if not active_db: return "Database not initialized.", 503
     try:
         obj_id = ObjectId(movie_id)
     except:
@@ -1974,6 +2179,7 @@ def edit_movie(movie_id):
             update_query.setdefault("$unset", {})["ott_platform"] = ""
 
         movies.update_one({"_id": obj_id}, update_query)
+        flash(f"'{update_data['title']}' updated successfully!", 'success')
         
         if request.form.get('send_notification'):
             notification_data = movie_obj.copy()
@@ -1989,12 +2195,15 @@ def edit_movie(movie_id):
     
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
+    # Send the original movie object to the template (needed for JS update check)
+    movie_obj['_id'] = str(movie_obj['_id']) 
     return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
 
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
+    if not active_db: return "Database not initialized.", 503
     try: movies.delete_one({"_id": ObjectId(movie_id)})
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
@@ -2002,6 +2211,7 @@ def delete_movie(movie_id):
 @app.route('/admin/api/live_search')
 @requires_auth
 def admin_api_live_search():
+    if not active_db: return jsonify({"error": "Database not initialized."}), 503
     query = request.args.get('q', '').strip()
     try:
         results = list(movies.find({"title": {"$regex": query, "$options": "i"} if query else {}}, {"_id": 1, "title": 1, "type": 1}).sort('updated_at', -1))
@@ -2010,8 +2220,6 @@ def admin_api_live_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-### [পরিবর্তিত ফাংশন] ###
-# এই ফাংশনটি আপনার সার্চের সমস্যা সমাধান করবে
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
@@ -2022,7 +2230,6 @@ def api_search_tmdb():
     search_title = query
     search_year = None
     
-    # রেগুলার এক্সপ্রেশন ব্যবহার করে কোয়েরি থেকে সাল (year) আলাদা করার চেষ্টা
     match = re.search(r'^(.*?)\s*\(?(\d{4})\)?$', query)
     if match:
         search_title = match.group(1).strip()
@@ -2031,11 +2238,9 @@ def api_search_tmdb():
     all_results = []
     seen_ids = set()
 
-    # TMDB থেকে আসা ফলাফলকে একটি স্ট্যান্ডার্ড ফরম্যাটে প্রসেস করার জন্য ফাংশন
     def process_tmdb_results(items, media_type_fallback=None):
         for item in items:
             item_id = item.get('id')
-            # ডুপ্লিকেট বা পোস্টার ছাড়া ফলাফল বাদ দেওয়া
             if item_id in seen_ids or not item.get('poster_path'):
                 continue
             
@@ -2055,31 +2260,26 @@ def api_search_tmdb():
             seen_ids.add(item_id)
 
     try:
-        # API রিকোয়েস্টের জন্য সাধারণ প্যারামিটার
         base_params = {
             'api_key': TMDB_API_KEY,
             'query': quote(search_title),
-            'language': 'en-US',      # <-- গুরুত্বপূর্ণ: ভাষাগত সমস্যা এড়ানোর জন্য
-            'include_adult': 'true'   # <-- গুরুত্বপূর্ণ: adult কন্টেন্ট অন্তর্ভুক্ত করার জন্য
+            'language': 'en-US',      
+            'include_adult': 'true'   
         }
         
-        # যদি সাল পাওয়া যায়, তবে প্রথমে সুনির্দিষ্টভাবে সার্চ করা হবে
         if search_year:
-            # মুভি সার্চ (সাল সহ)
             movie_params = base_params.copy()
             movie_params['primary_release_year'] = search_year
             movie_res = requests.get("https://api.themoviedb.org/3/search/movie", params=movie_params, timeout=10)
             if movie_res.ok:
                 process_tmdb_results(movie_res.json().get('results', []), 'movie')
 
-            # টিভি সিরিজ সার্চ (সাল সহ)
             tv_params = base_params.copy()
             tv_params['first_air_date_year'] = search_year
             tv_res = requests.get("https://api.themoviedb.org/3/search/tv", params=tv_params, timeout=10)
             if tv_res.ok:
                 process_tmdb_results(tv_res.json().get('results', []), 'tv')
 
-        # ফলব্যাক হিসেবে সাধারণ 'multi' সার্চ (এখানে পুরো কোয়েরি ব্যবহার করা হয়)
         multi_params = base_params.copy()
         multi_params['query'] = quote(query) 
         multi_res = requests.get("https://api.themoviedb.org/3/search/multi", params=multi_params, timeout=10)
@@ -2118,6 +2318,7 @@ def api_resync_tmdb():
 
 @app.route('/api/search')
 def api_search():
+    if not active_db: return jsonify([]), 503
     query = request.args.get('q', '').strip()
     if not query: return jsonify([])
     try:
@@ -2130,4 +2331,5 @@ def api_search():
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 3000))
+    # Note: On local development, if PRIMARY fails, you need to restart the script to switch to SECONDARY.
     app.run(debug=True, host='0.0.0.0', port=port)
