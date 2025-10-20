@@ -21,7 +21,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "FreeMovieHub")
 DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "AllBotUpdatemy")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
+# TELEGRAM_CHANNEL_ID এখন একাধিক চ্যানেল সমর্থন করার জন্য ডেটাবেস থেকে লোড হবে।
 WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
 # --- App Initialization & Global Database State ---
@@ -155,15 +155,32 @@ def format_series_info(episodes, season_packs):
             if not ep_nums: continue
             
             ep_range = f"EP{ep_nums[0]:02d}" if len(ep_nums) == 1 else f"EP{ep_nums[0]:02d}-{ep_nums[-1]:02d}"
-            info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
+            # Check if this season was already listed as a complete pack
+            is_complete_pack = any(p.get('season_number') == season for p in season_packs)
+            if not is_complete_pack:
+                 info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
 
     return " & ".join(info_parts)
 
 
 # --- Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID or not WEBSITE_URL:
-        print("INFO: Telegram bot token, channel ID, or website URL not configured. Skipping notification.")
+    global settings # Ensure access to the global settings collection
+
+    if not TELEGRAM_BOT_TOKEN or not WEBSITE_URL or not settings:
+        print("INFO: Telegram bot token, website URL, or settings collection not configured. Skipping notification.")
+        return
+
+    # 1. Fetch all configured channel IDs from DB
+    try:
+        telegram_config = settings.find_one({"_id": "telegram_config"})
+        channel_list = telegram_config.get("channels", []) if telegram_config else []
+    except Exception as e:
+        print(f"ERROR: Failed to fetch Telegram configuration from DB: {e}")
+        channel_list = []
+
+    if not channel_list:
+        print("INFO: No Telegram channels configured in the database. Skipping notification.")
         return
 
     try:
@@ -175,7 +192,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             title_with_year += f" ({year})"
         
         if series_update_info:
-            title_with_year += f" {series_update_info}"
+            title_with_year += f" - {series_update_info}"
 
         available_qualities = []
         if movie_data.get('links'):
@@ -208,19 +225,36 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
 
         inline_keyboard = {"inline_keyboard": [[{"text": "📥👇 Download Now 👇📥", "url": movie_url}]]}
         api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-        payload = {'chat_id': TELEGRAM_CHANNEL_ID, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
         
-        response = requests.post(api_url, data=payload, timeout=15)
-        response.raise_for_status()
-        
-        if response.json().get('ok'):
-            print(f"SUCCESS: Telegram notification sent for '{movie_data['title']}' (Type: {notification_type}).")
-        else:
-            print(f"WARNING: Telegram API error: {response.json().get('description')}")
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Failed to send Telegram notification: {e}")
+        # 2. Iterate through channels and send the notification
+        for channel_info in channel_list:
+            channel_id = channel_info.get('id')
+            channel_name = channel_info.get('name', 'Unknown')
+            if not channel_id:
+                print(f"WARNING: Skipping channel due to missing ID: {channel_name}")
+                continue
+
+            payload = {
+                'chat_id': channel_id, 
+                'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 
+                'caption': caption, 
+                'parse_mode': 'Markdown', 
+                'reply_markup': json.dumps(inline_keyboard)
+            }
+            
+            try:
+                response = requests.post(api_url, data=payload, timeout=15)
+                response.raise_for_status()
+                
+                if response.json().get('ok'):
+                    print(f"SUCCESS: Telegram notification sent to '{channel_name}' ({channel_id}).")
+                else:
+                    print(f"WARNING: Telegram API error for '{channel_name}': {response.json().get('description')}")
+            except requests.exceptions.RequestException as e:
+                print(f"ERROR: Failed to send Telegram notification to '{channel_name}': {e}")
+
     except Exception as e:
-        print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
+        print(f"ERROR: Unexpected error in send_telegram_notification setup: {e}")
 
 
 # --- Custom Jinja Filter for Relative Time ---
@@ -274,8 +308,10 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES ==============================================================
+# === [START] HTML TEMPLATES (Only Admin Panel is modified substantially) =================
 # =========================================================================================
+
+# --- index_html, detail_html, wait_page_html, request_html remain the same ---
 
 index_html = """
 <!DOCTYPE html>
@@ -586,7 +622,7 @@ index_html = """
         <div class="pagination">
             {% set url_args = {'page': pagination.prev_num} %}
             {% if 'category' in request.endpoint %}{% set _ = url_args.update({'name': query}) %}{% endif %}
-            {% if 'platform' in request.endpoint %}{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
+            {% if 'platform' in request.endpoint %{% set _ = url_args.update({'platform_name': query.replace(' Originals', '')}) %}{% endif %}
             {% if pagination.has_prev %}<a href="{{ url_for(request.endpoint, **url_args) }}">&laquo; Prev</a>{% endif %}
             
             <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
@@ -1283,6 +1319,9 @@ admin_html = """
         .flash-message { padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; font-weight: bold; }
         .flash-success { background-color: var(--success-color); color: white; }
         .flash-error { background-color: var(--netflix-red); color: white; }
+        
+        .telegram-list-item { display: grid; grid-template-columns: 1fr 2fr 80px; gap: 15px; align-items: center; background: #333; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
+        .telegram-list-item span:last-child { justify-self: flex-end; }
     </style>
 </head>
 <body>
@@ -1396,6 +1435,38 @@ admin_html = """
         <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
     </form>
     <hr>
+    
+    <!-- Telegram Management Section -->
+    <h2><i class="fab fa-telegram-plane"></i> Telegram Channel Management</h2>
+    <div class="management-section">
+        <div style="flex: 1; min-width: 400px;">
+            <form method="post">
+                <input type="hidden" name="form_action" value="add_channel">
+                <fieldset><legend>Add New Telegram Channel</legend>
+                    <p style="font-size: 0.9rem; color: #aaa;">Enter the Channel ID (e.g., @MyChannelUsername or -10012345678) and a descriptive name.</p>
+                    <div class="form-group"><label>Channel Name:</label><input type="text" name="channel_name" required placeholder="e.g., Main Movie Channel"></div>
+                    <div class="form-group"><label>Channel ID/Username:</label><input type="text" name="channel_id" required placeholder="e.g., @MyChannelUsername or -10012345678"></div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
+                </fieldset>
+            </form>
+        </div>
+        <div style="flex: 1; min-width: 400px;">
+            <h3>Configured Channels ({{ telegram_channels_list|length }})</h3>
+            <div class="management-list">
+                {% for channel in telegram_channels_list %}
+                <div class="telegram-list-item">
+                    <span>{{ loop.index }}. {{ channel.name }}</span>
+                    <span style="font-size: 0.9em; color: var(--warning-color);">{{ channel.id }}</span>
+                    <a href="{{ url_for('delete_telegram_channel', channel_id=quote(channel.id)) }}" onclick="return confirm('Are you sure you want to delete {{ channel.name }}?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a>
+                </div>
+                {% else %}
+                <p style="color: #888;">No channels configured. Please add one above.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <hr>
+    <!-- End Telegram Management Section -->
 
     <h2><i class="fas fa-inbox"></i> Manage Requests</h2>
     <div class="table-container">
@@ -1520,7 +1591,7 @@ admin_html = """
 </body></html>
 """
 
-# ... (edit_html remains the same as provided in the previous response) ...
+# --- edit_html remains the same ---
 edit_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1672,6 +1743,8 @@ edit_html = """
     // Functionality to auto-generate notification text for series updates
     function formatSeriesInfoJS(episodes, seasonPacks) {
         let infoParts = [];
+        
+        // Include complete seasons first
         if (seasonPacks && seasonPacks.length > 0) {
             const sortedPacks = seasonPacks.sort((a, b) => a.season_number - b.season_number);
             sortedPacks.forEach(pack => {
@@ -1679,15 +1752,24 @@ edit_html = """
                 infoParts.push(`S${seasonNum} [COMPLETE SEASON]`);
             });
         }
+        
+        // Handle individual episodes, excluding seasons already covered by a complete pack
         if (episodes && episodes.length > 0) {
             const episodesBySeason = {};
             episodes.forEach(ep => {
                 if (!episodesBySeason[ep.season]) episodesBySeason[ep.season] = [];
                 episodesBySeason[ep.season].push(ep.episode_number);
             });
-            Object.keys(episodesBySeason).sort((a, b) => a - b).forEach(season => {
+            
+            Object.keys(episodesBySeason).sort((a, b) => a - b).forEach(seasonStr => {
+                const season = parseInt(seasonStr);
+                // Check if this season is already marked as a complete pack
+                const isComplete = seasonPacks.some(p => p.season_number === season);
+                if (isComplete) return; 
+                
                 const epNums = episodesBySeason[season].sort((a, b) => a - b);
                 if (epNums.length === 0) return;
+                
                 const seasonNum = String(season).padStart(2, '0');
                 const firstEp = String(epNums[0]).padStart(2, '0');
                 const lastEp = String(epNums[epNums.length - 1]).padStart(2, '0');
@@ -1703,9 +1785,20 @@ edit_html = """
             document.getElementById('custom_notification_text').value = '';
             return;
         }
-        // Safely parse initial data from Jinja (movie_obj)
-        const movieData = JSON.parse('{{ movie|tojson|safe }}'.replace(/&quot;/g, '"') || '{}');
         
+        // Safely parse initial data from Jinja (movie_obj)
+        // Note: We use JSON.parse on the serialized movie object for comparison.
+        const movieJsonElement = document.querySelector('script[data-movie-data]');
+        let movieData = {};
+        try {
+            // Unescape then parse
+            const dataString = '{{ movie|tojson|safe }}'.replace(/&quot;/g, '"');
+            movieData = JSON.parse(dataString || '{}');
+        } catch (e) {
+            console.error("Failed to parse movie data for JS comparison:", e);
+            movieData = {};
+        }
+
         const oldEpisodes = movieData.episodes || [];
         const oldSeasonPacks = movieData.season_packs || [];
         
@@ -1715,14 +1808,14 @@ edit_html = """
         // Collect current form data
         const currentEps = [];
         document.querySelectorAll('#episodes_container .dynamic-item').forEach(item => {
-            const season = item.querySelector('[name="episode_season[]"]').value;
-            const episode = item.querySelector('[name="episode_number[]"]').value;
-            if (season && episode) currentEps.push({ season: parseInt(season), episode_number: parseInt(episode) });
+            const season = parseInt(item.querySelector('[name="episode_season[]"]').value);
+            const episode = parseInt(item.querySelector('[name="episode_number[]"]').value);
+            if (!isNaN(season) && !isNaN(episode)) currentEps.push({ season: season, episode_number: episode });
         });
         const currentPacks = [];
         document.querySelectorAll('#season_packs_container .dynamic-item').forEach(item => {
-            const season = item.querySelector('[name="season_pack_number[]"]').value;
-            if (season) currentPacks.push({ season_number: parseInt(season) });
+            const season = parseInt(item.querySelector('[name="season_pack_number[]"]').value);
+            if (!isNaN(season)) currentPacks.push({ season_number: season });
         });
         
         // Compare to find newly added entries
@@ -1737,7 +1830,6 @@ edit_html = """
         const episodesContainer = document.getElementById('episodes_container');
         const packsContainer = document.getElementById('season_packs_container');
         
-        // Listen to structural changes (adding/removing items)
         const observerCallback = (mutationsList, observer) => {
             for(const mutation of mutationsList) { if (mutation.type === 'childList') autoGenerateNotificationText(); }
         };
@@ -1746,7 +1838,6 @@ edit_html = """
         if (episodesContainer) observer.observe(episodesContainer, config);
         if (packsContainer) observer.observe(packsContainer, config);
         
-        // Listen to input changes (changing season/episode numbers)
         document.body.addEventListener('input', (event) => {
             if (event.target.matches('[name="episode_season[]"], [name="episode_number[]"], [name="season_pack_number[]"]')) {
                 autoGenerateNotificationText();
@@ -1769,7 +1860,7 @@ edit_html = """
 # === [START] PYTHON FUNCTIONS & FLASK ROUTES (Data-level logic) ==========================
 # =========================================================================================
 
-# --- TMDB API Helper Function ---
+# --- TMDB API Helper Function (Same) ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "series" else "movie"
@@ -1784,7 +1875,7 @@ def get_tmdb_details(tmdb_id, media_type):
         print(f"ERROR: TMDb API request failed: {e}")
         return None
 
-# --- Pagination Helper Class ---
+# --- Pagination Helper Class (Same) ---
 class Pagination:
     def __init__(self, page, per_page, total_count):
         self.page = page
@@ -1801,7 +1892,7 @@ class Pagination:
     @property
     def next_num(self): return self.page + 1
 
-# --- Data Fetching Helper ---
+# --- Data Fetching Helper (Same) ---
 def get_paginated_content(query_filter, page):
     if not active_db: return [], Pagination(page, ITEMS_PER_PAGE, 0)
     skip = (page - 1) * ITEMS_PER_PAGE
@@ -1811,7 +1902,7 @@ def get_paginated_content(query_filter, page):
     pagination = Pagination(page, ITEMS_PER_PAGE, total_count)
     return content_list, pagination
 
-# --- Database Sync Logic ---
+# --- Database Sync Logic (Same) ---
 def sync_databases(source_uri, destination_uri):
     """Copies all data from source DB to destination DB."""
     if not source_uri or not destination_uri or source_uri == destination_uri:
@@ -1860,11 +1951,13 @@ def home():
 
     query = request.args.get('q', '').strip()
     if query:
+        # Use regex search for robustness
         movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('updated_at', -1))
         total_results = movies.count_documents({"title": {"$regex": query, "$options": "i"}})
         pagination = Pagination(1, ITEMS_PER_PAGE, total_results)
         return render_template_string(index_html, movies=movies_list, query=f'Results for "{query}"', is_full_page_list=True, pagination=pagination)
 
+    # Fetch content for homepage
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     
@@ -1952,10 +2045,10 @@ def wait_page():
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
-    # If DB is completely offline, show only the status/header and flash messages
+    # If DB is completely offline, handle gracefully
     if not active_db:
         ad_settings_data = settings.find_one({"_id": "ad_config"}) if settings else {}
-        return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings=ad_settings_data)
+        return render_template_string(admin_html, active_db_name="OFFLINE", stats={}, requests_list=[], categories_list=[], ott_list=[], content_list=[], ad_settings=ad_settings_data, telegram_channels_list=[])
 
     if request.method == "POST":
         form_action = request.form.get("form_action")
@@ -1964,6 +2057,25 @@ def admin():
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
             flash("Ad settings updated successfully.", 'success')
+        
+        # --- NEW TELEGRAM CHANNEL LOGIC ---
+        elif form_action == "add_channel":
+            channel_id = request.form.get("channel_id", "").strip()
+            channel_name = request.form.get("channel_name", "").strip()
+            if channel_id and channel_name:
+                try:
+                    settings.update_one(
+                        {"_id": "telegram_config"},
+                        {"$push": {"channels": {"id": channel_id, "name": channel_name}}},
+                        upsert=True
+                    )
+                    flash(f"Telegram channel '{channel_name}' added successfully!", 'success')
+                except Exception as e:
+                    flash(f"Error adding channel: {e}", 'error')
+            else:
+                flash("Channel ID and Name are required.", 'error')
+        # --- END NEW TELEGRAM CHANNEL LOGIC ---
+
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
@@ -1982,6 +2094,7 @@ def admin():
             is_completed = 'is_completed' in request.form
             ott_platform = request.form.get("ott_platform")
             tmdb_id = request.form.get("tmdb_id")
+            
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
@@ -1995,19 +2108,29 @@ def admin():
             }
             if ott_platform and ott_platform != "None": movie_data["ott_platform"] = ott_platform
             
+            # Fetch TMDB details for release date/vote average if TMDB ID is provided
             if tmdb_id:
                 tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
                 if tmdb_details: 
-                    movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
+                    movie_data.update({
+                        'release_date': tmdb_details.get('release_date'),
+                        'vote_average': tmdb_details.get('vote_average')
+                    })
 
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
                 movie_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
             else:
-                sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-                movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
-                s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
-                movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
+                sp_nums = request.form.getlist('season_pack_number[]')
+                sp_w = request.form.getlist('season_pack_watch_link[]')
+                sp_d = request.form.getlist('season_pack_download_link[]')
+                movie_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i].isdigit()]
+                
+                s = request.form.getlist('episode_season[]')
+                n = request.form.getlist('episode_number[]')
+                t = request.form.getlist('episode_title[]')
+                l = request.form.getlist('episode_watch_link[]')
+                movie_data['episodes'] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i].isdigit() and n[i].isdigit() and l[i]]
             
             names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
@@ -2031,6 +2154,10 @@ def admin():
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
     
+    telegram_config = settings.find_one({"_id": "telegram_config"}) or {}
+    telegram_channels_list = telegram_config.get("channels", [])
+
+    
     return render_template_string(
         admin_html, 
         content_list=content_list, 
@@ -2039,8 +2166,29 @@ def admin():
         ad_settings=ad_settings_data, 
         categories_list=categories_list, 
         ott_list=ott_list,
-        MONGO_URI_SECONDARY=MONGO_URI_SECONDARY # Pass secondary URI existence status
+        MONGO_URI_SECONDARY=MONGO_URI_SECONDARY,
+        telegram_channels_list=telegram_channels_list
     )
+
+
+@app.route('/admin/telegram/delete/<channel_id>')
+@requires_auth
+def delete_telegram_channel(channel_id):
+    if not active_db: return "Database not initialized.", 503
+    
+    # Unquote the ID since it was quoted in the template
+    channel_id = unquote(channel_id)
+
+    try:
+        settings.update_one(
+            {"_id": "telegram_config"},
+            {"$pull": {"channels": {"id": channel_id}}}
+        )
+        flash(f"Telegram channel '{channel_id}' removed.", 'success')
+    except Exception as e:
+        flash(f"Error deleting channel: {e}", 'error')
+    
+    return redirect(url_for('admin'))
 
 
 @app.route('/admin/sync_db/<target>', methods=['GET'])
@@ -2149,15 +2297,23 @@ def edit_movie(movie_id):
         custom_notification_text = request.form.get("custom_notification_text", "").strip()
 
         if content_type == "series":
-            sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
-            update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i]]
-            s, n, t, l = request.form.getlist('episode_season[]'), request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_watch_link[]')
-            update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
+            sp_nums = request.form.getlist('season_pack_number[]')
+            sp_w = request.form.getlist('season_pack_watch_link[]')
+            sp_d = request.form.getlist('season_pack_download_link[]')
+            update_data['season_packs'] = [{"season_number": int(sp_nums[i]), "watch_link": sp_w[i].strip() or None, "download_link": sp_d[i].strip() or None} for i in range(len(sp_nums)) if sp_nums[i].isdigit()]
+            
+            s = request.form.getlist('episode_season[]')
+            n = request.form.getlist('episode_number[]')
+            t = request.form.getlist('episode_title[]')
+            l = request.form.getlist('episode_watch_link[]')
+            update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i].isdigit() and n[i].isdigit() and l[i]]
+            
             update_query.setdefault("$unset", {})["links"] = ""
 
             if custom_notification_text:
                 series_update_info_str = custom_notification_text
             else:
+                # Calculate what was newly added by comparing against old object data
                 old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
                 old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
                 
@@ -2182,10 +2338,10 @@ def edit_movie(movie_id):
         flash(f"'{update_data['title']}' updated successfully!", 'success')
         
         if request.form.get('send_notification'):
-            notification_data = movie_obj.copy()
-            notification_data.update(update_data)
+            # Fetch the final updated object to send the complete data to the notification function
+            final_movie_data = movies.find_one({"_id": obj_id})
             send_telegram_notification(
-                notification_data, 
+                final_movie_data, 
                 obj_id, 
                 notification_type='update', 
                 series_update_info=series_update_info_str
@@ -2195,6 +2351,7 @@ def edit_movie(movie_id):
     
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
+    
     # Send the original movie object to the template (needed for JS update check)
     movie_obj['_id'] = str(movie_obj['_id']) 
     return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
