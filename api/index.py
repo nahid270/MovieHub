@@ -64,6 +64,18 @@ try:
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
+    # --- Initialize Design Settings (New Feature) ---
+    default_design_settings = {
+        "_id": "design_config",
+        "language_tag_css": "padding: 3px 8px; font-size: 0.7rem; top: 8px; right: 8px; background-color: #00ffaa; color: #111; font-weight: 700; border-radius: 4px; box-shadow: 0 0 8px rgba(0, 255, 170, 0.5); z-index: 5;",
+        "new_badge_css": "background-color: var(--primary-color); color: white; padding: 4px 12px 4px 8px; font-size: 0.7rem; font-weight: 700; z-index: 3; clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);",
+        "new_badge_text": "NEW"
+    }
+    if not settings.find_one({"_id": "design_config"}):
+        settings.insert_one(default_design_settings)
+        print("SUCCESS: Initialized default design settings.")
+    # --- End Initialize Design Settings ---
+
     try:
         movies.create_index("title")
         movies.create_index("type")
@@ -245,6 +257,7 @@ app.jinja_env.filters['time_ago'] = time_ago
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
+    design_settings = settings.find_one({"_id": "design_config"}) or {}
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
@@ -258,6 +271,7 @@ def inject_globals():
     return dict(
         website_name=WEBSITE_NAME, 
         ad_settings=ad_settings or {}, 
+        design_settings=design_settings, # NEW
         predefined_categories=all_categories, 
         quote=quote, 
         datetime=datetime, 
@@ -267,7 +281,7 @@ def inject_globals():
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Language Tag CSS Updated) ===================================
+# === [START] HTML TEMPLATES (Using Dynamic Styles) =======================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -465,29 +479,19 @@ index_html = """
   }
 
   .type-tag, .language-tag {
-    position: absolute; color: white; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; z-index: 2; text-transform: uppercase; border-radius: 4px;
+    position: absolute; color: white; font-weight: 600; z-index: 2; text-transform: uppercase;
   }
   
-  /* --- UPDATED Language Tag STYLES (Adjusted Size/Position) --- */
+  /* --- DYNAMIC LANGUAGE TAG STYLES --- */
   .language-tag { 
-      padding: 3px 8px; 
-      font-size: 0.7rem; 
-      top: 8px; /* Slightly closer to corner */
-      right: 8px; /* Slightly closer to corner */
-      background-color: #00ffaa; /* Bright color */
-      color: #111; 
-      font-weight: 700;
-      border-radius: 4px;
-      box-shadow: 0 0 8px rgba(0, 255, 170, 0.5); /* Reduced shadow intensity */
-      z-index: 5;
+      {{ design_settings.language_tag_css | safe }}
   }
-  /* --- END UPDATED Language Tag STYLES --- */
+  /* --- END DYNAMIC LANGUAGE TAG STYLES --- */
 
-  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); }
+  .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; }
   .new-badge {
-    position: absolute; top: 0; left: 0; background-color: var(--primary-color);
-    color: white; padding: 4px 12px 4px 8px; font-size: 0.7rem; font-weight: 700;
-    z-index: 3; clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    position: absolute; top: 0; left: 0;
+    {{ design_settings.new_badge_css | safe }}
   }
 
   .full-page-grid-container { padding: 80px 10px 20px; }
@@ -555,7 +559,7 @@ index_html = """
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
       <div class="poster-wrapper">
         {% if (datetime.utcnow() - m._id.generation_time.replace(tzinfo=None)).days < 7 %}
-            <span class="new-badge">NEW</span>
+            <span class="new-badge">{{ design_settings.new_badge_text or "NEW" }}</span>
         {% endif %}
         {% if m.language %}<span class="language-tag">{{ m.language }}</span>{% endif %}
         <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
@@ -1355,6 +1359,32 @@ admin_html = """
     </div>
     <hr>
 
+    <h2><i class="fas fa-brush"></i> Design Settings (Poster Tags)</h2>
+    <form method="post">
+        <input type="hidden" name="form_action" value="update_design_settings">
+        <fieldset><legend>Language Tag Customization (CSS)</legend>
+            <div class="form-group">
+                <label>Language Tag CSS Properties:</label>
+                <textarea name="language_tag_css" rows="3" placeholder="e.g., padding: 4px 10px; font-size: 0.8rem; top: 10px; right: 10px; background-color: #00ffaa;">{{ design_settings.language_tag_css or '' }}</textarea>
+                <small>Style must include position (top, right) and size/color (font-size, padding, background-color). Do NOT include 'position: absolute' or 'color: white'.</small>
+            </div>
+        </fieldset>
+        <fieldset><legend>New/Recent Badge Customization</legend>
+            <div class="form-group">
+                <label>Badge Text (e.g., NEW, HOT, নতুন):</label>
+                <input type="text" name="new_badge_text" value="{{ design_settings.new_badge_text or 'NEW' }}">
+            </div>
+            <div class="form-group">
+                <label>New Badge CSS Properties (The red ribbon/badge):</label>
+                <textarea name="new_badge_css" rows="3" placeholder="e.g., background-color: #E50914; color: white; padding: 4px 12px 4px 8px;">{{ design_settings.new_badge_css or '' }}</textarea>
+                <small>Style must include background/color/padding. Do NOT include 'position: absolute'.</small>
+            </div>
+        </fieldset>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Design Settings</button>
+    </form>
+    <hr>
+
+
     <h2><i class="fab fa-telegram-plane"></i> Telegram Notification Channels</h2>
     <div class="management-section">
         <form method="post" style="flex: 1; min-width: 300px; padding: 15px;">
@@ -1731,10 +1761,10 @@ edit_html = """
 
 
 # =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Unchanged functional code) =================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Admin logic updated) =======================
 # =========================================================================================
 
-# --- TMDB API Helper Function ---
+# --- TMDB API Helper Function (Unchanged) ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "series" else "movie"
@@ -1749,7 +1779,7 @@ def get_tmdb_details(tmdb_id, media_type):
         print(f"ERROR: TMDb API request failed: {e}")
         return None
 
-# --- Pagination Helper Class ---
+# --- Pagination Helper Class (Unchanged) ---
 class Pagination:
     def __init__(self, page, per_page, total_count):
         self.page = page
@@ -1876,7 +1906,17 @@ def admin():
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         
-        # --- NEW TELEGRAM LOGIC ---
+        # --- NEW DESIGN SETTINGS LOGIC ---
+        elif form_action == "update_design_settings":
+            design_settings_data = {
+                "language_tag_css": request.form.get("language_tag_css").strip(),
+                "new_badge_css": request.form.get("new_badge_css").strip(),
+                "new_badge_text": request.form.get("new_badge_text").strip()
+            }
+            settings.update_one({"_id": "design_config"}, {"$set": design_settings_data}, upsert=True)
+            flash("Design settings updated successfully!", 'success')
+        # --- END NEW DESIGN SETTINGS LOGIC ---
+
         elif form_action == "add_telegram_channel":
             bot_token = request.form.get("bot_token", "").strip()
             channel_id = request.form.get("channel_id", "").strip()
@@ -1886,7 +1926,6 @@ def admin():
                 flash(f"Channel {channel_id} added successfully!", 'success')
             else:
                  flash("Both Bot Token and Channel ID are required.", 'error')
-        # --- END NEW TELEGRAM LOGIC ---
 
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
@@ -1945,6 +1984,7 @@ def admin():
     categories_list = list(categories_collection.find().sort("name", 1))
     ott_list = list(ott_collection.find().sort("name", 1))
     ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
+    design_settings_data = settings.find_one({"_id": "design_config"}) or default_design_settings
     
     # --- GET TELEGRAM CHANNELS FOR DISPLAY ---
     tele_config_data = settings.find_one({"_id": "telegram_config"})
@@ -1956,9 +1996,10 @@ def admin():
         stats=stats, 
         requests_list=requests_list, 
         ad_settings=ad_settings_data, 
+        design_settings=design_settings_data, # NEW
         categories_list=categories_list, 
         ott_list=ott_list,
-        telegram_channels=telegram_channels # New context variable
+        telegram_channels=telegram_channels 
     )
 
 @app.route('/admin/telegram/delete/<channel_id>')
