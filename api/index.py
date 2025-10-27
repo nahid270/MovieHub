@@ -293,6 +293,7 @@ index_html = """
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="Watch and download the latest movies and series on {{ website_name }}. Your ultimate entertainment hub.">
 <meta name="keywords" content="movies, series, download, watch online, {{ website_name }}, bengali movies, hindi movies, english movies">
+<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
@@ -800,6 +801,7 @@ detail_html = """
 <title>{{ movie.title if movie else "Content Not Found" }} - {{ website_name }}</title>
 <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
 <meta name="description" content="{{ movie.overview|striptags|truncate(160) }}">
+<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"/>
@@ -1797,6 +1799,13 @@ class Pagination:
     def next_num(self): return self.page + 1
 
 # --- Flask Routes (unchanged) ---
+
+# [নতুন যোগ করা হয়েছে] - সার্চ ইঞ্জিনকে ব্লক করার জন্য
+@app.route('/robots.txt')
+def robots_txt():
+    disallow_all = "User-agent: *\nDisallow: /"
+    return Response(disallow_all, mimetype='text/plain')
+
 @app.route('/')
 def home():
     query = request.args.get('q', '').strip()
