@@ -12,18 +12,17 @@ import math
 import re
 
 # --- Environment Variables ---
-# এগুলো এখন আর সরাসরি ব্যবহার না হলেও, fallback হিসেবে বা Vercel Deploy এর জন্য রাখা হলো।
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "CineZoneBD")
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "https://t.me/AllBotUpdatemy") 
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "AllBotUpdatemy") 
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") # [গুরুত্বপূর্ণ] আপনার ওয়েবসাইটের সঠিক URL এখানে দিন
 
 # পুরনো টেলিগ্রাম ভ্যারিয়েবলগুলো এখন শুধু একটি সেটিং হিসেবে ব্যবহৃত হবে না, DB তে সেভ হবে।
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
-WEBSITE_URL = os.environ.get("WEBSITE_URL") 
 
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
@@ -64,7 +63,6 @@ try:
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
-    # --- Initialize Design Settings (New Feature) ---
     default_design_settings = {
         "_id": "design_config",
         "language_tag_css": "padding: 3px 8px; font-size: 0.7rem; top: 8px; right: 8px; background-color: #00ffaa; color: #111; font-weight: 700; border-radius: 4px; box-shadow: 0 0 8px rgba(0, 255, 170, 0.5); z-index: 5;",
@@ -74,8 +72,7 @@ try:
     if not settings.find_one({"_id": "design_config"}):
         settings.insert_one(default_design_settings)
         print("SUCCESS: Initialized default design settings.")
-    # --- End Initialize Design Settings ---
-
+    
     try:
         movies.create_index("title")
         movies.create_index("type")
@@ -104,57 +101,48 @@ except Exception as e:
 
 # --- Helper function to format series info ---
 def format_series_info(episodes, season_packs):
-    """Generates a string like S01 [EP01-10 ADDED] & S02 [COMPLETE SEASON ADDED]"""
     info_parts = []
-    
-    # Process Season Packs
     if season_packs:
         sorted_packs = sorted(season_packs, key=lambda p: p.get('season_number', 0))
         for pack in sorted_packs:
             season_num = pack.get('season_number')
             if season_num is not None:
                 info_parts.append(f"S{season_num:02d} [COMPLETE SEASON]")
-
-    # Process Individual Episodes
     if episodes:
         episodes_by_season = {}
         for ep in episodes:
             season = ep.get('season')
             ep_num = ep.get('episode_number')
             if season is not None and ep_num is not None:
-                if season not in episodes_by_season:
-                    episodes_by_season[season] = []
+                if season not in episodes_by_season: episodes_by_season[season] = []
                 episodes_by_season[season].append(ep_num)
-
         for season in sorted(episodes_by_season.keys()):
             ep_nums = sorted(episodes_by_season[season])
             if not ep_nums: continue
-            
             ep_range = f"EP{ep_nums[0]:02d}" if len(ep_nums) == 1 else f"EP{ep_nums[0]:02d}-{ep_nums[-1]:02d}"
             info_parts.append(f"S{season:02d} [{ep_range} ADDED]")
-
     return " & ".join(info_parts)
 
 
-# --- UPDATED: Telegram Notification Function ---
+# --- [পরিবর্তিত ফাংশন] Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    # 1. Fetch all channel configurations from DB
     tele_configs = settings.find_one({"_id": "telegram_config"})
     channels = tele_configs.get('channels', []) if tele_configs else []
-
     if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
-        print("INFO: No Telegram channels configured in DB or ENV. Skipping notification.")
+        print("INFO: No Telegram channels configured. Skipping notification.")
         return
 
-    # Add environment variables as a fallback/default channel if they exist
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
-        # Check if the environment config is already present in the list (to avoid duplicates if migrating)
         if not any(c.get('channel_id') == TELEGRAM_CHANNEL_ID for c in channels):
             channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
 
+    if not WEBSITE_URL:
+        print("FATAL: WEBSITE_URL environment variable is not set. Cannot send notification.")
+        return
 
     try:
-        movie_url = f"{WEBSITE_URL}/movie/{str(content_id)}"
+        # [পরিবর্তন] এখন আর মুভির সরাসরি লিংক যাবে না, হোমপেজের লিংক যাবে।
+        website_link = f"{WEBSITE_URL}"
         
         title_with_year = movie_data.get('title', 'N/A')
         if movie_data.get('release_date'):
@@ -164,24 +152,15 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         if series_update_info:
             title_with_year += f" {series_update_info}"
 
-        available_qualities = []
-        if movie_data.get('links'):
-            for link in movie_data['links']:
-                if link.get('quality'):
-                    available_qualities.append(link['quality'])
-        if not available_qualities:
-             available_qualities.append("WEB-DL")
+        available_qualities = [link.get('quality') for link in movie_data.get('links', []) if link.get('quality')]
+        if not available_qualities: available_qualities.append("WEB-DL")
         
         quality_str = ", ".join(sorted(list(set(available_qualities))))
         language_str = movie_data.get('language', 'N/A')
-        genres_list = movie_data.get('genres', [])
-        genres_str = ", ".join(genres_list) if genres_list else "N/A"
+        genres_str = ", ".join(movie_data.get('genres', [])) or "N/A"
         clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
-        if notification_type == 'update':
-            caption_header = f"🔄 **UPDATED : {title_with_year}**\n"
-        else:
-            caption_header = f"🔥 **NEW ADDED : {title_with_year}**\n"
+        caption_header = f"🔄 **UPDATED : {title_with_year}**\n" if notification_type == 'update' else f"🔥 **NEW ADDED : {title_with_year}**\n"
         
         caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
@@ -193,41 +172,30 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
-        inline_keyboard = {"inline_keyboard": [[{"text": "📥👇 Download Now 👇📥", "url": movie_url}]]}
+        # [পরিবর্তন] বাটনের টেক্সট এবং URL পরিবর্তন করা হয়েছে।
+        inline_keyboard = {"inline_keyboard": [[{"text": "✅ ভিজিট করুন ✅", "url": website_link}]]}
 
-        # 2. Iterate and send to all configured channels
         sent_count = 0
         for config in channels:
-            bot_token = config.get('token')
-            channel_id = config.get('channel_id')
-
-            if not bot_token or not channel_id:
-                continue
+            bot_token, channel_id = config.get('token'), config.get('channel_id')
+            if not bot_token or not channel_id: continue
 
             api_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            payload = {
-                'chat_id': channel_id, 
-                'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 
-                'caption': caption, 
-                'parse_mode': 'Markdown', 
-                'reply_markup': json.dumps(inline_keyboard)
-            }
+            payload = {'chat_id': channel_id, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
             
             try:
                 response = requests.post(api_url, data=payload, timeout=15)
                 response.raise_for_status()
-                
                 if response.json().get('ok'):
-                    print(f"SUCCESS: Telegram notification sent to channel '{channel_id}' (Type: {notification_type}).")
+                    print(f"SUCCESS: Telegram notification sent to channel '{channel_id}'.")
                     sent_count += 1
                 else:
                     print(f"WARNING: Telegram API error for channel '{channel_id}': {response.json().get('description')}")
             except requests.exceptions.RequestException as e:
-                print(f"ERROR: Failed to send Telegram notification to channel '{channel_id}': {e}")
+                print(f"ERROR: Failed to send notification to channel '{channel_id}': {e}")
         
         if sent_count == 0:
             print("WARNING: Notification attempt failed for all configured channels.")
-
     except Exception as e:
         print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
 
@@ -253,7 +221,7 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- [আপডেট করা হয়েছে] ---
+# --- Context Processor (Unchanged) ---
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
@@ -261,27 +229,11 @@ def inject_globals():
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
-    category_icons = {
-        "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film",
-        "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones",
-        "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost",
-        "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart",
-        "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home"
-    }
-    return dict(
-        website_name=WEBSITE_NAME, 
-        ad_settings=ad_settings or {}, 
-        design_settings=design_settings, # NEW
-        predefined_categories=all_categories, 
-        quote=quote, 
-        datetime=datetime, 
-        category_icons=category_icons,
-        all_ott_platforms=all_ott_platforms,
-        developer_telegram_id=DEVELOPER_TELEGRAM_ID
-    )
+    category_icons = { "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
+    return dict( website_name=WEBSITE_NAME, ad_settings=ad_settings or {}, design_settings=design_settings, predefined_categories=all_categories, quote=quote, datetime=datetime, category_icons=category_icons, all_ott_platforms=all_ott_platforms, developer_telegram_id=DEVELOPER_TELEGRAM_ID )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Using Dynamic Styles) =======================================
+# === [START] HTML TEMPLATES (Footer পরিবর্তিত) =======================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -483,12 +435,10 @@ index_html = """
     position: absolute; color: white; font-weight: 600; z-index: 2; text-transform: uppercase;
   }
   
-  /* --- DYNAMIC LANGUAGE TAG STYLES --- */
   .language-tag { 
       {{ design_settings.language_tag_css | safe }}
   }
-  /* --- END DYNAMIC LANGUAGE TAG STYLES --- */
-
+  
   .type-tag { bottom: 8px; right: 8px; background-color: var(--type-color); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; }
   .new-badge {
     position: absolute; top: 0; left: 0;
@@ -497,7 +447,13 @@ index_html = """
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
-  .main-footer { background-color: #111; padding: 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.8rem; }
+  /* [পরিবর্তন] ফুটার স্টাইল আপডেট করা হয়েছে */
+  .main-footer { background-color: #111; padding: 30px 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.9rem; }
+  .footer-links { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+  .footer-links a { color: var(--text-dark); font-weight: 500; transition: color 0.2s; }
+  .footer-links a:hover { color: var(--text-light); }
+  .footer-disclaimer { max-width: 800px; margin: 15px auto 0; font-size: 0.8rem; line-height: 1.6; color: #666; }
+
   .ad-container { margin: 20px auto; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
   .ad-container > * { max-width: 100% !important; }
   .mobile-nav-menu {position: fixed;top: 0;left: 0;width: 100%;height: 100%;background-color: var(--bg-color);z-index: 9999;display: flex;flex-direction: column;align-items: center;justify-content: center;transform: translateX(-100%);transition: transform 0.3s ease-in-out;}
@@ -543,7 +499,6 @@ index_html = """
         <button class="menu-toggle"><i class="fas fa-bars"></i></button>
     </div>
 </header>
-<!-- [START] মোবাইল মেনু আপডেট করা হয়েছে -->
 <div class="mobile-nav-menu">
     <button class="close-btn">&times;</button>
     <div class="mobile-links">
@@ -551,10 +506,9 @@ index_html = """
         <a href="{{ url_for('all_series') }}">All Web Series</a>
         <a href="{{ url_for('all_movies') }}">All Movies</a>
         <hr>
-        <a href="https://t.me/{{ developer_telegram_id }}" target="_blank">How to Create Website</a>
+        <a href="https://t.me/{{ developer_telegram_id }}" target="_blank">Contact Developer</a>
     </div>
 </div>
-<!-- [END] মোবাইল মেনু আপডেট করা হয়েছে -->
 <main>
   {% macro render_movie_card(m) %}
     <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
@@ -727,9 +681,21 @@ index_html = """
     </div>
   {% endif %}
 </main>
+<!-- [নতুন যোগ করা হয়েছে] Legal Links সহ ফুটার -->
 <footer class="main-footer">
-    <p>&copy; 2024 {{ website_name }}. All Rights Reserved.</p>
+    <div class="footer-links">
+        <a href="{{ url_for('about_us') }}">About Us</a>
+        <a href="{{ url_for('contact_us') }}">Contact Us</a>
+        <a href="{{ url_for('dmca') }}">DMCA</a>
+        <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>
+        <a href="{{ url_for('terms_of_service') }}">Terms of Service</a>
+    </div>
+    <p>&copy; {{ datetime.utcnow().year }} {{ website_name }}. All Rights Reserved.</p>
+    <p class="footer-disclaimer">
+        <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided by non-affiliated third parties.
+    </p>
 </footer>
+
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item active"><i class="fas fa-home"></i><span>Home</span></a>
   <a href="{{ url_for('all_movies') }}" class="nav-item"><i class="fas fa-layer-group"></i><span>Content</span></a>
@@ -922,6 +888,13 @@ detail_html = """
   .movie-card { display: block; position: relative; }
   .movie-card .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; }
 
+  /* [নতুন যোগ করা হয়েছে] Disclaimer স্টাইল */
+  .download-disclaimer {
+      max-width: 800px; margin: 20px auto; padding: 15px;
+      background-color: rgba(255, 204, 0, 0.1); border: 1px solid rgba(255, 204, 0, 0.3);
+      border-radius: 8px; text-align: center; font-size: 0.85rem; color: #ccc;
+  }
+
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
   }
@@ -972,6 +945,11 @@ detail_html = """
         </div>
         <div class="tab-pane active" id="downloads-pane">
             {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
+
+            <!-- [নতুন যোগ করা হয়েছে] Disclaimer -->
+            <div class="download-disclaimer">
+                <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided by non-affiliated third parties. Clicking on the links will redirect you to third-party sites.
+            </div>
             
             {% if movie.type == 'movie' and movie.links %}
                 <div class="link-group">
@@ -1204,7 +1182,6 @@ request_html = """
 </body>
 </html>
 """
-# --- UPDATED ADMIN HTML ---
 admin_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1761,9 +1738,67 @@ edit_html = """
 </body></html>
 """
 
+# [নতুন যোগ করা হয়েছে] Legal পেজগুলোর জন্য একটি বেস টেমপ্লেট
+legal_page_template_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - {{ website_name }}</title>
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a; --text-light: #ffffff; --text-dark: #a0a0a0; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); line-height: 1.8; margin: 0; padding: 0; }
+        a { color: var(--primary-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+        .page-header { text-align: center; border-bottom: 2px solid var(--primary-color); padding-bottom: 20px; margin-bottom: 30px; }
+        .page-header h1 { font-size: 2.5rem; margin: 0; }
+        .page-content { background-color: var(--card-bg); padding: 30px; border-radius: 8px; }
+        .page-content h2 { color: var(--primary-color); font-size: 1.8rem; }
+        .page-content p { color: var(--text-dark); }
+        .page-content ul { list-style-position: inside; padding-left: 0; }
+        .main-footer { background-color: #111; padding: 30px 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.9rem; }
+        .footer-links { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .footer-links a { color: var(--text-dark); font-weight: 500; transition: color 0.2s; }
+        .footer-links a:hover { color: var(--text-light); }
+        .footer-disclaimer { max-width: 800px; margin: 15px auto 0; font-size: 0.8rem; line-height: 1.6; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <a href="{{ url_for('home') }}" style="text-decoration:none;"><h1>{{ website_name }}</h1></a>
+        </div>
+        <div class="page-content">
+            <h2>{{ title }}</h2>
+            {{ content|safe }}
+        </div>
+    </div>
+    <footer class="main-footer">
+        <div class="footer-links">
+            <a href="{{ url_for('about_us') }}">About Us</a>
+            <a href="{{ url_for('contact_us') }}">Contact Us</a>
+            <a href="{{ url_for('dmca') }}">DMCA</a>
+            <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>
+            <a href="{{ url_for('terms_of_service') }}">Terms of Service</a>
+        </div>
+        <p>&copy; {{ datetime.utcnow().year }} {{ website_name }}. All Rights Reserved.</p>
+        <p class="footer-disclaimer">
+            <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided by non-affiliated third parties.
+        </p>
+    </footer>
+</body>
+</html>
+"""
 
 # =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Admin logic updated) =======================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Legal Routes যোগ করা হয়েছে) ================
 # =========================================================================================
 
 # --- TMDB API Helper Function (Unchanged) ---
@@ -1784,9 +1819,7 @@ def get_tmdb_details(tmdb_id, media_type):
 # --- Pagination Helper Class (Unchanged) ---
 class Pagination:
     def __init__(self, page, per_page, total_count):
-        self.page = page
-        self.per_page = per_page
-        self.total_count = total_count
+        self.page = page; self.per_page = per_page; self.total_count = total_count
     @property
     def total_pages(self): return math.ceil(self.total_count / self.per_page)
     @property
@@ -1798,9 +1831,7 @@ class Pagination:
     @property
     def next_num(self): return self.page + 1
 
-# --- Flask Routes (unchanged) ---
-
-# [নতুন যোগ করা হয়েছে] - সার্চ ইঞ্জিনকে ব্লক করার জন্য
+# --- Flask Routes ---
 @app.route('/robots.txt')
 def robots_txt():
     disallow_all = "User-agent: *\nDisallow: /"
@@ -1817,32 +1848,20 @@ def home():
 
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
-    
     home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
-    
     categorized_content = {k: v for k, v in categorized_content.items() if v}
-
-    context = {
-        "slider_content": slider_content, "latest_content": latest_content,
-        "categorized_content": categorized_content, "is_full_page_list": False
-    }
+    context = {"slider_content": slider_content, "latest_content": latest_content, "categorized_content": categorized_content, "is_full_page_list": False}
     return render_template_string(index_html, **context)
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
     try:
-        movie = movies.find_one_and_update(
-            {"_id": ObjectId(movie_id)},
-            {"$inc": {"view_count": 1}},
-            return_document=True
-        )
-        if not movie: 
-            return "Content not found", 404
+        movie = movies.find_one_and_update({"_id": ObjectId(movie_id)}, {"$inc": {"view_count": 1}}, return_document=True)
+        if not movie: return "Content not found", 404
         related_content = list(movies.find({"type": movie.get('type'), "_id": {"$ne": movie['_id']}}).sort('updated_at', -1).limit(10))
         return render_template_string(detail_html, movie=movie, related_content=related_content)
-    except Exception as e:
-        print(f"Error in movie_detail: {e}")
+    except:
         return "Content not found", 404
 
 def get_paginated_content(query_filter, page):
@@ -1869,30 +1888,22 @@ def movies_by_category():
     title = request.args.get('name')
     if not title: return redirect(url_for('home'))
     page = request.args.get('page', 1, type=int)
-    
-    query_filter = {}
-    if title == "Latest Movies": query_filter = {"type": "movie"}
-    elif title == "Latest Series": query_filter = {"type": "series"}
-    else: query_filter = {"categories": title}
-    
+    query_filter = {"categories": title}
     content_list, pagination = get_paginated_content(query_filter, page)
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True, pagination=pagination)
 
 @app.route('/platform/<platform_name>')
 def movies_by_platform(platform_name):
     page = request.args.get('page', 1, type=int)
-    query_filter = {"ott_platform": platform_name}
-    
-    content_list, pagination = get_paginated_content(query_filter, page)
+    content_list, pagination = get_paginated_content({"ott_platform": platform_name}, page)
     return render_template_string(index_html, movies=content_list, query=f"{platform_name} Originals", is_full_page_list=True, pagination=pagination)
 
 @app.route('/request', methods=['GET', 'POST'])
 def request_content():
     if request.method == 'POST':
         content_name = request.form.get('content_name', '').strip()
-        extra_info = request.form.get('extra_info', '').strip()
         if content_name:
-            requests_collection.insert_one({"name": content_name, "info": extra_info, "status": "Pending", "created_at": datetime.utcnow()})
+            requests_collection.insert_one({"name": content_name, "info": request.form.get('extra_info', '').strip(), "status": "Pending", "created_at": datetime.utcnow()})
             flash('Your request has been submitted successfully!', 'success')
         else:
             flash('Content name is required.', 'error')
@@ -1905,6 +1916,75 @@ def wait_page():
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
+# [নতুন যোগ করা হয়েছে] Legal Pages Routes
+@app.route('/about-us')
+def about_us():
+    title = "About Us"
+    content = f"""
+    <p>Welcome to {WEBSITE_NAME}, your number one source for discovering new entertainment. We're dedicated to giving you the very best index of movies and web series, with a focus on dependability, user experience, and uniqueness.</p>
+    <p>Founded in 2024, {WEBSITE_NAME} has come a long way from its beginnings. We are a community-driven platform that aims to provide an organized and accessible catalog of entertainment content available on the internet.</p>
+    <p>Please note that {WEBSITE_NAME} does not host any content on its own servers. We are an index that provides links to content hosted by third-party services. We are not responsible for the content hosted on these third-party sites.</p>
+    <p>We hope you enjoy our service as much as we enjoy offering it to you. If you have any questions or comments, please don't hesitate to contact us.</p>
+    """
+    return render_template_string(legal_page_template_html, title=title, content=content)
+
+@app.route('/contact-us')
+def contact_us():
+    title = "Contact Us"
+    content = f"""
+    <p>If you have any questions, suggestions, or need to report an issue, please feel free to reach out to us. We value your feedback and are here to help.</p>
+    <p>The best way to contact our support team or the developer is through Telegram.</p>
+    <p><strong>Contact via Telegram:</strong> <a href="https://t.me/{DEVELOPER_TELEGRAM_ID}" target="_blank">@{DEVELOPER_TELEGRAM_ID}</a></p>
+    <p>For copyright-related inquiries, please refer to our <a href="{url_for('dmca')}">DMCA page</a> for specific instructions on how to submit a notice.</p>
+    """
+    return render_template_string(legal_page_template_html, title=title, content=content)
+
+@app.route('/dmca')
+def dmca():
+    title = "DMCA Takedown Policy"
+    content = f"""
+    <p>{WEBSITE_NAME} is an online service provider as defined in the Digital Millennium Copyright Act. We take copyright infringement very seriously and will vigorously protect the rights of legal copyright owners.</p>
+    <p><strong>Please note: We do not host any files on our servers.</strong> All content linked on our website is hosted on third-party servers and provided by non-affiliated third parties. We are merely an index of links available on the internet.</p>
+    <p>If you are the copyright owner of content that appears on the {WEBSITE_NAME} website and you did not authorize the use of the content, you must notify us in writing in order for us to identify the allegedly infringing content and take action.</p>
+    <p>Your written notice must include the following:</p>
+    <ul>
+        <li>A physical or electronic signature of the copyright owner or a person authorized to act on their behalf.</li>
+        <li>Identification of the copyrighted work claimed to have been infringed.</li>
+        <li>Identification of the material that is claimed to be infringing and that is to be removed, and information reasonably sufficient to permit us to locate the material (i.e., the exact URL of the page on {WEBSITE_NAME}).</li>
+        <li>Your contact information, including your address, telephone number, and an email address.</li>
+        <li>A statement that you have a good faith belief that use of the material in the manner complained of is not authorized by the copyright owner, its agent, or the law.</li>
+        <li>A statement that the information in the notification is accurate, and, under penalty of perjury, that you are authorized to act on behalf of the copyright owner.</li>
+    </ul>
+    <p>Please send your takedown notice to our designated agent via email at: <strong>contact.cinezonebd@proton.me</strong> (Please replace with your actual contact email).</p>
+    <p>We will act upon all valid and complete notices within 48-72 business hours.</p>
+    """
+    return render_template_string(legal_page_template_html, title=title, content=content)
+
+@app.route('/privacy-policy')
+def privacy_policy():
+    title = "Privacy Policy"
+    content = """
+    <p>Your privacy is important to us. It is our policy to respect your privacy regarding any information we may collect from you across our website.</p>
+    <p>We only ask for personal information when we truly need it to provide a service to you (like content requests). We collect it by fair and lawful means, with your knowledge and consent.</p>
+    <p>We do not collect or store any personal user data. We do not use cookies for tracking purposes. Third-party services, such as our advertisers, may use cookies, which are not under our control.</p>
+    <p>Our website may link to external sites that are not operated by us. Please be aware that we have no control over the content and practices of these sites, and cannot accept responsibility or liability for their respective privacy policies.</p>
+    <p>Your continued use of our website will be regarded as acceptance of our practices around privacy and personal information. If you have any questions about how we handle user data and personal information, feel free to contact us.</p>
+    """
+    return render_template_string(legal_page_template_html, title=title, content=content)
+
+@app.route('/terms-of-service')
+def terms_of_service():
+    title = "Terms of Service"
+    content = f"""
+    <p>By accessing the website at {WEBSITE_URL}, you are agreeing to be bound by these terms of service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws.</p>
+    <p><strong>Use License:</strong> Permission is granted to temporarily view the materials on this website for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title.</p>
+    <p><strong>Disclaimer:</strong> The materials on {WEBSITE_NAME}'s website are provided on an 'as is' basis. {WEBSITE_NAME} makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.</p>
+    <p><strong>Limitations:</strong> In no event shall {WEBSITE_NAME} or its suppliers be liable for any damages arising out of the use or inability to use the materials on the website.</p>
+    <p><strong>Links:</strong> {WEBSITE_NAME} has not reviewed all of the sites linked to its website and is not responsible for the contents of any such linked site. The inclusion of any link does not imply endorsement by {WEBSITE_NAME} of the site. Use of any such linked website is at the user's own risk.</p>
+    """
+    return render_template_string(legal_page_template_html, title=title, content=content)
+
+
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
@@ -1914,34 +1994,18 @@ def admin():
         if form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
-        
-        # --- NEW DESIGN SETTINGS LOGIC ---
         elif form_action == "update_design_settings":
-            design_settings_data = {
-                "language_tag_css": request.form.get("language_tag_css").strip(),
-                "new_badge_css": request.form.get("new_badge_css").strip(),
-                "new_badge_text": request.form.get("new_badge_text").strip()
-            }
+            design_settings_data = { "language_tag_css": request.form.get("language_tag_css").strip(), "new_badge_css": request.form.get("new_badge_css").strip(), "new_badge_text": request.form.get("new_badge_text").strip() }
             settings.update_one({"_id": "design_config"}, {"$set": design_settings_data}, upsert=True)
-            flash("Design settings updated successfully!", 'success')
-        # --- END NEW DESIGN SETTINGS LOGIC ---
-
         elif form_action == "add_telegram_channel":
-            bot_token = request.form.get("bot_token", "").strip()
-            channel_id = request.form.get("channel_id", "").strip()
+            bot_token, channel_id = request.form.get("bot_token", "").strip(), request.form.get("channel_id", "").strip()
             if bot_token and channel_id:
-                new_channel = {"token": bot_token, "channel_id": channel_id}
-                settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": new_channel}}, upsert=True)
-                flash(f"Channel {channel_id} added successfully!", 'success')
-            else:
-                 flash("Both Bot Token and Channel ID are required.", 'error')
-
+                settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}}, upsert=True)
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
         elif form_action == "add_platform":
-            platform_name = request.form.get("platform_name", "").strip()
-            logo_url = request.form.get("platform_logo_url", "").strip()
+            platform_name, logo_url = request.form.get("platform_name", "").strip(), request.form.get("platform_logo_url", "").strip()
             if platform_name and logo_url:
                 ott_collection.update_one({"name": platform_name}, {"$set": {"name": platform_name, "logo_url": logo_url}}, upsert=True)
         elif form_action == "bulk_delete":
@@ -1949,25 +2013,18 @@ def admin():
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
-            screenshots_text = request.form.get("screenshots", "").strip()
-            screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
-            is_completed = 'is_completed' in request.form
-            ott_platform = request.form.get("ott_platform")
-            tmdb_id = request.form.get("tmdb_id")
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
-                "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-                "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(), "screenshots": screenshots_list,
-                "language": request.form.get("language").strip() or None,
-                "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
+                "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None,
+                "overview": request.form.get("overview").strip(), "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
+                "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
-                "tmdb_id": tmdb_id if tmdb_id else None, "is_completed": is_completed
+                "tmdb_id": request.form.get("tmdb_id") or None, "is_completed": 'is_completed' in request.form
             }
-            if ott_platform and ott_platform != "None": movie_data["ott_platform"] = ott_platform
-            if tmdb_id:
-                tmdb_details = get_tmdb_details(tmdb_id, "series" if content_type == "series" else "movie")
+            if request.form.get("ott_platform") != "None": movie_data["ott_platform"] = request.form.get("ott_platform")
+            if movie_data["tmdb_id"]:
+                tmdb_details = get_tmdb_details(movie_data["tmdb_id"], "series" if content_type == "series" else "movie")
                 if tmdb_details: movie_data.update({'release_date': tmdb_details.get('release_date'),'vote_average': tmdb_details.get('vote_average')})
             if content_type == "movie":
                 qualities = ["480p", "720p", "1080p", "BLU-RAY"]
@@ -1981,48 +2038,22 @@ def admin():
             movie_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
             result = movies.insert_one(movie_data)
             if result.inserted_id:
-                series_info = None
-                if movie_data['type'] == 'series':
-                    series_info = format_series_info(movie_data.get('episodes', []), movie_data.get('season_packs', []))
+                series_info = format_series_info(movie_data.get('episodes', []), movie_data.get('season_packs', [])) if movie_data['type'] == 'series' else None
                 send_telegram_notification(movie_data, result.inserted_id, series_update_info=series_info)
         return redirect(url_for('admin'))
     
-    content_list = list(movies.find({}).sort('updated_at', -1))
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
-    requests_list = list(requests_collection.find().sort("created_at", -1))
-    categories_list = list(categories_collection.find().sort("name", 1))
-    ott_list = list(ott_collection.find().sort("name", 1))
-    ad_settings_data = settings.find_one({"_id": "ad_config"}) or {}
-    design_settings_data = settings.find_one({"_id": "design_config"}) or default_design_settings
-    
-    # --- GET TELEGRAM CHANNELS FOR DISPLAY ---
     tele_config_data = settings.find_one({"_id": "telegram_config"})
-    telegram_channels = tele_config_data.get('channels', []) if tele_config_data else []
-    
     return render_template_string(
-        admin_html, 
-        content_list=content_list, 
-        stats=stats, 
-        requests_list=requests_list, 
-        ad_settings=ad_settings_data, 
-        design_settings=design_settings_data, # NEW
-        categories_list=categories_list, 
-        ott_list=ott_list,
-        telegram_channels=telegram_channels 
-    )
+        admin_html, content_list=list(movies.find({}).sort('updated_at', -1)), stats=stats, requests_list=list(requests_collection.find().sort("created_at", -1)),
+        ad_settings=settings.find_one({"_id": "ad_config"}) or {}, design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
+        categories_list=list(categories_collection.find().sort("name", 1)), ott_list=list(ott_collection.find().sort("name", 1)),
+        telegram_channels=tele_config_data.get('channels', []) if tele_config_data else [] )
 
 @app.route('/admin/telegram/delete/<channel_id>')
 @requires_auth
 def delete_telegram_channel(channel_id):
-    channel_id = unquote(channel_id)
-    try:
-        settings.update_one(
-            {"_id": "telegram_config"},
-            {"$pull": {"channels": {"channel_id": channel_id}}}
-        )
-        flash(f"Channel {channel_id} successfully deleted.", 'success')
-    except Exception as e:
-        flash(f"Error deleting channel: {e}", 'error')
+    settings.update_one({"_id": "telegram_config"}, {"$pull": {"channels": {"channel_id": unquote(channel_id)}}})
     return redirect(url_for('admin'))
 
 @app.route('/admin/category/delete/<cat_id>')
@@ -2054,43 +2085,29 @@ def delete_request(req_id):
     except: pass
     return redirect(url_for('admin'))
 
-# === UPDATED FUNCTION ===
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    try:
-        obj_id = ObjectId(movie_id)
-    except:
-        return "Invalid ID", 400
+    try: obj_id = ObjectId(movie_id)
+    except: return "Invalid ID", 400
     movie_obj = movies.find_one({"_id": obj_id})
-    if not movie_obj:
-        return "Movie not found", 404
+    if not movie_obj: return "Movie not found", 404
     
     if request.method == "POST":
         content_type = request.form.get("content_type")
-        screenshots_text = request.form.get("screenshots", "").strip()
-        screenshots_list = [url.strip() for url in screenshots_text.splitlines() if url.strip()]
-        is_completed = 'is_completed' in request.form
-        ott_platform = request.form.get("ott_platform")
-        
         update_data = {
-            "title": request.form.get("title").strip(), "type": content_type,
-            "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
-            "backdrop": request.form.get("backdrop").strip() or None,
-            "overview": request.form.get("overview").strip(), 
-            "screenshots": screenshots_list,
-            "language": request.form.get("language").strip() or None,
-            "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
-            "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(),
-            "is_completed": is_completed
+            "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
+            "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), 
+            "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
+            "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
+            "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(), "is_completed": 'is_completed' in request.form
         }
         
         names, urls = request.form.getlist('manual_link_name[]'), request.form.getlist('manual_link_url[]')
         update_data["manual_links"] = [{"name": names[i].strip(), "url": urls[i].strip()} for i in range(len(names)) if names[i] and urls[i]]
         update_query = {"$set": update_data}
         
-        series_update_info_str = None
-        custom_notification_text = request.form.get("custom_notification_text", "").strip()
+        series_update_info_str = request.form.get("custom_notification_text", "").strip() or None
 
         if content_type == "series":
             sp_nums, sp_w, sp_d = request.form.getlist('season_pack_number[]'), request.form.getlist('season_pack_watch_link[]'), request.form.getlist('season_pack_download_link[]')
@@ -2099,47 +2116,32 @@ def edit_movie(movie_id):
             update_data["episodes"] = [{"season": int(s[i]), "episode_number": int(n[i]), "title": t[i].strip(), "watch_link": l[i].strip()} for i in range(len(s)) if s[i] and n[i] and l[i]]
             update_query.setdefault("$unset", {})["links"] = ""
 
-            if custom_notification_text:
-                series_update_info_str = custom_notification_text
-            else:
+            if not series_update_info_str:
                 old_ep_ids = {(ep.get('season'), ep.get('episode_number')) for ep in movie_obj.get('episodes', [])}
                 old_pack_ids = {p.get('season_number') for p in movie_obj.get('season_packs', [])}
-                
                 newly_added_eps = [ep for ep in update_data["episodes"] if (ep.get('season'), ep.get('episode_number')) not in old_ep_ids]
                 newly_added_packs = [p for p in update_data["season_packs"] if p.get('season_number') not in old_pack_ids]
-                
                 if newly_added_eps or newly_added_packs:
                     series_update_info_str = format_series_info(newly_added_eps, newly_added_packs)
-
         else: # Movie
             qualities = ["480p", "720p", "1080p", "BLU-RAY"]
             update_data["links"] = [{"quality": q, "watch_url": request.form.get(f"watch_link_{q}"), "download_url": request.form.get(f"download_link_{q}")} for q in qualities if request.form.get(f"watch_link_{q}") or request.form.get(f"download_link_{q}")]
-            update_query.setdefault("$unset", {})["episodes"] = ""
-            update_query.setdefault("$unset", {})["season_packs"] = ""
+            update_query.setdefault("$unset", {})["episodes"] = ""; update_query.setdefault("$unset", {})["season_packs"] = ""
         
-        if ott_platform and ott_platform != "None":
-            update_query["$set"]["ott_platform"] = ott_platform
+        if request.form.get("ott_platform") != "None":
+            update_query["$set"]["ott_platform"] = request.form.get("ott_platform")
         else:
             update_query.setdefault("$unset", {})["ott_platform"] = ""
 
         movies.update_one({"_id": obj_id}, update_query)
         
         if request.form.get('send_notification'):
-            # Fetch the updated object to ensure notification has all current details
             updated_movie = movies.find_one({"_id": obj_id})
-            send_telegram_notification(
-                updated_movie, 
-                obj_id, 
-                notification_type='update', 
-                series_update_info=series_update_info_str
-            )
+            send_telegram_notification(updated_movie, obj_id, notification_type='update', series_update_info=series_update_info_str)
         
         return redirect(url_for('admin'))
     
-    categories_list = list(categories_collection.find().sort("name", 1))
-    ott_list = list(ott_collection.find().sort("name", 1))
-    return render_template_string(edit_html, movie=movie_obj, categories_list=categories_list, ott_list=ott_list)
-
+    return render_template_string(edit_html, movie=movie_obj, categories_list=list(categories_collection.find().sort("name", 1)), ott_list=list(ott_collection.find().sort("name", 1)))
 
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
@@ -2159,79 +2161,39 @@ def admin_api_live_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-### [পরিবর্তিত ফাংশন] ###
 @app.route('/admin/api/search')
 @requires_auth
 def api_search_tmdb():
     query = request.args.get('query', '').strip()
-    if not query:
-        return jsonify({"error": "Query parameter is missing"}), 400
-
-    search_title = query
-    search_year = None
-    
+    if not query: return jsonify({"error": "Query parameter is missing"}), 400
+    search_title, search_year = query, None
     match = re.search(r'^(.*?)\s*\(?(\d{4})\)?$', query)
-    if match:
-        search_title = match.group(1).strip()
-        search_year = match.group(2)
-
-    all_results = []
-    seen_ids = set()
-
+    if match: search_title, search_year = match.group(1).strip(), match.group(2)
+    
+    all_results, seen_ids = [], set()
     def process_tmdb_results(items, media_type_fallback=None):
         for item in items:
-            item_id = item.get('id')
-            if item_id in seen_ids or not item.get('poster_path'):
-                continue
-            
+            if item.get('id') in seen_ids or not item.get('poster_path'): continue
             media_type = item.get('media_type', media_type_fallback)
-            if media_type not in ['movie', 'tv']:
-                continue
-
-            year = (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0]
-            
-            all_results.append({
-                "id": item_id,
-                "title": item.get('title') or item.get('name'),
-                "year": year,
-                "poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}",
-                "media_type": media_type
-            })
-            seen_ids.add(item_id)
+            if media_type not in ['movie', 'tv']: continue
+            all_results.append({ "id": item.get('id'), "title": item.get('title') or item.get('name'), "year": (item.get('release_date') or item.get('first_air_date', 'N/A')).split('-')[0], "poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}", "media_type": media_type })
+            seen_ids.add(item.get('id'))
 
     try:
-        base_params = {
-            'api_key': TMDB_API_KEY,
-            'query': quote(search_title),
-            'language': 'en-US',
-            'include_adult': 'true'
-        }
-        
+        base_params = {'api_key': TMDB_API_KEY, 'query': quote(search_title), 'language': 'en-US', 'include_adult': 'true'}
         if search_year:
-            movie_params = base_params.copy()
-            movie_params['primary_release_year'] = search_year
+            movie_params = {**base_params, 'primary_release_year': search_year}; tv_params = {**base_params, 'first_air_date_year': search_year}
             movie_res = requests.get("https://api.themoviedb.org/3/search/movie", params=movie_params, timeout=10)
-            if movie_res.ok:
-                process_tmdb_results(movie_res.json().get('results', []), 'movie')
-
-            tv_params = base_params.copy()
-            tv_params['first_air_date_year'] = search_year
+            if movie_res.ok: process_tmdb_results(movie_res.json().get('results', []), 'movie')
             tv_res = requests.get("https://api.themoviedb.org/3/search/tv", params=tv_params, timeout=10)
-            if tv_res.ok:
-                process_tmdb_results(tv_res.json().get('results', []), 'tv')
+            if tv_res.ok: process_tmdb_results(tv_res.json().get('results', []), 'tv')
 
-        multi_params = base_params.copy()
-        multi_params['query'] = quote(query) 
+        multi_params = {**base_params, 'query': quote(query)}
         multi_res = requests.get("https://api.themoviedb.org/3/search/multi", params=multi_params, timeout=10)
-        if multi_res.ok:
-            process_tmdb_results(multi_res.json().get('results', []))
-        
+        if multi_res.ok: process_tmdb_results(multi_res.json().get('results', []))
         return jsonify(all_results)
-    
     except Exception as e:
-        print(f"ERROR in api_search_tmdb: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/admin/api/details')
 @requires_auth
@@ -2239,22 +2201,15 @@ def api_get_details():
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
     if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
     details = get_tmdb_details(tmdb_id, "series" if media_type == "tv" else "movie")
-    if details: return jsonify(details)
-    else: return jsonify({"error": "Details not found on TMDb"}), 404
+    return jsonify(details) if details else (jsonify({"error": "Details not found"}), 404)
 
 @app.route('/admin/api/resync_tmdb')
 @requires_auth
 def api_resync_tmdb():
-    tmdb_id = request.args.get('id')
-    media_type = request.args.get('type') 
-    if not tmdb_id or not media_type:
-        return jsonify({"error": "TMDB ID and media type are required"}), 400
-    
+    tmdb_id, media_type = request.args.get('id'), request.args.get('type')
+    if not tmdb_id or not media_type: return jsonify({"error": "ID and type are required"}), 400
     details = get_tmdb_details(tmdb_id, media_type)
-    if details:
-        return jsonify(details)
-    else:
-        return jsonify({"error": "Could not fetch details from TMDB"}), 404
+    return jsonify(details) if details else (jsonify({"error": "Could not fetch details"}), 404)
 
 @app.route('/api/search')
 def api_search():
@@ -2264,8 +2219,7 @@ def api_search():
         results = list(movies.find({"title": {"$regex": query, "$options": "i"}}, {"_id": 1, "title": 1, "poster": 1}).limit(10))
         for item in results: item['_id'] = str(item['_id'])
         return jsonify(results)
-    except Exception as e:
-        print(f"API Search Error: {e}")
+    except:
         return jsonify({"error": "An error occurred"}), 500
 
 if __name__ == "__main__":
