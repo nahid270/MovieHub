@@ -17,7 +17,7 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "7dc544d9253bccc3cfecc1c677f69819"
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "CineZoneBD")
-DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "CineZoneBDBot") 
+DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "CineZoneBDBot")
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") # [গুরুত্বপূর্ণ] আপনার ওয়েবসাইটের সঠিক URL এখানে দিন
 
 # পুরনো টেলিগ্রাম ভ্যারিয়েবলগুলো এখন শুধু একটি সেটিং হিসেবে ব্যবহৃত হবে না, DB তে সেভ হবে।
@@ -72,7 +72,7 @@ try:
     if not settings.find_one({"_id": "design_config"}):
         settings.insert_one(default_design_settings)
         print("SUCCESS: Initialized default design settings.")
-    
+
     try:
         movies.create_index("title")
         movies.create_index("type")
@@ -143,25 +143,25 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
     try:
         # [পরিবর্তন] এখন আর মুভির সরাসরি লিংক যাবে না, হোমপেজের লিংক যাবে।
         website_link = f"{WEBSITE_URL}"
-        
+
         title_with_year = movie_data.get('title', 'N/A')
         if movie_data.get('release_date'):
             year = movie_data['release_date'].split('-')[0]
             title_with_year += f" ({year})"
-        
+
         if series_update_info:
             title_with_year += f" {series_update_info}"
 
         available_qualities = [link.get('quality') for link in movie_data.get('links', []) if link.get('quality')]
         if not available_qualities: available_qualities.append("WEB-DL")
-        
+
         quality_str = ", ".join(sorted(list(set(available_qualities))))
         language_str = movie_data.get('language', 'N/A')
         genres_str = ", ".join(movie_data.get('genres', [])) or "N/A"
         clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
 
         caption_header = f"🔄 **UPDATED : {title_with_year}**\n" if notification_type == 'update' else f"🔥 **NEW ADDED : {title_with_year}**\n"
-        
+
         caption = caption_header
         if language_str and not any(char.isdigit() for char in language_str):
              caption += f"**{language_str.upper()}**\n"
@@ -182,7 +182,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
 
             api_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
             payload = {'chat_id': channel_id, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
-            
+
             try:
                 response = requests.post(api_url, data=payload, timeout=15)
                 response.raise_for_status()
@@ -193,7 +193,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
                     print(f"WARNING: Telegram API error for channel '{channel_id}': {response.json().get('description')}")
             except requests.exceptions.RequestException as e:
                 print(f"ERROR: Failed to send notification to channel '{channel_id}': {e}")
-        
+
         if sent_count == 0:
             print("WARNING: Notification attempt failed for all configured channels.")
     except Exception as e:
@@ -207,7 +207,7 @@ def time_ago(obj_id):
     now = datetime.utcnow()
     diff = now - post_time
     seconds = diff.total_seconds()
-    
+
     if seconds < 60: return "just now"
     elif seconds < 3600:
         minutes = int(seconds / 60)
@@ -221,19 +221,35 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- Context Processor (Unchanged) ---
+# --- [পরিবর্তিত] Context Processor ---
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
     design_settings = settings.find_one({"_id": "design_config"}) or {}
+    # [নতুন যোগ করা হয়েছে] সাইট কনফিগারেশন এবং হেডলাইন লোড করুন
+    site_config = settings.find_one({"_id": "site_config"}) or {}
+    
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
     category_icons = { "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
-    return dict( website_name=WEBSITE_NAME, ad_settings=ad_settings or {}, design_settings=design_settings, predefined_categories=all_categories, quote=quote, datetime=datetime, category_icons=category_icons, all_ott_platforms=all_ott_platforms, developer_telegram_id=DEVELOPER_TELEGRAM_ID )
+    
+    return dict(
+        website_name=WEBSITE_NAME,
+        ad_settings=ad_settings or {},
+        design_settings=design_settings,
+        predefined_categories=all_categories,
+        quote=quote,
+        datetime=datetime,
+        category_icons=category_icons,
+        all_ott_platforms=all_ott_platforms,
+        developer_telegram_id=DEVELOPER_TELEGRAM_ID,
+        # [নতুন যোগ করা হয়েছে] হেডলাইনগুলো টেমপ্লেটে পাঠান
+        headlines=site_config.get('headlines', [])
+    )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES (Footer পরিবর্তিত) =======================================
+# === [START] HTML TEMPLATES ([পরিবর্তিত] index_html ও admin_html) ========================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -447,7 +463,6 @@ index_html = """
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
-  /* [পরিবর্তন] ফুটার স্টাইল আপডেট করা হয়েছে */
   .main-footer { background-color: #111; padding: 30px 20px; text-align: center; color: var(--text-dark); margin-top: 30px; font-size: 0.9rem; }
   .footer-links { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
   .footer-links a { color: var(--text-dark); font-weight: 500; transition: color 0.2s; }
@@ -479,6 +494,56 @@ index_html = """
   .pagination a, .pagination span { padding: 8px 15px; border-radius: 5px; background-color: var(--card-bg); color: var(--text-dark); font-weight: 500; }
   .pagination a:hover { background-color: #333; }
   .pagination .current { background-color: var(--primary-color); color: white; }
+
+  /* [নতুন যোগ করা হয়েছে] Headline Ticker Styles */
+  .headline-ticker-section { margin: 10px 0 20px 0; }
+  .headline-ticker {
+    display: flex;
+    align-items: center;
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    border: 1px solid #333;
+    overflow: hidden;
+    padding: 5px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  }
+  .ticker-icon {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 1.1rem;
+    margin-right: 10px;
+  }
+  .ticker-content-wrapper {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+    white-space: nowrap;
+  }
+  .ticker-content {
+    display: inline-block;
+    animation: ticker-scroll linear infinite;
+  }
+  .headline-ticker:hover .ticker-content {
+    animation-play-state: paused;
+  }
+  .headline-item {
+    display: inline-block; /* Changed for better compatibility */
+    margin-right: 40px;
+    color: var(--text-dark);
+    font-weight: 500;
+  }
+  .separator {
+    color: var(--primary-color);
+    margin: 0 10px;
+    font-size: 1.2em;
+    vertical-align: middle;
+  }
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
 
   @media (min-width: 769px) { 
     .container { padding: 0 40px; } .main-header { padding: 0 40px; }
@@ -583,6 +648,23 @@ index_html = """
         </div>
     </section>
 
+    <!-- [নতুন যোগ করা হয়েছে] Headline Ticker Section -->
+    {% if headlines %}
+    <section class="headline-ticker-section container">
+        <div class="headline-ticker">
+            <div class="ticker-icon"><i class="fas fa-bullhorn"></i></div>
+            <div class="ticker-content-wrapper" id="ticker-wrapper">
+                <div class="ticker-content" id="ticker-content">
+                    {% for headline in headlines %}
+                        <span class="headline-item">{{ headline }}</span>
+                        {% if not loop.last %}<span class="separator">&starf;</span>{% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="home-search-section container">
         <form action="{{ url_for('home') }}" method="get" class="home-search-form">
             <input type="text" name="q" class="home-search-input" placeholder="সার্চ করে খুঁজে নিন আপনার পছন্দের ...">
@@ -681,7 +763,6 @@ index_html = """
     </div>
   {% endif %}
 </main>
-<!-- [নতুন যোগ করা হয়েছে] Legal Links সহ ফুটার -->
 <footer class="main-footer">
     <div class="footer-links">
         <a href="{{ url_for('about_us') }}">About Us</a>
@@ -753,6 +834,31 @@ index_html = """
     new Swiper('.platform-slider', {
         slidesPerView: 'auto',
         spaceBetween: 20,
+    });
+    // [নতুন যোগ করা হয়েছে] Dynamic Headline Ticker Speed
+    document.addEventListener('DOMContentLoaded', () => {
+        const tickerWrapper = document.getElementById('ticker-wrapper');
+        const tickerContent = document.getElementById('ticker-content');
+        if (tickerWrapper && tickerContent) {
+            const contentWidth = tickerContent.scrollWidth;
+            const wrapperWidth = tickerWrapper.offsetWidth;
+
+            if (contentWidth > wrapperWidth) {
+                // Clone content for a seamless loop
+                const clone = tickerContent.cloneNode(true);
+                tickerContent.parentElement.appendChild(clone);
+                
+                // Adjust animation based on content width
+                // Speed: 60 pixels per second. Increase the number for slower speed.
+                const duration = (contentWidth / 60);
+                const allContent = document.querySelectorAll('.ticker-content');
+                allContent.forEach(item => {
+                    item.style.animationDuration = duration + 's';
+                });
+            } else {
+                tickerContent.style.animation = 'none'; // No need to scroll if content fits
+            }
+        }
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -1363,6 +1469,21 @@ admin_html = """
     </form>
     <hr>
 
+    <!-- [নতুন যোগ করা হয়েছে] Headline Ticker Management Section -->
+    <h2><i class="fas fa-bullhorn"></i> Headline Ticker Management</h2>
+    <form method="post">
+        <input type="hidden" name="form_action" value="update_headlines">
+        <fieldset>
+            <legend>Manage Scrolling Headlines</legend>
+            <div class="form-group">
+                <label for="headlines_text">Headlines (One per line):</label>
+                <textarea name="headlines_text" id="headlines_text" rows="5" placeholder="Enter each headline on a new line.&#10;Example: New Bangla movie added!&#10;Server maintenance on Sunday.">{{ headlines_text or '' }}</textarea>
+                <small>Each line you enter here will be shown as a separate scrolling headline on the homepage.</small>
+            </div>
+        </fieldset>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Headlines</button>
+    </form>
+    <hr>
 
     <h2><i class="fab fa-telegram-plane"></i> Telegram Notification Channels</h2>
     <div class="management-section">
@@ -1798,7 +1919,7 @@ legal_page_template_html = """
 """
 
 # =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES (Legal Routes যোগ করা হয়েছে) ================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES ([পরিবর্তিত] admin) ==========================
 # =========================================================================================
 
 # --- TMDB API Helper Function (Unchanged) ---
@@ -1991,7 +2112,18 @@ def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
-        if form_action == "update_ads":
+        # [নতুন যোগ করা হয়েছে] হেডলাইন আপডেট করার জন্য এই ব্লকটি যোগ করুন
+        if form_action == "update_headlines":
+            headlines_text = request.form.get("headlines_text", "")
+            # প্রতিটি লাইনকে আলাদা হেডলাইন হিসেবে লিস্টে সংরক্ষণ করুন
+            headlines_list = [line.strip() for line in headlines_text.splitlines() if line.strip()]
+            settings.update_one(
+                {"_id": "site_config"},
+                {"$set": {"headlines": headlines_list}},
+                upsert=True
+            )
+
+        elif form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
         elif form_action == "update_design_settings":
@@ -2044,11 +2176,23 @@ def admin():
     
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     tele_config_data = settings.find_one({"_id": "telegram_config"})
+    
+    # [নতুন যোগ করা হয়েছে] অ্যাডমিন প্যানেলে দেখানোর জন্য হেডলাইন লোড করুন
+    site_config = settings.find_one({"_id": "site_config"}) or {}
+    headlines_text = '\n'.join(site_config.get('headlines', []))
+    
     return render_template_string(
-        admin_html, content_list=list(movies.find({}).sort('updated_at', -1)), stats=stats, requests_list=list(requests_collection.find().sort("created_at", -1)),
-        ad_settings=settings.find_one({"_id": "ad_config"}) or {}, design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
-        categories_list=list(categories_collection.find().sort("name", 1)), ott_list=list(ott_collection.find().sort("name", 1)),
-        telegram_channels=tele_config_data.get('channels', []) if tele_config_data else [] )
+        admin_html,
+        content_list=list(movies.find({}).sort('updated_at', -1)),
+        stats=stats,
+        requests_list=list(requests_collection.find().sort("created_at", -1)),
+        ad_settings=settings.find_one({"_id": "ad_config"}) or {},
+        design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
+        categories_list=list(categories_collection.find().sort("name", 1)),
+        ott_list=list(ott_collection.find().sort("name", 1)),
+        telegram_channels=tele_config_data.get('channels', []) if tele_config_data else [],
+        headlines_text=headlines_text  # [নতুন যোগ করা হয়েছে] টেমপ্লেটে পাঠান
+    )
 
 @app.route('/admin/telegram/delete/<channel_id>')
 @requires_auth
