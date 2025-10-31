@@ -857,7 +857,6 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-# [পরিবর্তিত] detail_html
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1067,15 +1066,6 @@ detail_html = """
                         </a>
                     </div>
                 {% endfor %}
-            {% endif %}
-
-            {% if movie.type != 'movie' and movie.manual_links %}
-                <div class="link-group" style="margin-top: 20px;">
-                    <h3>More Links</h3>
-                    {% for link in movie.manual_links %}
-                        <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn"><span>{{ link.name }}</span><i class="fas fa-link"></i></a>
-                    {% endfor %}
-                </div>
             {% endif %}
 
             {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
@@ -1901,7 +1891,6 @@ legal_page_template_html = """
 </body>
 </html>
 """
-# [পরিবর্তিত] generate_links_html
 generate_links_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1931,7 +1920,7 @@ generate_links_html = """
         #links-container { display: none; flex-direction: column; gap: 12px; margin-top: 20px; }
         .link-button { display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: white; font-weight: 600; padding: 15px 20px; border-radius: 8px; font-size: 1rem; background: linear-gradient(90deg, var(--g-1), var(--g-2), var(--g-1)); background-size: 200% 100%; transition: all 0.4s ease; }
         .link-button:hover { background-position: 100% 0; transform: scale(1.03); }
-        .link-button .quality { font-size: 1.1rem; }
+        .link-button .quality { font-size: 1.1rem; text-align: left; }
         .link-button .icon i { font-size: 1.2rem; }
 
         .ad-container { margin: 25px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; }
@@ -2139,7 +2128,6 @@ def request_content():
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
-# [পরিবর্তিত] লিংক জেনারেট করার রুট
 @app.route('/generate-links/<movie_id>')
 def generate_links_page(movie_id):
     try:
@@ -2151,20 +2139,25 @@ def generate_links_page(movie_id):
         episodes_for_season = []
         season_num = None
 
+        # Check for any available links
+        has_movie_links = movie.get('links') or movie.get('manual_links')
+        has_series_links = movie.get('episodes') or movie.get('season_packs')
+
         if movie.get('type') == 'series':
             if not season_num_str:
                 return "Season number is required for series.", 400
             season_num = int(season_num_str)
-            # নির্দিষ্ট সিজনের এপিসোডগুলো ফিল্টার করুন
             if 'episodes' in movie:
                 episodes_for_season = [ep for ep in movie['episodes'] if ep.get('season') == season_num]
             
-            # যদি ঐ সিজনের কোনো এপিসোড বা প্যাক না থাকে
             has_season_pack = any(p.get('season_number') == season_num for p in movie.get('season_packs', []))
             if not episodes_for_season and not has_season_pack:
                 return f"No links found for Season {season_num}.", 404
         
-        elif not movie.get('links') and not movie.get('manual_links'):
+        elif movie.get('type') == 'movie' and not has_movie_links:
+            return "No links found for this content.", 404
+        
+        elif not has_movie_links and not has_series_links:
             return "No links found for this content.", 404
 
         return render_template_string(
