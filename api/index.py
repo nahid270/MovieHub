@@ -1050,7 +1050,7 @@ detail_html = """
             
             {% if movie.type == 'movie' and (movie.links or movie.manual_links) %}
                 <div class="link-group">
-                    <a href="{{ url_for('generate_links_page', movie_id=movie._id) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
+                    <a href="{{ url_for('first_wait_step', movie_id=movie._id) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
                         <span><i class="fas fa-bolt"></i> Get Links</span>
                     </a>
                 </div>
@@ -1061,7 +1061,7 @@ detail_html = """
                 {% for season_num in all_seasons %}
                     <div class="episode-list" style="margin-bottom: 20px;">
                         <h3>Season {{ season_num }}</h3>
-                        <a href="{{ url_for('generate_links_page', movie_id=movie._id, season=season_num) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
+                        <a href="{{ url_for('first_wait_step', movie_id=movie._id, season=season_num) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
                             <span><i class="fas fa-list-ul"></i> Get Season {{ season_num }} Links</span>
                         </a>
                     </div>
@@ -1132,7 +1132,7 @@ wait_page_html = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Generating Link... - {{ website_name }}</title>
+    <title>Please Wait... - {{ website_name }}</title>
     <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
     <meta name="robots" content="noindex, nofollow">
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1144,8 +1144,7 @@ wait_page_html = """
         h1 { font-size: 1.8rem; color: var(--primary-color); margin-bottom: 20px; }
         p { color: var(--text-dark); margin-bottom: 30px; font-size: 1rem; }
         .timer { font-size: 2.5rem; font-weight: 700; color: var(--text-light); margin-bottom: 30px; }
-        .get-link-btn { display: inline-block; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: #555; transition: background-color 0.2s; }
-        .get-link-btn.ready { background-color: var(--primary-color); }
+        .get-link-btn { display: none; text-decoration: none; color: white; font-weight: 600; cursor: pointer; border: none; padding: 12px 30px; border-radius: 50px; font-size: 1rem; background-color: var(--primary-color); transition: background-color 0.2s; }
         .ad-container { margin: 30px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; text-align: center; }
         .ad-container > * { max-width: 100% !important; }
     </style>
@@ -1153,26 +1152,24 @@ wait_page_html = """
 <body>
     {{ ad_settings.ad_body_top | safe }}
     <div class="wait-container">
-        <h1>Please Wait</h1>
-        <p>Your link is being generated. You will be redirected automatically.</p>
-        <div class="timer">Please wait <span id="countdown">5</span> seconds...</div>
-        <a id="get-link-btn" class="get-link-btn" href="#">Generating Link...</a>
+        <h1>Step 1: Preparing Link</h1>
+        <p>Your link will be ready in a moment. Please wait.</p>
+        <div id="timer-container" class="timer">Please wait <span id="countdown">10</span> seconds...</div>
+        <a id="get-link-btn" class="get-link-btn" href="{{ target_url | safe }}">Go to Links Page</a>
         {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
     </div>
     <script>
         (function() {
-            let timeLeft = 5;
+            let timeLeft = 10;
             const countdownElement = document.getElementById('countdown');
+            const timerContainer = document.getElementById('timer-container');
             const linkButton = document.getElementById('get-link-btn');
-            const targetUrl = "{{ target_url | safe }}";
+            
             const timer = setInterval(() => {
                 if (timeLeft <= 0) {
                     clearInterval(timer);
-                    countdownElement.parentElement.textContent = "Your link is ready!";
-                    linkButton.classList.add('ready');
-                    linkButton.textContent = 'Click Here to Proceed';
-                    linkButton.href = targetUrl;
-                    window.location.href = targetUrl;
+                    timerContainer.style.display = 'none';
+                    linkButton.style.display = 'inline-block';
                 } else {
                     countdownElement.textContent = timeLeft;
                 }
@@ -1940,7 +1937,7 @@ generate_links_html = """
 
         <div id="countdown-container">
             <p>Please wait for the links to be generated.</p>
-            <div class="timer"><span id="countdown">10</span> seconds</div>
+            <div class="timer"><span id="countdown">5</span> seconds</div>
             <div class="loader"></div>
         </div>
 
@@ -1970,9 +1967,9 @@ generate_links_html = """
                 {% endif %}
             {% elif movie.type == 'series' and season_num is defined %}
                 {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
-                {% if season_pack and season_pack.download_link %}
-                <a href="{{ season_pack.download_link }}" target="_blank" class="link-button">
-                    <span class="quality">Download All Episodes (ZIP)</span>
+                {% if season_pack and (season_pack.download_link or season_pack.watch_link) %}
+                <a href="{{ season_pack.download_link or season_pack.watch_link }}" target="_blank" class="link-button">
+                    <span class="quality">Season {{ season_num }} Complete</span>
                     <span class="icon"><i class="fas fa-file-archive"></i></span>
                 </a>
                 {% endif %}
@@ -1993,7 +1990,7 @@ generate_links_html = """
 
     <script>
         (function() {
-            let timeLeft = 10;
+            let timeLeft = 5;
             const countdownElement = document.getElementById('countdown');
             const countdownContainer = document.getElementById('countdown-container');
             const linksContainer = document.getElementById('links-container');
@@ -2128,36 +2125,37 @@ def request_content():
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
+# --- Two-Step Link Generation Routes ---
+
+@app.route('/wait-step-1/<movie_id>')
+def first_wait_step(movie_id):
+    season_num = request.args.get('season')
+    if season_num:
+        target_url = url_for('generate_links_page', movie_id=movie_id, season=season_num)
+    else:
+        target_url = url_for('generate_links_page', movie_id=movie_id)
+    return render_template_string(wait_page_html, target_url=target_url)
+
 @app.route('/generate-links/<movie_id>')
 def generate_links_page(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie:
-            return "Content not found.", 404
+        if not movie: return "Content not found.", 404
 
         season_num_str = request.args.get('season')
-        episodes_for_season = []
-        season_num = None
+        episodes_for_season, season_num = [], None
 
-        # Check for any available links
         has_movie_links = movie.get('links') or movie.get('manual_links')
-        has_series_links = movie.get('episodes') or movie.get('season_packs')
-
+        
         if movie.get('type') == 'series':
-            if not season_num_str:
-                return "Season number is required for series.", 400
+            if not season_num_str: return "Season number is required for series.", 400
             season_num = int(season_num_str)
             if 'episodes' in movie:
                 episodes_for_season = [ep for ep in movie['episodes'] if ep.get('season') == season_num]
-            
             has_season_pack = any(p.get('season_number') == season_num for p in movie.get('season_packs', []))
             if not episodes_for_season and not has_season_pack:
                 return f"No links found for Season {season_num}.", 404
-        
         elif movie.get('type') == 'movie' and not has_movie_links:
-            return "No links found for this content.", 404
-        
-        elif not has_movie_links and not has_series_links:
             return "No links found for this content.", 404
 
         return render_template_string(
@@ -2170,14 +2168,7 @@ def generate_links_page(movie_id):
         print(f"Error in generate_links_page: {e}")
         return "Content not found or invalid ID.", 404
 
-
-@app.route('/wait')
-def wait_page():
-    encoded_target_url = request.args.get('target')
-    if not encoded_target_url: return redirect(url_for('home'))
-    return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
-
-# Legal Pages Routes
+# --- Legal Pages Routes ---
 @app.route('/about-us')
 def about_us():
     title = "About Us"
@@ -2245,7 +2236,7 @@ def terms_of_service():
     """
     return render_template_string(legal_page_template_html, title=title, content=content)
 
-
+# --- Admin Panel Routes ---
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
@@ -2429,6 +2420,7 @@ def delete_movie(movie_id):
     except: return "Invalid ID", 400
     return redirect(url_for('admin'))
 
+# --- Admin Panel API Routes ---
 @app.route('/admin/api/live_search')
 @requires_auth
 def admin_api_live_search():
@@ -2490,6 +2482,7 @@ def api_resync_tmdb():
     details = get_tmdb_details(tmdb_id, media_type)
     return jsonify(details) if details else (jsonify({"error": "Could not fetch details"}), 404)
 
+# --- Public API Route for Live Search ---
 @app.route('/api/search')
 def api_search():
     query = request.args.get('q', '').strip()
