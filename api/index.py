@@ -126,8 +126,10 @@ def format_series_info(episodes, season_packs):
 
 # --- Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    tele_configs = settings.find_one({"_id": "telegram_config"})
-    channels = tele_configs.get('channels', []) if tele_configs else []
+    tele_configs = settings.find_one({"_id": "telegram_config"}) or {}
+    channels = tele_configs.get('channels', [])
+    tutorial_video_url = tele_configs.get('tutorial_video_url')
+
     if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
         print("INFO: No Telegram channels configured. Skipping notification.")
         return
@@ -141,7 +143,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         return
 
     try:
-        website_link = f"{WEBSITE_URL}"
+        website_link = f"{WEBSITE_URL}/movie/{content_id}"
 
         title_with_year = movie_data.get('title', 'N/A')
         if movie_data.get('release_date'):
@@ -171,7 +173,17 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
-        inline_keyboard = {"inline_keyboard": [[{"text": "✅ ভিজিট করুন ✅", "url": website_link}]]}
+        # Inline Keyboard বাটন তৈরি করা হচ্ছে
+        inline_buttons = [
+            [{"text": "✅ ডাউনলোড করুন ✅", "url": website_link}]
+        ]
+        
+        if tutorial_video_url:
+            inline_buttons.append(
+                [{"text": "🎬 কিভাবে ডাউনলোড করবেন?", "url": tutorial_video_url}]
+            )
+
+        inline_keyboard = {"inline_keyboard": inline_buttons}
 
         sent_count = 0
         for config in channels:
@@ -1460,13 +1472,21 @@ admin_html = """
 
     <h2><i class="fab fa-telegram-plane"></i> Telegram Notification Channels</h2>
     <div class="management-section">
-        <form method="post" style="flex: 1; min-width: 300px; padding: 15px;">
-            <input type="hidden" name="form_action" value="add_telegram_channel">
-            <fieldset><legend>Add New Channel</legend>
-                <div class="form-group"><label>Bot Token:</label><input type="text" name="bot_token" required></div>
-                <div class="form-group"><label>Channel ID (e.g., @mychannel or -100xxxxxxxxxx):</label><input type="text" name="channel_id" required></div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
+        <form method="post" style="flex: 2; min-width: 300px; padding: 15px;">
+            <input type="hidden" name="form_action" value="update_telegram_settings">
+            <fieldset><legend>General Settings</legend>
+                <div class="form-group">
+                    <label>"How to Download" Tutorial Video URL:</label>
+                    <input type="url" name="tutorial_video_url" value="{{ telegram_settings.tutorial_video_url or '' }}" placeholder="https://t.me/your_channel/video_id">
+                    <small>This link will be added as a button to every notification.</small>
+                </div>
             </fieldset>
+            <fieldset><legend>Add New Channel</legend>
+                <div class="form-group"><label>Bot Token:</label><input type="text" name="bot_token"></div>
+                <div class="form-group"><label>Channel ID (e.g., @mychannel or -100xxxxxxxxxx):</label><input type="text" name="channel_id"></div>
+                <button type="submit" name="submit_action" value="add_channel" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
+            </fieldset>
+            <button type="submit" name="submit_action" value="save_settings" class="btn btn-success" style="margin-top: 15px;"><i class="fas fa-save"></i> Save Settings</button>
         </form>
         <div class="management-list" style="flex: 1; min-width: 300px;">
             <h3>Configured Channels</h3>
@@ -2257,10 +2277,23 @@ def admin():
         elif form_action == "update_design_settings":
             design_settings_data = { "language_tag_css": request.form.get("language_tag_css").strip(), "new_badge_css": request.form.get("new_badge_css").strip(), "new_badge_text": request.form.get("new_badge_text").strip() }
             settings.update_one({"_id": "design_config"}, {"$set": design_settings_data}, upsert=True)
-        elif form_action == "add_telegram_channel":
-            bot_token, channel_id = request.form.get("bot_token", "").strip(), request.form.get("channel_id", "").strip()
-            if bot_token and channel_id:
-                settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}}, upsert=True)
+        elif form_action == "update_telegram_settings":
+            submit_action = request.form.get("submit_action")
+            tutorial_url = request.form.get("tutorial_video_url", "").strip()
+            settings.update_one(
+                {"_id": "telegram_config"},
+                {"$set": {"tutorial_video_url": tutorial_url}},
+                upsert=True
+            )
+            if submit_action == "add_channel":
+                bot_token = request.form.get("bot_token", "").strip()
+                channel_id = request.form.get("channel_id", "").strip()
+                if bot_token and channel_id:
+                    settings.update_one(
+                        {"_id": "telegram_config"},
+                        {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}},
+                        upsert=True
+                    )
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
@@ -2303,7 +2336,7 @@ def admin():
         return redirect(url_for('admin'))
     
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
-    tele_config_data = settings.find_one({"_id": "telegram_config"})
+    tele_config_data = settings.find_one({"_id": "telegram_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     headlines_text = '\n'.join(site_config.get('headlines', []))
     
@@ -2316,7 +2349,8 @@ def admin():
         design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
         categories_list=list(categories_collection.find().sort("name", 1)),
         ott_list=list(ott_collection.find().sort("name", 1)),
-        telegram_channels=tele_config_data.get('channels', []) if tele_config_data else [],
+        telegram_channels=tele_config_data.get('channels', []),
+        telegram_settings=tele_config_data,
         headlines_text=headlines_text
     )
 
