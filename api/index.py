@@ -857,6 +857,7 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+# [পরিবর্তিত] detail_html
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1048,7 +1049,7 @@ detail_html = """
                 <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided by non-affiliated third parties. Clicking on the links will redirect you to third-party sites.
             </div>
             
-            {% if movie.type == 'movie' and movie.links %}
+            {% if movie.type == 'movie' and (movie.links or movie.manual_links) %}
                 <div class="link-group">
                     <a href="{{ url_for('generate_links_page', movie_id=movie._id) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
                         <span><i class="fas fa-bolt"></i> Get Links</span>
@@ -1061,19 +1062,15 @@ detail_html = """
                 {% for season_num in all_seasons %}
                     <div class="episode-list" style="margin-bottom: 20px;">
                         <h3>Season {{ season_num }}</h3>
-                        {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
-                        {% if season_pack and season_pack.download_link %}<a href="{{ url_for('wait_page', target=quote(season_pack.download_link)) }}" class="action-btn"><span>Download All Episodes (ZIP)</span><i class="fas fa-file-archive"></i></a>{% endif %}
-                        
-                        {% set episodes_for_season = movie.episodes | selectattr('season', 'equalto', season_num) | list %}
-                        {% for ep in episodes_for_season | sort(attribute='episode_number') %}
-                            {% if ep.watch_link %}<a href="{{ url_for('wait_page', target=quote(ep.watch_link)) }}" class="action-btn"><span>Episode {{ ep.episode_number }}: {{ ep.title or 'Watch/Download' }}</span><i class="fas fa-download"></i></a>{% endif %}
-                        {% endfor %}
+                        <a href="{{ url_for('generate_links_page', movie_id=movie._id, season=season_num) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
+                            <span><i class="fas fa-list-ul"></i> Get Season {{ season_num }} Links</span>
+                        </a>
                     </div>
                 {% endfor %}
             {% endif %}
 
-            {% if movie.manual_links %}
-                <div class="link-group">
+            {% if movie.type != 'movie' and movie.manual_links %}
+                <div class="link-group" style="margin-top: 20px;">
                     <h3>More Links</h3>
                     {% for link in movie.manual_links %}
                         <a href="{{ url_for('wait_page', target=quote(link.url)) }}" class="action-btn"><span>{{ link.name }}</span><i class="fas fa-link"></i></a>
@@ -1082,7 +1079,7 @@ detail_html = """
             {% endif %}
 
             {% if not movie.links and not movie.manual_links and not movie.episodes and not movie.season_packs %}
-                <p style="text-align:center; color: var(--text-dark);">No download links available yet.</p>
+                <p style="text-align:center; color: var(--text-dark);">No links available yet.</p>
             {% endif %}
         </div>
     </div>
@@ -1904,7 +1901,7 @@ legal_page_template_html = """
 </body>
 </html>
 """
-# নতুন লিংক জেনারেট পেজের টেমপ্লেট
+# [পরিবর্তিত] generate_links_html
 generate_links_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1959,26 +1956,45 @@ generate_links_html = """
         </div>
 
         <div id="links-container">
-            {% for link in movie.links %}
-              {% if link.download_url %}
-              <a href="{{ link.download_url }}" target="_blank" class="link-button">
-                  <span class="quality">Download {{ link.quality }}</span>
-                  <span class="icon"><i class="fas fa-download"></i></span>
-              </a>
-              {% endif %}
-              {% if link.watch_url %}
-              <a href="{{ link.watch_url }}" target="_blank" class="link-button">
-                  <span class="quality">Watch {{ link.quality }}</span>
-                  <span class="icon"><i class="fas fa-play-circle"></i></span>
-              </a>
-              {% endif %}
-            {% endfor %}
-            {% if movie.manual_links %}
-                {% for m_link in movie.manual_links %}
-                <a href="{{ m_link.url }}" target="_blank" class="link-button">
-                    <span class="quality">{{ m_link.name }}</span>
-                    <span class="icon"><i class="fas fa-link"></i></span>
+            {% if movie.type == 'movie' %}
+                {% for link in movie.links %}
+                  {% if link.download_url %}
+                  <a href="{{ link.download_url }}" target="_blank" class="link-button">
+                      <span class="quality">Download {{ link.quality }}</span>
+                      <span class="icon"><i class="fas fa-download"></i></span>
+                  </a>
+                  {% endif %}
+                  {% if link.watch_url %}
+                  <a href="{{ link.watch_url }}" target="_blank" class="link-button">
+                      <span class="quality">Watch {{ link.quality }}</span>
+                      <span class="icon"><i class="fas fa-play-circle"></i></span>
+                  </a>
+                  {% endif %}
+                {% endfor %}
+                {% if movie.manual_links %}
+                    {% for m_link in movie.manual_links %}
+                    <a href="{{ m_link.url }}" target="_blank" class="link-button">
+                        <span class="quality">{{ m_link.name }}</span>
+                        <span class="icon"><i class="fas fa-link"></i></span>
+                    </a>
+                    {% endfor %}
+                {% endif %}
+            {% elif movie.type == 'series' and season_num is defined %}
+                {% set season_pack = (movie.season_packs | selectattr('season_number', 'equalto', season_num) | first) if movie.season_packs else none %}
+                {% if season_pack and season_pack.download_link %}
+                <a href="{{ season_pack.download_link }}" target="_blank" class="link-button">
+                    <span class="quality">Download All Episodes (ZIP)</span>
+                    <span class="icon"><i class="fas fa-file-archive"></i></span>
                 </a>
+                {% endif %}
+                
+                {% for ep in episodes_for_season | sort(attribute='episode_number') %}
+                    {% if ep.watch_link %}
+                    <a href="{{ ep.watch_link }}" target="_blank" class="link-button">
+                        <span class="quality">Episode {{ ep.episode_number }}: {{ ep.title or 'Watch/Download' }}</span>
+                        <span class="icon"><i class="fas fa-play"></i></span>
+                    </a>
+                    {% endif %}
                 {% endfor %}
             {% endif %}
         </div>
@@ -2123,17 +2139,44 @@ def request_content():
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
-# নতুন লিংক জেনারেট করার রুট
+# [পরিবর্তিত] লিংক জেনারেট করার রুট
 @app.route('/generate-links/<movie_id>')
 def generate_links_page(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie or (not movie.get('links') and not movie.get('manual_links')):
-            return "Links not found for this content.", 404
-        return render_template_string(generate_links_html, movie=movie)
+        if not movie:
+            return "Content not found.", 404
+
+        season_num_str = request.args.get('season')
+        episodes_for_season = []
+        season_num = None
+
+        if movie.get('type') == 'series':
+            if not season_num_str:
+                return "Season number is required for series.", 400
+            season_num = int(season_num_str)
+            # নির্দিষ্ট সিজনের এপিসোডগুলো ফিল্টার করুন
+            if 'episodes' in movie:
+                episodes_for_season = [ep for ep in movie['episodes'] if ep.get('season') == season_num]
+            
+            # যদি ঐ সিজনের কোনো এপিসোড বা প্যাক না থাকে
+            has_season_pack = any(p.get('season_number') == season_num for p in movie.get('season_packs', []))
+            if not episodes_for_season and not has_season_pack:
+                return f"No links found for Season {season_num}.", 404
+        
+        elif not movie.get('links') and not movie.get('manual_links'):
+            return "No links found for this content.", 404
+
+        return render_template_string(
+            generate_links_html, 
+            movie=movie, 
+            season_num=season_num, 
+            episodes_for_season=episodes_for_season
+        )
     except Exception as e:
         print(f"Error in generate_links_page: {e}")
         return "Content not found or invalid ID.", 404
+
 
 @app.route('/wait')
 def wait_page():
