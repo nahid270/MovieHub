@@ -124,7 +124,7 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- [পরিবর্তিত ফাংশন] Telegram Notification Function ---
+# --- Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
     tele_configs = settings.find_one({"_id": "telegram_config"})
     channels = tele_configs.get('channels', []) if tele_configs else []
@@ -141,7 +141,6 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         return
 
     try:
-        # [পরিবর্তন] এখন আর মুভির সরাসরি লিংক যাবে না, হোমপেজের লিংক যাবে।
         website_link = f"{WEBSITE_URL}"
 
         title_with_year = movie_data.get('title', 'N/A')
@@ -172,7 +171,6 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         caption += f"\n\n🔗 Visit : **{clean_url}**"
         caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
 
-        # [পরিবর্তন] বাটনের টেক্সট এবং URL পরিবর্তন করা হয়েছে।
         inline_keyboard = {"inline_keyboard": [[{"text": "✅ ভিজিট করুন ✅", "url": website_link}]]}
 
         sent_count = 0
@@ -221,12 +219,11 @@ def time_ago(obj_id):
 
 app.jinja_env.filters['time_ago'] = time_ago
 
-# --- [পরিবর্তিত] Context Processor ---
+# --- Context Processor ---
 @app.context_processor
 def inject_globals():
     ad_settings = settings.find_one({"_id": "ad_config"})
     design_settings = settings.find_one({"_id": "design_config"}) or {}
-    # [নতুন যোগ করা হয়েছে] সাইট কনফিগারেশন এবং হেডলাইন লোড করুন
     site_config = settings.find_one({"_id": "site_config"}) or {}
     
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
@@ -244,12 +241,11 @@ def inject_globals():
         category_icons=category_icons,
         all_ott_platforms=all_ott_platforms,
         developer_telegram_id=DEVELOPER_TELEGRAM_ID,
-        # [নতুন যোগ করা হয়েছে] হেডলাইনগুলো টেমপ্লেটে পাঠান
         headlines=site_config.get('headlines', [])
     )
 
 # =========================================================================================
-# === [START] HTML TEMPLATES ([পরিবর্তিত] index_html ও admin_html) ========================
+# === [START] HTML TEMPLATES =============================================================
 # =========================================================================================
 index_html = """
 <!DOCTYPE html>
@@ -495,7 +491,7 @@ index_html = """
   .pagination a:hover { background-color: #333; }
   .pagination .current { background-color: var(--primary-color); color: white; }
 
-  /* [নতুন যোগ করা হয়েছে] Headline Ticker Styles */
+  /* Headline Ticker Styles */
   .headline-ticker-section { margin: 10px 0 20px 0; }
   .headline-ticker {
     display: flex;
@@ -529,7 +525,7 @@ index_html = """
     animation-play-state: paused;
   }
   .headline-item {
-    display: inline-block; /* Changed for better compatibility */
+    display: inline-block;
     margin-right: 40px;
     color: var(--text-dark);
     font-weight: 500;
@@ -648,7 +644,7 @@ index_html = """
         </div>
     </section>
 
-    <!-- [নতুন যোগ করা হয়েছে] Headline Ticker Section -->
+    <!-- Headline Ticker Section -->
     {% if headlines %}
     <section class="headline-ticker-section container">
         <div class="headline-ticker">
@@ -835,7 +831,7 @@ index_html = """
         slidesPerView: 'auto',
         spaceBetween: 20,
     });
-    // [নতুন যোগ করা হয়েছে] Dynamic Headline Ticker Speed
+    // Dynamic Headline Ticker Speed
     document.addEventListener('DOMContentLoaded', () => {
         const tickerWrapper = document.getElementById('ticker-wrapper');
         const tickerContent = document.getElementById('ticker-content');
@@ -844,19 +840,16 @@ index_html = """
             const wrapperWidth = tickerWrapper.offsetWidth;
 
             if (contentWidth > wrapperWidth) {
-                // Clone content for a seamless loop
                 const clone = tickerContent.cloneNode(true);
                 tickerContent.parentElement.appendChild(clone);
                 
-                // Adjust animation based on content width
-                // Speed: 60 pixels per second. Increase the number for slower speed.
                 const duration = (contentWidth / 60);
                 const allContent = document.querySelectorAll('.ticker-content');
                 allContent.forEach(item => {
                     item.style.animationDuration = duration + 's';
                 });
             } else {
-                tickerContent.style.animation = 'none'; // No need to scroll if content fits
+                tickerContent.style.animation = 'none';
             }
         }
     });
@@ -994,7 +987,6 @@ detail_html = """
   .movie-card { display: block; position: relative; }
   .movie-card .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; }
 
-  /* [নতুন যোগ করা হয়েছে] Disclaimer স্টাইল */
   .download-disclaimer {
       max-width: 800px; margin: 20px auto; padding: 15px;
       background-color: rgba(255, 204, 0, 0.1); border: 1px solid rgba(255, 204, 0, 0.3);
@@ -1042,7 +1034,7 @@ detail_html = """
 
     <nav class="tabs-nav">
         <button class="tab-link" data-tab="info-pane">Info</button>
-        <button class="tab-link active" data-tab="downloads-pane">Download Links</button>
+        <button class="tab-link active" data-tab="downloads-pane">Links</button>
     </nav>
 
     <div class="tabs-content">
@@ -1052,17 +1044,15 @@ detail_html = """
         <div class="tab-pane active" id="downloads-pane">
             {% if ad_settings.ad_detail_page %}<div class="ad-container">{{ ad_settings.ad_detail_page | safe }}</div>{% endif %}
 
-            <!-- [নতুন যোগ করা হয়েছে] Disclaimer -->
             <div class="download-disclaimer">
                 <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided by non-affiliated third parties. Clicking on the links will redirect you to third-party sites.
             </div>
             
             {% if movie.type == 'movie' and movie.links %}
                 <div class="link-group">
-                    {% for link_item in movie.links %}
-                        {% if link_item.download_url %}<a href="{{ url_for('wait_page', target=quote(link_item.download_url)) }}" class="action-btn"><span>Download {{ link_item.quality }}</span><i class="fas fa-download"></i></a>{% endif %}
-                        {% if link_item.watch_url %}<a href="{{ url_for('wait_page', target=quote(link_item.watch_url)) }}" class="action-btn"><span>Watch {{ link_item.quality }}</span><i class="fas fa-play"></i></a>{% endif %}
-                    {% endfor %}
+                    <a href="{{ url_for('generate_links_page', movie_id=movie._id) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
+                        <span><i class="fas fa-bolt"></i> Get Links</span>
+                    </a>
                 </div>
             {% endif %}
             
@@ -1177,7 +1167,7 @@ wait_page_html = """
     {{ ad_settings.ad_body_top | safe }}
     <div class="wait-container">
         <h1>Please Wait</h1>
-        <p>Your download link is being generated. You will be redirected automatically.</p>
+        <p>Your link is being generated. You will be redirected automatically.</p>
         <div class="timer">Please wait <span id="countdown">5</span> seconds...</div>
         <a id="get-link-btn" class="get-link-btn" href="#">Generating Link...</a>
         {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
@@ -1469,7 +1459,6 @@ admin_html = """
     </form>
     <hr>
 
-    <!-- [নতুন যোগ করা হয়েছে] Headline Ticker Management Section -->
     <h2><i class="fas fa-bullhorn"></i> Headline Ticker Management</h2>
     <form method="post">
         <input type="hidden" name="form_action" value="update_headlines">
@@ -1858,8 +1847,6 @@ edit_html = """
 </script>
 </body></html>
 """
-
-# [নতুন যোগ করা হয়েছে] Legal পেজগুলোর জন্য একটি বেস টেমপ্লেট
 legal_page_template_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1917,12 +1904,117 @@ legal_page_template_html = """
 </body>
 </html>
 """
+# নতুন লিংক জেনারেট পেজের টেমপ্লেট
+generate_links_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Generating Links for {{ movie.title }} - {{ website_name }}</title>
+    <link rel="icon" href="https://img.icons8.com/fluency/48/cinema-.png" type="image/png">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    {{ ad_settings.ad_header | safe }}
+    <style>
+        :root { --primary-color: #E50914; --bg-color: #141414; --card-bg: #1a1a1a; --text-light: #ffffff; --text-dark: #a0a0a0; --g-1: #ff00de; --g-2: #00ffff; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-light); display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+        .main-container { background-color: var(--card-bg); padding: 25px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
+        .movie-info { display: flex; align-items: center; gap: 20px; text-align: left; margin-bottom: 25px; }
+        .movie-info img { width: 100px; border-radius: 8px; }
+        .movie-info h1 { font-size: 1.5rem; margin: 0; }
+        .movie-info p { color: var(--text-dark); margin: 5px 0 0; font-size: 0.9rem; }
+        
+        #countdown-container p { font-size: 1.1rem; color: var(--text-dark); }
+        .timer { font-size: 2.5rem; font-weight: 700; color: var(--primary-color); margin: 15px 0; }
+        .loader { width: 50px; height: 50px; border: 5px solid #333; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #links-container { display: none; flex-direction: column; gap: 12px; margin-top: 20px; }
+        .link-button { display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: white; font-weight: 600; padding: 15px 20px; border-radius: 8px; font-size: 1rem; background: linear-gradient(90deg, var(--g-1), var(--g-2), var(--g-1)); background-size: 200% 100%; transition: all 0.4s ease; }
+        .link-button:hover { background-position: 100% 0; transform: scale(1.03); }
+        .link-button .quality { font-size: 1.1rem; }
+        .link-button .icon i { font-size: 1.2rem; }
+
+        .ad-container { margin: 25px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; }
+        .ad-container > * { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    {{ ad_settings.ad_body_top | safe }}
+    <div class="main-container">
+        <div class="movie-info">
+            <img src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
+            <div>
+                <h1>{{ movie.title }}</h1>
+                <p>Links are being prepared...</p>
+            </div>
+        </div>
+
+        <div id="countdown-container">
+            <p>Please wait for the links to be generated.</p>
+            <div class="timer"><span id="countdown">10</span> seconds</div>
+            <div class="loader"></div>
+        </div>
+
+        <div id="links-container">
+            {% for link in movie.links %}
+              {% if link.download_url %}
+              <a href="{{ link.download_url }}" target="_blank" class="link-button">
+                  <span class="quality">Download {{ link.quality }}</span>
+                  <span class="icon"><i class="fas fa-download"></i></span>
+              </a>
+              {% endif %}
+              {% if link.watch_url %}
+              <a href="{{ link.watch_url }}" target="_blank" class="link-button">
+                  <span class="quality">Watch {{ link.quality }}</span>
+                  <span class="icon"><i class="fas fa-play-circle"></i></span>
+              </a>
+              {% endif %}
+            {% endfor %}
+            {% if movie.manual_links %}
+                {% for m_link in movie.manual_links %}
+                <a href="{{ m_link.url }}" target="_blank" class="link-button">
+                    <span class="quality">{{ m_link.name }}</span>
+                    <span class="icon"><i class="fas fa-link"></i></span>
+                </a>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
+    </div>
+
+    <script>
+        (function() {
+            let timeLeft = 10;
+            const countdownElement = document.getElementById('countdown');
+            const countdownContainer = document.getElementById('countdown-container');
+            const linksContainer = document.getElementById('links-container');
+
+            const timer = setInterval(() => {
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    countdownContainer.style.display = 'none';
+                    linksContainer.style.display = 'flex';
+                } else {
+                    countdownElement.textContent = timeLeft;
+                }
+                timeLeft--;
+            }, 1000);
+        })();
+    </script>
+    {{ ad_settings.ad_footer | safe }}
+</body>
+</html>
+"""
 
 # =========================================================================================
-# === [START] PYTHON FUNCTIONS & FLASK ROUTES ([পরিবর্তিত] admin) ==========================
+# === [START] PYTHON FUNCTIONS & FLASK ROUTES ============================================
 # =========================================================================================
 
-# --- TMDB API Helper Function (Unchanged) ---
+# --- TMDB API Helper Function ---
 def get_tmdb_details(tmdb_id, media_type):
     if not TMDB_API_KEY: return None
     search_type = "tv" if media_type == "series" else "movie"
@@ -1937,7 +2029,7 @@ def get_tmdb_details(tmdb_id, media_type):
         print(f"ERROR: TMDb API request failed: {e}")
         return None
 
-# --- Pagination Helper Class (Unchanged) ---
+# --- Pagination Helper Class ---
 class Pagination:
     def __init__(self, page, per_page, total_count):
         self.page = page; self.per_page = per_page; self.total_count = total_count
@@ -2031,13 +2123,25 @@ def request_content():
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
+# নতুন লিংক জেনারেট করার রুট
+@app.route('/generate-links/<movie_id>')
+def generate_links_page(movie_id):
+    try:
+        movie = movies.find_one({"_id": ObjectId(movie_id)})
+        if not movie or (not movie.get('links') and not movie.get('manual_links')):
+            return "Links not found for this content.", 404
+        return render_template_string(generate_links_html, movie=movie)
+    except Exception as e:
+        print(f"Error in generate_links_page: {e}")
+        return "Content not found or invalid ID.", 404
+
 @app.route('/wait')
 def wait_page():
     encoded_target_url = request.args.get('target')
     if not encoded_target_url: return redirect(url_for('home'))
     return render_template_string(wait_page_html, target_url=unquote(encoded_target_url))
 
-# [নতুন যোগ করা হয়েছে] Legal Pages Routes
+# Legal Pages Routes
 @app.route('/about-us')
 def about_us():
     title = "About Us"
@@ -2112,17 +2216,14 @@ def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
-        # [নতুন যোগ করা হয়েছে] হেডলাইন আপডেট করার জন্য এই ব্লকটি যোগ করুন
         if form_action == "update_headlines":
             headlines_text = request.form.get("headlines_text", "")
-            # প্রতিটি লাইনকে আলাদা হেডলাইন হিসেবে লিস্টে সংরক্ষণ করুন
             headlines_list = [line.strip() for line in headlines_text.splitlines() if line.strip()]
             settings.update_one(
                 {"_id": "site_config"},
                 {"$set": {"headlines": headlines_list}},
                 upsert=True
             )
-
         elif form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
@@ -2176,8 +2277,6 @@ def admin():
     
     stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     tele_config_data = settings.find_one({"_id": "telegram_config"})
-    
-    # [নতুন যোগ করা হয়েছে] অ্যাডমিন প্যানেলে দেখানোর জন্য হেডলাইন লোড করুন
     site_config = settings.find_one({"_id": "site_config"}) or {}
     headlines_text = '\n'.join(site_config.get('headlines', []))
     
@@ -2191,7 +2290,7 @@ def admin():
         categories_list=list(categories_collection.find().sort("name", 1)),
         ott_list=list(ott_collection.find().sort("name", 1)),
         telegram_channels=tele_config_data.get('channels', []) if tele_config_data else [],
-        headlines_text=headlines_text  # [নতুন যোগ করা হয়েছে] টেমপ্লেটে পাঠান
+        headlines_text=headlines_text
     )
 
 @app.route('/admin/telegram/delete/<channel_id>')
