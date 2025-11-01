@@ -1005,26 +1005,48 @@ detail_html = """
       border-radius: 8px; text-align: center; font-size: 0.85rem; color: #ccc;
   }
   
-  /* New Screenshot Gallery Styles */
-  .screenshot-gallery {
-      display: flex;
-      flex-direction: column;
-      gap: 15px; /* প্রতিটি ছবির মধ্যে ফাঁকা জায়গা */
-      padding: 15px;
-      background-color: #000; /* আপনার ছবির মতো কালো ব্যাকগ্রাউন্ড */
-      border-radius: 12px;
-      margin-top: 20px;
+  /* === নতুন স্ক্রিনশট স্টাইল শুরু === */
+  @keyframes rgb-glow-border {
+      0%   { border-color: #ff00de; box-shadow: 0 0 15px #ff00de; }
+      25%  { border-color: #00ffff; box-shadow: 0 0 15px #00ffff; }
+      50%  { border-color: #adff2f; box-shadow: 0 0 15px #adff2f; }
+      75%  { border-color: #f83d61; box-shadow: 0 0 15px #f83d61; }
+      100% { border-color: #ff00de; box-shadow: 0 0 15px #ff00de; }
   }
-  .screenshot-gallery img {
+
+  .screenshot-grid {
+      display: grid;
+      grid-template-columns: 1fr; /* মোবাইল ডিভাইসের জন্য ডিফল্ট এক কলাম */
+      gap: 25px;
+  }
+
+  .screenshot-item {
+      border: 3px solid transparent;
+      border-radius: 10px;
+      overflow: hidden;
+      animation: rgb-glow-border 4s linear infinite;
+      background-color: #000; /* যদি ছবি লোড না হয়, একটি কালো ব্যাকগ্রাউন্ড দেখাবে */
+      transition: transform 0.3s ease;
+  }
+  
+  .screenshot-item:hover {
+      transform: scale(1.03); /* হোভারে হালকা জুম ইফেক্ট */
+  }
+
+  .screenshot-image {
       width: 100%;
-      border-radius: 8px; /* ছবির কোণাগুলো কিছুটা বাঁকানো হবে */
-      border: 3px solid #00ff6a; /* উজ্জ্বল সবুজ বর্ডার */
-      box-shadow: 0 0 15px rgba(0, 255, 106, 0.6); /* সবুজ রঙের গ্লো ইফেক্ট */
+      height: auto;
       display: block;
+      border-radius: 6px; /* ভেতরের ছবির জন্য সামান্য ছোট ব্যাসার্ধ */
   }
+  /* === নতুন স্ক্রিনশট স্টাইল শেষ === */
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
+      /* বড় স্ক্রিনের জন্য স্ক্রিনশট গ্রিড লেআউট */
+      .screenshot-grid {
+          grid-template-columns: repeat(2, 1fr);
+      }
   }
 </style>
 </head>
@@ -1107,9 +1129,12 @@ detail_html = """
     {% if movie.screenshots %}
     <section class="category-section">
         <h2 class="category-title">Screenshots</h2>
-        <div class="screenshot-gallery">
-            {% for ss in movie.screenshots|slice(3) %}
-                <img src="{{ ss }}" loading="lazy" alt="Screenshot of {{ movie.title }}">
+        <!-- নতুন স্ক্রিনশট গ্রিড -->
+        <div class="screenshot-grid">
+            {% for ss in movie.screenshots %}
+            <div class="screenshot-item">
+                <img src="{{ ss }}" loading="lazy" alt="Screenshot of {{ movie.title }}" class="screenshot-image">
+            </div>
             {% endfor %}
         </div>
     </section>
@@ -1148,6 +1173,7 @@ detail_html = """
             });
         });
         new Swiper('.movie-carousel', { slidesPerView: 3, spaceBetween: 15, breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } } });
+        // মুছে ফেলা হয়েছে: Swiper gallery-thumbs এর কোডটি এখান থেকে সরানো হয়েছে কারণ আমরা আর স্লাইডার ব্যবহার করছি না।
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -2324,8 +2350,7 @@ def admin():
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(), 
-                "screenshots": [line.strip() for line in re.split(r'[,\s\n]+', request.form.get("screenshots", "").strip("[]'\" ")) if line.strip()],
+                "overview": request.form.get("overview").strip(), "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
                 "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
@@ -2418,7 +2443,7 @@ def edit_movie(movie_id):
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), 
-            "screenshots": [line.strip() for line in re.split(r'[,\s\n]+', request.form.get("screenshots", "").strip("[]'\" ")) if line.strip()],
+            "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
             "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(), "is_completed": 'is_completed' in request.form
         }
