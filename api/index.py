@@ -2324,7 +2324,8 @@ def admin():
             movie_data = {
                 "title": request.form.get("title").strip(), "type": content_type,
                 "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER, "backdrop": request.form.get("backdrop").strip() or None,
-                "overview": request.form.get("overview").strip(), "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
+                "overview": request.form.get("overview").strip(), 
+                "screenshots": [line.strip() for line in re.split(r'[,\s\n]+', request.form.get("screenshots", "").strip("[]'\" ")) if line.strip()],
                 "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
                 "categories": request.form.getlist("categories"), "episodes": [], "links": [], "season_packs": [], "manual_links": [],
                 "created_at": datetime.utcnow(), "updated_at": datetime.utcnow(), "view_count": 0,
@@ -2417,7 +2418,7 @@ def edit_movie(movie_id):
         update_data = {
             "title": request.form.get("title").strip(), "type": content_type, "poster": request.form.get("poster").strip() or PLACEHOLDER_POSTER,
             "backdrop": request.form.get("backdrop").strip() or None, "overview": request.form.get("overview").strip(), 
-            "screenshots": [url.strip() for url in request.form.get("screenshots", "").strip().splitlines() if url.strip()],
+            "screenshots": [line.strip() for line in re.split(r'[,\s\n]+', request.form.get("screenshots", "").strip("[]'\" ")) if line.strip()],
             "language": request.form.get("language").strip() or None, "genres": [g.strip() for g in request.form.get("genres").split(',') if g.strip()],
             "categories": request.form.getlist("categories"), "updated_at": datetime.utcnow(), "is_completed": 'is_completed' in request.form
         }
