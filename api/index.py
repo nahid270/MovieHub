@@ -1004,6 +1004,24 @@ detail_html = """
       background-color: rgba(255, 204, 0, 0.1); border: 1px solid rgba(255, 204, 0, 0.3);
       border-radius: 8px; text-align: center; font-size: 0.85rem; color: #ccc;
   }
+  
+  /* New Screenshot Gallery Styles */
+  .screenshot-gallery {
+      display: flex;
+      flex-direction: column;
+      gap: 15px; /* প্রতিটি ছবির মধ্যে ফাঁকা জায়গা */
+      padding: 15px;
+      background-color: #000; /* আপনার ছবির মতো কালো ব্যাকগ্রাউন্ড */
+      border-radius: 12px;
+      margin-top: 20px;
+  }
+  .screenshot-gallery img {
+      width: 100%;
+      border-radius: 8px; /* ছবির কোণাগুলো কিছুটা বাঁকানো হবে */
+      border: 3px solid #00ff6a; /* উজ্জ্বল সবুজ বর্ডার */
+      box-shadow: 0 0 15px rgba(0, 255, 106, 0.6); /* সবুজ রঙের গ্লো ইফেক্ট */
+      display: block;
+  }
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
@@ -1089,12 +1107,10 @@ detail_html = """
     {% if movie.screenshots %}
     <section class="category-section">
         <h2 class="category-title">Screenshots</h2>
-        <div class="swiper gallery-thumbs">
-            <div class="swiper-wrapper">
-                {% for ss in movie.screenshots %}
-                <div class="swiper-slide"><img src="{{ ss }}" loading="lazy" alt="Thumbnail of {{ movie.title }}" style="border-radius: 5px; height: 100%; object-fit: cover;"></div>
-                {% endfor %}
-            </div>
+        <div class="screenshot-gallery">
+            {% for ss in movie.screenshots|slice(3) %}
+                <img src="{{ ss }}" loading="lazy" alt="Screenshot of {{ movie.title }}">
+            {% endfor %}
         </div>
     </section>
     {% endif %}
@@ -1132,7 +1148,6 @@ detail_html = """
             });
         });
         new Swiper('.movie-carousel', { slidesPerView: 3, spaceBetween: 15, breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } } });
-        if (document.querySelector('.gallery-thumbs')) { new Swiper('.gallery-thumbs', { slidesPerView: 2, spaceBetween: 10, breakpoints: { 640: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } } }); }
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
