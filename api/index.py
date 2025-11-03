@@ -24,6 +24,35 @@ WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") # [�
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 
+# --- [ ফাইনাল আপডেট ] Community Links Configuration ---
+# এখানে আপনার কমিউনিটি চ্যানেলগুলোর লিংক পরিবর্তন করুন।
+# icon_class: Font Awesome আইকনের ক্লাস। (उदा: fas fa-bell)
+# icon_color: আইকনের রঙ।
+COMMUNITY_LINKS = [
+    {
+        'title': 'New Content Alerts',
+        'subtitle': 'Get notified for every new upload',
+        'icon_class': 'fas fa-bell',
+        'icon_color': '#3b9eff',
+        'url': 'https://t.me/+YhqvLHXHdIViNTRl'  # <<== আপনার এলার্ট চ্যানেলের লিংক দিন
+    },
+    {
+        'title': 'Join Request Group',
+        'subtitle': 'Request your favorite content',
+        'icon_class': 'fas fa-comments',
+        'icon_color': '#ffc107',
+        'url': 'https://t.me/Movie_Request_Group_23'  # <<== আপনার রিকুয়েস্ট গ্রুপের লিংক দিন
+    },
+    {
+        'title': 'Backup Channel',
+        'subtitle': 'Join for future updates',
+        'icon_class': 'fas fa-shield-alt',
+        'icon_color': '#28a745',
+        'url': 'https://t.me/+60goZWp-FpkxNzVl' # <<== আপনার ব্যাকআপ চ্যানেলের লিংক দিন
+    }
+]
+
+
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
@@ -253,7 +282,8 @@ def inject_globals():
         category_icons=category_icons,
         all_ott_platforms=all_ott_platforms,
         developer_telegram_id=DEVELOPER_TELEGRAM_ID,
-        headlines=site_config.get('headlines', [])
+        headlines=site_config.get('headlines', []),
+        community_links=COMMUNITY_LINKS
     )
 
 # =========================================================================================
@@ -553,6 +583,59 @@ index_html = """
     100% { transform: translateX(-100%); }
   }
 
+  /* Community Section Styles */
+  .community-section { margin: 40px auto; padding: 20px 0; max-width: 800px; }
+  .community-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 10px;
+  }
+  .community-title-underline {
+      width: 60px;
+      height: 4px;
+      background-color: var(--primary-color);
+      margin: 0 auto 30px auto;
+      border-radius: 2px;
+  }
+  .community-links-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+  }
+  .community-link {
+      display: flex;
+      align-items: center;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 15px 20px;
+      text-decoration: none;
+      border: 1px solid #282828;
+      transition: all 0.2s ease-in-out;
+  }
+  .community-link:hover {
+      transform: translateY(-3px);
+      background-color: #2a2a2a;
+      border-color: var(--primary-color);
+  }
+  .community-icon {
+      font-size: 1.8rem;
+      margin-right: 20px;
+      width: 40px;
+      text-align: center;
+  }
+  .community-link .text-content h4 {
+      margin: 0 0 4px 0;
+      font-size: 1.1rem;
+      color: var(--text-light);
+      font-weight: 600;
+  }
+  .community-link .text-content p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+  }
+
   @media (min-width: 769px) { 
     .container { padding: 0 40px; } .main-header { padding: 0 40px; }
     body { padding-bottom: 0; } .bottom-nav { display: none; }
@@ -769,6 +852,30 @@ index_html = """
           {% endif %}
       {% endfor %}
     </div>
+
+    <!-- [ সঠিক অবস্থান ] Community Section -->
+    <div class="container">
+      {% if community_links %}
+      <section class="community-section">
+          <h2 class="community-title">Join Our Community</h2>
+          <div class="community-title-underline"></div>
+          <div class="community-links-container">
+              {% for link in community_links %}
+              <a href="{{ link.url }}" class="community-link" target="_blank" rel="noopener noreferrer">
+                  <div class="community-icon" style="color: {{ link.icon_color }};">
+                      <i class="{{ link.icon_class }}"></i>
+                  </div>
+                  <div class="text-content">
+                      <h4>{{ link.title }}</h4>
+                      <p>{{ link.subtitle }}</p>
+                  </div>
+              </a>
+              {% endfor %}
+          </div>
+      </section>
+      {% endif %}
+    </div>
+
   {% endif %}
 </main>
 <footer class="main-footer">
