@@ -85,7 +85,9 @@ try:
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
-        default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
+        # [পরিবর্তন শুরু] - ডিফল্ট ক্যাটাগরি লিস্টে "Upcoming" যোগ করা হয়েছে।
+        default_categories = ["Upcoming", "Trending", "Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance"]
+        # [পরিবর্তন শেষ]
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
@@ -267,7 +269,9 @@ def inject_globals():
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
-    category_icons = { "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
+    # [পরিবর্তন শুরু] - ক্যাটাগরি আইকন লিস্টে "Upcoming" যোগ করা হয়েছে।
+    category_icons = { "Upcoming": "fa-hourglass-half", "Trending": "fa-fire", "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
+    # [পরিবর্তন শেষ]
     
     return dict(
         website_name=WEBSITE_NAME,
@@ -287,6 +291,9 @@ def inject_globals():
 # =========================================================================================
 # === [START] HTML TEMPLATES =============================================================
 # =========================================================================================
+
+# [পরিবর্তন শুরু] - index_html টেমপ্লেট আপডেট করা হয়েছে।
+# এখানে "Coming Soon" সেকশন যোগ করা হয়েছে এবং নিচের লুপ থেকে 'Upcoming' ক্যাটাগরিটি বাদ দেওয়া হয়েছে।
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -843,6 +850,10 @@ index_html = """
           {% endif %}
       {% endmacro %}
       
+      {% if categorized_content['Upcoming'] %}
+      {{ render_grid_section('Coming Soon', categorized_content['Upcoming'], 'Upcoming') }}
+      {% endif %}
+      
       {% if categorized_content['Trending'] %}
       {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
       {% endif %}
@@ -864,7 +875,7 @@ index_html = """
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       
       {% for cat_name, movies_list in categorized_content.items() %}
-          {% if cat_name != 'Trending' %}
+          {% if cat_name not in ['Trending', 'Upcoming'] %}
             {{ render_grid_section(cat_name, movies_list, cat_name) }}
           {% endif %}
       {% endfor %}
@@ -993,6 +1004,8 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
+# [পরিবর্তন শেষ]
+
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
