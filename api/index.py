@@ -53,6 +53,7 @@ COMMUNITY_LINKS = [
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
+ADMIN_ITEMS_PER_PAGE = 30 # নতুন: অ্যাডমিন প্যানেলের জন্য প্রতি পৃষ্ঠায় আইটেম সংখ্যা
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_secret_key_for_flash_messages")
 
@@ -85,9 +86,22 @@ try:
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
-        default_categories = ["Upcoming", "Trending", "Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance"]
-        categories_collection.insert_many([{"name": cat} for cat in default_categories])
-        print("SUCCESS: Initialized default categories in the database.")
+        default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
+        # নতুন: ডিফল্ট ক্যাটাগরিতে order ফিল্ড যোগ করা হচ্ছে
+        categories_to_insert = [{"name": cat, "order": i} for i, cat in enumerate(default_categories)]
+        categories_collection.insert_many(categories_to_insert)
+        print("SUCCESS: Initialized default categories in the database with order.")
+    
+    # One-time migration for old categories without 'order' field
+    if categories_collection.count_documents({"order": {"$exists": False}}) > 0:
+        print("INFO: Migrating old categories to include 'order' field...")
+        cats_to_update = list(categories_collection.find({"order": {"$exists": False}}))
+        max_order_doc = categories_collection.find_one(sort=[("order", -1)])
+        next_order = (max_order_doc['order'] + 1) if max_order_doc and 'order' in max_order_doc else 0
+        for i, cat in enumerate(cats_to_update):
+            categories_collection.update_one({"_id": cat["_id"]}, {"$set": {"order": next_order + i}})
+        print(f"SUCCESS: Migrated {len(cats_to_update)} categories.")
+
 
     default_design_settings = {
         "_id": "design_config",
@@ -107,6 +121,7 @@ try:
         movies.create_index("tmdb_id")
         movies.create_index("ott_platform")
         categories_collection.create_index("name", unique=True)
+        categories_collection.create_index("order") # নতুন: order ফিল্ডের জন্য ইনডেক্স
         ott_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
@@ -264,10 +279,11 @@ def inject_globals():
     design_settings = settings.find_one({"_id": "design_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     
-    all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    # নতুন: order অনুযায়ী ক্যাটাগরি সাজানো হচ্ছে
+    all_categories = [cat['name'] for cat in categories_collection.find().sort("order", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
-    category_icons = { "Upcoming": "fa-hourglass-half", "Trending": "fa-fire", "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
+    category_icons = { "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "Trending": "fa-fire", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
     
     return dict(
         website_name=WEBSITE_NAME,
@@ -466,7 +482,6 @@ index_html = """
     background-color: var(--card-bg);
     border: 2px solid transparent;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    height: 100%;
   }
   .movie-card:hover {
       transform: translateY(-5px);
@@ -474,7 +489,7 @@ index_html = """
   }
   .poster-wrapper { position: relative; }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
-  .card-info { padding: 10px; background-color: var(--card-bg); flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+  .card-info { padding: 10px; background-color: var(--card-bg); }
   .card-title {
     font-size: 0.9rem; font-weight: 500; color: var(--text-light);
     margin: 0 0 5px 0; line-height: 1.4; min-height: 2.8em;
@@ -487,7 +502,6 @@ index_html = """
     display: flex; 
     align-items: center; 
     justify-content: space-between;
-    margin-top: auto;
   }
   .card-meta span {
       display: flex;
@@ -511,33 +525,6 @@ index_html = """
     position: absolute; top: 0; left: 0;
     {{ design_settings.new_badge_css | safe }}
   }
-  
-  /* [পরিবর্তন শুরু] - কন্টেন্ট ক্যারোসেল (স্লাইডার) এর জন্য নতুন CSS */
-  .content-carousel-section { position: relative; }
-  .content-carousel .swiper-slide {
-      width: 150px; /* মোবাইলের জন্য স্লাইডের প্রস্থ */
-  }
-  .content-carousel .swiper-button-next,
-  .content-carousel .swiper-button-prev {
-      color: var(--text-light);
-      background-color: rgba(0, 0, 0, 0.5);
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      transition: background-color 0.2s;
-      display: none; /* মোবাইলে বাটন লুকানো থাকবে */
-  }
-  .content-carousel .swiper-button-next:hover,
-  .content-carousel .swiper-button-prev:hover {
-      background-color: rgba(229, 9, 20, 0.8);
-  }
-  .content-carousel .swiper-button-next::after,
-  .content-carousel .swiper-button-prev::after {
-      font-size: 1.2rem;
-      font-weight: bold;
-  }
-  /* [পরিবর্তন শেষ] */
-
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
@@ -684,15 +671,6 @@ index_html = """
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     .full-page-grid-container { padding: 120px 40px 20px; }
-    /* [পরিবর্তন শুরু] - বড় স্ক্রিনের জন্য ক্যারোসেল স্টাইল */
-    .content-carousel .swiper-slide {
-        width: 180px; 
-    }
-    .content-carousel .swiper-button-next,
-    .content-carousel .swiper-button-prev {
-        display: flex; /* বড় স্ক্রিনে বাটন দেখানো হবে */
-    }
-    /* [পরিবর্তন শেষ] */
   }
 </style>
 </head>
@@ -865,7 +843,6 @@ index_html = """
     {% endif %}
 
     <div class="container">
-      {# [পরিবর্তন শুরু] - সাধারণ গ্রিড সেকশনের জন্য ম্যাক্রো #}
       {% macro render_grid_section(title, movies_list, cat_name) %}
           {% if movies_list %}
           <section class="category-section">
@@ -881,40 +858,11 @@ index_html = """
           </section>
           {% endif %}
       {% endmacro %}
-
-      {# [পরিবর্তন শুরু] - ক্যারোসেল (স্লাইডার) সেকশনের জন্য নতুন ম্যাক্রো #}
-      {% macro render_carousel_section(title, movies_list, cat_name) %}
-        {% if movies_list %}
-        <section class="category-section content-carousel-section">
-            <div class="category-header">
-                <h2 class="category-title">{{ title }}</h2>
-                <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
-            </div>
-            <div class="swiper content-carousel">
-                <div class="swiper-wrapper">
-                    {% for m in movies_list %}
-                    <div class="swiper-slide">
-                        {{ render_movie_card(m) }}
-                    </div>
-                    {% endfor %}
-                </div>
-                <div class="swiper-button-next"></div>
-                <div class="swiper-button-prev"></div>
-            </div>
-        </section>
-        {% endif %}
-      {% endmacro %}
-      
-      {# [পরিবর্তন শুরু] - প্রথমে "Upcoming" ও "Trending" স্লাইডার রেন্ডার করা হচ্ছে #}
-      {% if categorized_content['Upcoming'] %}
-        {{ render_carousel_section('Coming Soon', categorized_content['Upcoming'], 'Upcoming') }}
-      {% endif %}
       
       {% if categorized_content['Trending'] %}
-        {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
+      {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
       {% endif %}
 
-      {# এরপর "Recently Added" গ্রিড #}
       {% if latest_content %}
       <section class="category-section">
           <div class="category-header">
@@ -931,9 +879,8 @@ index_html = """
 
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       
-      {# [পরিবর্তন শুরু] - সবশেষে বাকি ক্যাটাগরিগুলো গ্রিড আকারে দেখানো হচ্ছে #}
       {% for cat_name, movies_list in categorized_content.items() %}
-          {% if cat_name not in ['Trending', 'Upcoming'] %}
+          {% if cat_name != 'Trending' %}
             {{ render_grid_section(cat_name, movies_list, cat_name) }}
           {% endif %}
       {% endfor %}
@@ -1036,16 +983,6 @@ index_html = """
         slidesPerView: 'auto',
         spaceBetween: 20,
     });
-    /* [পরিবর্তন শুরু] - নতুন কন্টেন্ট ক্যারোসেল (স্লাইডার) চালু করার কোড */
-    new Swiper('.content-carousel', {
-        slidesPerView: 'auto',
-        spaceBetween: 15,
-        navigation: {
-            nextEl: '.swiper-button-next',
-            prevEl: '.swiper-button-prev',
-        },
-    });
-    /* [পরিবর্তন শেষ] */
     // Dynamic Headline Ticker Speed
     document.addEventListener('DOMContentLoaded', () => {
         const tickerWrapper = document.getElementById('ticker-wrapper');
@@ -1528,6 +1465,7 @@ admin_html = """
     <meta name="robots" content="noindex, nofollow">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script> <!-- নতুন: SortableJS লাইব্রেরি -->
     <style>
         :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); margin: 0; padding: 20px; }
@@ -1582,6 +1520,13 @@ admin_html = """
         .status-pending { background-color: #ffc107; color: black; }
         .status-fulfilled { background-color: #28a745; }
         .status-rejected { background-color: #6c757d; }
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; }
+        .pagination a, .pagination span { padding: 8px 15px; border-radius: 5px; background-color: var(--light-gray); color: var(--text-light); text-decoration: none; }
+        .pagination .current { background-color: var(--netflix-red); font-weight: bold; }
+        /* নতুন: ক্যাটাগরি সাজানোর জন্য স্টাইল */
+        #sortable-categories .management-item { cursor: grab; }
+        #sortable-categories .management-item:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; background: #444; }
     </style>
 </head>
 <body>
@@ -1671,6 +1616,14 @@ admin_html = """
             </table></div>
             <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
         </form>
+        <!-- নতুন: পেজিনেশন কন্ট্রোল -->
+        {% if pagination and pagination.total_pages > 1 %}
+        <div class="pagination">
+            {% if pagination.has_prev %}<a href="{{ url_for('admin', page=pagination.prev_num) }}">&laquo; Prev</a>{% endif %}
+            <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
+            {% if pagination.has_next %}<a href="{{ url_for('admin', page=pagination.next_num) }}">Next &raquo;</a>{% endif %}
+        </div>
+        {% endif %}
     </div>
     <hr>
 
@@ -1780,7 +1733,7 @@ admin_html = """
     <div class="management-section">
         <div style="flex: 1; min-width: 300px;">
             <h2><i class="fas fa-tags"></i> Category Management</h2>
-            <form method="post">
+            <form method="post" id="add-category-form">
                 <input type="hidden" name="form_action" value="add_category">
                 <fieldset><legend>Add New Category</legend>
                     <div class="form-group"><label>Category Name:</label><input type="text" name="category_name" required></div>
@@ -1788,8 +1741,15 @@ admin_html = """
                 </fieldset>
             </form>
             <div class="management-list">
-                <h3>Existing Categories</h3>
-                {% for cat in categories_list %}<div class="management-item"><span>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+                <h3>Existing Categories (Drag to Reorder)</h3>
+                <div id="sortable-categories">
+                    {% for cat in categories_list %}<div class="management-item" data-id="{{ cat._id }}"><span><i class="fas fa-grip-vertical" style="margin-right: 10px;"></i>{{ cat.name }}</span><a href="{{ url_for('delete_category', cat_id=cat._id) }}" onclick="return confirm('Are you sure?')" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Delete</a></div>{% endfor %}
+                </div>
+                <form method="post" id="save-order-form" style="padding:0; margin-top: 15px; background: none;">
+                    <input type="hidden" name="form_action" value="save_category_order">
+                    <input type="hidden" name="category_order" id="category_order_input">
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Save Category Order</button>
+                </form>
             </div>
         </div>
         <div style="flex: 1; min-width: 300px;">
@@ -1870,7 +1830,26 @@ admin_html = """
                 .catch(error => { console.error('Error fetching search results:', error); tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Error loading results.</td></tr>'; });
         }, 400);
     });
-    document.addEventListener('DOMContentLoaded', function() { toggleFields(); const selectAll = document.getElementById('select-all'); if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); } });
+    document.addEventListener('DOMContentLoaded', function() { 
+        toggleFields(); 
+        const selectAll = document.getElementById('select-all'); 
+        if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); }
+        
+        // নতুন: ক্যাটাগরি সাজানোর জন্য SortableJS চালু করা
+        const sortableList = document.getElementById('sortable-categories');
+        if (sortableList) {
+            const sortable = new Sortable(sortableList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost'
+            });
+
+            const saveOrderForm = document.getElementById('save-order-form');
+            saveOrderForm.addEventListener('submit', function(e) {
+                const order = sortable.toArray(); // get the data-id attributes in the new order
+                document.getElementById('category_order_input').value = order.join(',');
+            });
+        }
+    });
 </script>
 </body></html>
 """
@@ -2334,7 +2313,8 @@ def home():
 
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
-    home_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
+    # নতুন: order অনুযায়ী ক্যাটাগরি সাজানো হচ্ছে
+    home_categories = [cat['name'] for cat in categories_collection.find().sort("order", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
     categorized_content = {k: v for k, v in categorized_content.items() if v}
     context = {"slider_content": slider_content, "latest_content": latest_content, "categorized_content": categorized_content, "is_full_page_list": False}
@@ -2514,7 +2494,13 @@ def admin():
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
-        if form_action == "update_site_config":
+        if form_action == "save_category_order": # নতুন: ক্যাটাগরি অর্ডার সেভ করার জন্য
+            category_ids_ordered = request.form.get("category_order", "").split(',')
+            for index, cat_id in enumerate(category_ids_ordered):
+                if cat_id:
+                    categories_collection.update_one({"_id": ObjectId(cat_id)}, {"$set": {"order": index}})
+
+        elif form_action == "update_site_config":
             headlines_text = request.form.get("headlines_text", "")
             headlines_list = [line.strip() for line in headlines_text.splitlines() if line.strip()]
             logo_url = request.form.get("logo_url", "").strip()
@@ -2552,7 +2538,15 @@ def admin():
                     )
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
-            if category_name: categories_collection.update_one({"name": category_name}, {"$set": {"name": category_name}}, upsert=True)
+            if category_name:
+                # নতুন: নতুন ক্যাটাগরির জন্য order নম্বর ঠিক করা
+                max_order_doc = categories_collection.find_one(sort=[("order", -1)])
+                new_order = (max_order_doc['order'] + 1) if max_order_doc and 'order' in max_order_doc else 0
+                categories_collection.update_one(
+                    {"name": category_name}, 
+                    {"$setOnInsert": {"name": category_name, "order": new_order}}, 
+                    upsert=True
+                )
         elif form_action == "add_platform":
             platform_name, logo_url = request.form.get("platform_name", "").strip(), request.form.get("platform_logo_url", "").strip()
             if platform_name and logo_url:
@@ -2591,19 +2585,27 @@ def admin():
                 send_telegram_notification(movie_data, result.inserted_id, series_update_info=series_info)
         return redirect(url_for('admin'))
     
-    stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
+    # নতুন: অ্যাডমিন প্যানেলের কন্টেন্ট লিস্টের জন্য পেজিনেশন
+    page = request.args.get('page', 1, type=int)
+    skip = (page - 1) * ADMIN_ITEMS_PER_PAGE
+    total_content = movies.count_documents({})
+    content_list = list(movies.find({}).sort('updated_at', -1).skip(skip).limit(ADMIN_ITEMS_PER_PAGE))
+    pagination = Pagination(page, ADMIN_ITEMS_PER_PAGE, total_content)
+
+    stats = {"total_content": total_content, "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     tele_config_data = settings.find_one({"_id": "telegram_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     headlines_text = '\n'.join(site_config.get('headlines', []))
     
     return render_template_string(
         admin_html,
-        content_list=list(movies.find({}).sort('updated_at', -1)),
+        content_list=content_list, # পেজিনেটেড লিস্ট পাঠানো হচ্ছে
+        pagination=pagination, # পেজিনেশন অবজেক্ট পাঠানো হচ্ছে
         stats=stats,
         requests_list=list(requests_collection.find().sort("created_at", -1)),
         ad_settings=settings.find_one({"_id": "ad_config"}) or {},
         design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
-        categories_list=list(categories_collection.find().sort("name", 1)),
+        categories_list=list(categories_collection.find().sort("order", 1)), # order অনুযায়ী সাজানো
         ott_list=list(ott_collection.find().sort("name", 1)),
         telegram_channels=tele_config_data.get('channels', []),
         telegram_settings=tele_config_data,
