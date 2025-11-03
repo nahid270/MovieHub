@@ -24,6 +24,32 @@ WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") # [à
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 
+# --- Community Links Configuration ---
+COMMUNITY_LINKS = [
+    {
+        'title': 'New Content Alerts',
+        'subtitle': 'Get notified for every new upload',
+        'icon_class': 'fas fa-bell',
+        'icon_color': '#3b9eff',
+        'url': 'https://t.me/+YhqvLHXHdIViNTRl'
+    },
+    {
+        'title': 'Join Request Group',
+        'subtitle': 'Request your favorite content',
+        'icon_class': 'fas fa-comments',
+        'icon_color': '#ffc107',
+        'url': 'https://t.me/Movie_Request_Group_23'
+    },
+    {
+        'title': 'Backup Channel',
+        'subtitle': 'Join for future updates',
+        'icon_class': 'fas fa-shield-alt',
+        'icon_color': '#28a745',
+        'url': 'https://t.me/+60goZWp-FpkxNzVl'
+    }
+]
+
+
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
@@ -254,7 +280,8 @@ def inject_globals():
         category_icons=category_icons,
         all_ott_platforms=all_ott_platforms,
         developer_telegram_id=DEVELOPER_TELEGRAM_ID,
-        headlines=site_config.get('headlines', [])
+        headlines=site_config.get('headlines', []),
+        community_links=COMMUNITY_LINKS
     )
 
 # =========================================================================================
@@ -300,21 +327,18 @@ index_html = """
   .container { max-width: 1400px; margin: 0 auto; padding: 0 10px; }
   
   .main-header { position: fixed; top: 0; left: 0; width: 100%; height: var(--nav-height); display: flex; align-items: center; z-index: 1000; transition: background-color: 0.3s ease; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
-  .header-content { display: flex; justify-content: flex-end; /* Push menu toggle to the right */ align-items: center; width: 100%; position: relative; /* Needed for absolute positioning of the logo */ }
+  .header-content { display: flex; justify-content: flex-end; align-items: center; width: 100%; position: relative; }
   .logo {
-    /* Centering the logo/name */
     position: absolute;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    /* Styling for text */
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--primary-color);
   }
-  /* Style for the logo image to make it fit */
   .logo img {
-      max-height: 45px; /* Adjust this value if needed */
+      max-height: 45px;
       width: auto;
       display: block;
   }
@@ -570,6 +594,59 @@ index_html = """
     100% { transform: translateX(-100%); }
   }
 
+  /* Community Section Styles */
+  .community-section { margin: 40px auto; padding: 20px 0; max-width: 800px; }
+  .community-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 10px;
+  }
+  .community-title-underline {
+      width: 60px;
+      height: 4px;
+      background-color: var(--primary-color);
+      margin: 0 auto 30px auto;
+      border-radius: 2px;
+  }
+  .community-links-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+  }
+  .community-link {
+      display: flex;
+      align-items: center;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 15px 20px;
+      text-decoration: none;
+      border: 1px solid #282828;
+      transition: all 0.2s ease-in-out;
+  }
+  .community-link:hover {
+      transform: translateY(-3px);
+      background-color: #2a2a2a;
+      border-color: var(--primary-color);
+  }
+  .community-icon {
+      font-size: 1.8rem;
+      margin-right: 20px;
+      width: 40px;
+      text-align: center;
+  }
+  .community-link .text-content h4 {
+      margin: 0 0 4px 0;
+      font-size: 1.1rem;
+      color: var(--text-light);
+      font-weight: 600;
+  }
+  .community-link .text-content p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+  }
+
   @media (min-width: 769px) { 
     .container { padding: 0 40px; } .main-header { padding: 0 40px; }
     body { padding-bottom: 0; } .bottom-nav { display: none; }
@@ -585,7 +662,6 @@ index_html = """
 {{ ad_settings.ad_body_top | safe }}
 <header class="main-header">
     <div class="container header-content">
-        <!-- Logo or Website Name will be centered by CSS -->
         <a href="{{ url_for('home') }}" class="logo">
             {% if logo_url %}
                 <img src="{{ logo_url }}" alt="{{ website_name }} Logo">
@@ -793,6 +869,30 @@ index_html = """
           {% endif %}
       {% endfor %}
     </div>
+
+    <!-- Community Section -->
+    <div class="container">
+      {% if community_links %}
+      <section class="community-section">
+          <h2 class="community-title">Join Our Community</h2>
+          <div class="community-title-underline"></div>
+          <div class="community-links-container">
+              {% for link in community_links %}
+              <a href="{{ link.url }}" class="community-link" target="_blank" rel="noopener noreferrer">
+                  <div class="community-icon" style="color: {{ link.icon_color }};">
+                      <i class="{{ link.icon_class }}"></i>
+                  </div>
+                  <div class="text-content">
+                      <h4>{{ link.title }}</h4>
+                      <p>{{ link.subtitle }}</p>
+                  </div>
+              </a>
+              {% endfor %}
+          </div>
+      </section>
+      {% endif %}
+    </div>
+
   {% endif %}
 </main>
 <footer class="main-footer">
