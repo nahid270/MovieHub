@@ -85,9 +85,7 @@ try:
     print("SUCCESS: Successfully connected to MongoDB!")
 
     if categories_collection.count_documents({}) == 0:
-        # [পরিবর্তন শুরু] - ডিফল্ট ক্যাটাগরি লিস্টে "Upcoming" যোগ করা হয়েছে।
         default_categories = ["Upcoming", "Trending", "Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance"]
-        # [পরিবর্তন শেষ]
         categories_collection.insert_many([{"name": cat} for cat in default_categories])
         print("SUCCESS: Initialized default categories in the database.")
 
@@ -269,9 +267,7 @@ def inject_globals():
     all_categories = [cat['name'] for cat in categories_collection.find().sort("name", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
-    # [পরিবর্তন শুরু] - ক্যাটাগরি আইকন লিস্টে "Upcoming" যোগ করা হয়েছে।
     category_icons = { "Upcoming": "fa-hourglass-half", "Trending": "fa-fire", "Bangla": "fa-film", "Hindi": "fa-film", "English": "fa-film", "18+ Adult": "fa-exclamation-circle", "Korean": "fa-tv", "Dual Audio": "fa-headphones", "Bangla Dubbed": "fa-microphone-alt", "Hindi Dubbed": "fa-microphone-alt", "Horror": "fa-ghost", "Action": "fa-bolt", "Thriller": "fa-knife-kitchen", "Anime": "fa-dragon", "Romance": "fa-heart", "ALL MOVIES": "fa-layer-group", "WEB SERIES & TV SHOWS": "fa-tv-alt", "HOME": "fa-home" }
-    # [পরিবর্তন শেষ]
     
     return dict(
         website_name=WEBSITE_NAME,
@@ -291,9 +287,6 @@ def inject_globals():
 # =========================================================================================
 # === [START] HTML TEMPLATES =============================================================
 # =========================================================================================
-
-# [পরিবর্তন শুরু] - index_html টেমপ্লেট আপডেট করা হয়েছে।
-# এখানে "Coming Soon" সেকশন যোগ করা হয়েছে এবং নিচের লুপ থেকে 'Upcoming' ক্যাটাগরিটি বাদ দেওয়া হয়েছে।
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -473,6 +466,7 @@ index_html = """
     background-color: var(--card-bg);
     border: 2px solid transparent;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    height: 100%;
   }
   .movie-card:hover {
       transform: translateY(-5px);
@@ -480,7 +474,7 @@ index_html = """
   }
   .poster-wrapper { position: relative; }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
-  .card-info { padding: 10px; background-color: var(--card-bg); }
+  .card-info { padding: 10px; background-color: var(--card-bg); flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
   .card-title {
     font-size: 0.9rem; font-weight: 500; color: var(--text-light);
     margin: 0 0 5px 0; line-height: 1.4; min-height: 2.8em;
@@ -493,6 +487,7 @@ index_html = """
     display: flex; 
     align-items: center; 
     justify-content: space-between;
+    margin-top: auto;
   }
   .card-meta span {
       display: flex;
@@ -516,6 +511,33 @@ index_html = """
     position: absolute; top: 0; left: 0;
     {{ design_settings.new_badge_css | safe }}
   }
+  
+  /* [পরিবর্তন শুরু] - কন্টেন্ট ক্যারোসেল (স্লাইডার) এর জন্য নতুন CSS */
+  .content-carousel-section { position: relative; }
+  .content-carousel .swiper-slide {
+      width: 150px; /* মোবাইলের জন্য স্লাইডের প্রস্থ */
+  }
+  .content-carousel .swiper-button-next,
+  .content-carousel .swiper-button-prev {
+      color: var(--text-light);
+      background-color: rgba(0, 0, 0, 0.5);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      transition: background-color 0.2s;
+      display: none; /* মোবাইলে বাটন লুকানো থাকবে */
+  }
+  .content-carousel .swiper-button-next:hover,
+  .content-carousel .swiper-button-prev:hover {
+      background-color: rgba(229, 9, 20, 0.8);
+  }
+  .content-carousel .swiper-button-next::after,
+  .content-carousel .swiper-button-prev::after {
+      font-size: 1.2rem;
+      font-weight: bold;
+  }
+  /* [পরিবর্তন শেষ] */
+
 
   .full-page-grid-container { padding: 80px 10px 20px; }
   .full-page-grid-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
@@ -662,6 +684,15 @@ index_html = """
     .category-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     .full-page-grid-container { padding: 120px 40px 20px; }
+    /* [পরিবর্তন শুরু] - বড় স্ক্রিনের জন্য ক্যারোসেল স্টাইল */
+    .content-carousel .swiper-slide {
+        width: 180px; 
+    }
+    .content-carousel .swiper-button-next,
+    .content-carousel .swiper-button-prev {
+        display: flex; /* বড় স্ক্রিনে বাটন দেখানো হবে */
+    }
+    /* [পরিবর্তন শেষ] */
   }
 </style>
 </head>
@@ -834,6 +865,7 @@ index_html = """
     {% endif %}
 
     <div class="container">
+      {# [পরিবর্তন শুরু] - সাধারণ গ্রিড সেকশনের জন্য ম্যাক্রো #}
       {% macro render_grid_section(title, movies_list, cat_name) %}
           {% if movies_list %}
           <section class="category-section">
@@ -849,15 +881,40 @@ index_html = """
           </section>
           {% endif %}
       {% endmacro %}
+
+      {# [পরিবর্তন শুরু] - ক্যারোসেল (স্লাইডার) সেকশনের জন্য নতুন ম্যাক্রো #}
+      {% macro render_carousel_section(title, movies_list, cat_name) %}
+        {% if movies_list %}
+        <section class="category-section content-carousel-section">
+            <div class="category-header">
+                <h2 class="category-title">{{ title }}</h2>
+                <a href="{{ url_for('movies_by_category', name=cat_name) }}" class="view-all-link">View All &rarr;</a>
+            </div>
+            <div class="swiper content-carousel">
+                <div class="swiper-wrapper">
+                    {% for m in movies_list %}
+                    <div class="swiper-slide">
+                        {{ render_movie_card(m) }}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+            </div>
+        </section>
+        {% endif %}
+      {% endmacro %}
       
+      {# [পরিবর্তন শুরু] - প্রথমে "Upcoming" ও "Trending" স্লাইডার রেন্ডার করা হচ্ছে #}
       {% if categorized_content['Upcoming'] %}
-      {{ render_grid_section('Coming Soon', categorized_content['Upcoming'], 'Upcoming') }}
+        {{ render_carousel_section('Coming Soon', categorized_content['Upcoming'], 'Upcoming') }}
       {% endif %}
       
       {% if categorized_content['Trending'] %}
-      {{ render_grid_section('Trending Now', categorized_content['Trending'], 'Trending') }}
+        {{ render_carousel_section('Trending Now', categorized_content['Trending'], 'Trending') }}
       {% endif %}
 
+      {# এরপর "Recently Added" গ্রিড #}
       {% if latest_content %}
       <section class="category-section">
           <div class="category-header">
@@ -874,6 +931,7 @@ index_html = """
 
       {% if ad_settings.ad_list_page %}<div class="ad-container">{{ ad_settings.ad_list_page | safe }}</div>{% endif %}
       
+      {# [পরিবর্তন শুরু] - সবশেষে বাকি ক্যাটাগরিগুলো গ্রিড আকারে দেখানো হচ্ছে #}
       {% for cat_name, movies_list in categorized_content.items() %}
           {% if cat_name not in ['Trending', 'Upcoming'] %}
             {{ render_grid_section(cat_name, movies_list, cat_name) }}
@@ -978,6 +1036,16 @@ index_html = """
         slidesPerView: 'auto',
         spaceBetween: 20,
     });
+    /* [পরিবর্তন শুরু] - নতুন কন্টেন্ট ক্যারোসেল (স্লাইডার) চালু করার কোড */
+    new Swiper('.content-carousel', {
+        slidesPerView: 'auto',
+        spaceBetween: 15,
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+    });
+    /* [পরিবর্তন শেষ] */
     // Dynamic Headline Ticker Speed
     document.addEventListener('DOMContentLoaded', () => {
         const tickerWrapper = document.getElementById('ticker-wrapper');
@@ -1004,8 +1072,6 @@ index_html = """
 {{ ad_settings.ad_footer | safe }}
 </body></html>
 """
-# [পরিবর্তন শেষ]
-
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
