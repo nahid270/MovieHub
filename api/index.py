@@ -165,11 +165,13 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- Telegram Notification Function ---
+# --- [MODIFIED] Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
+    # This function now ignores content_id, notification_type, and series_update_info
+    # as the caption is static as per your request.
+    
     tele_configs = settings.find_one({"_id": "telegram_config"}) or {}
     channels = tele_configs.get('channels', [])
-    tutorial_video_url = tele_configs.get('tutorial_video_url')
 
     if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
         print("INFO: No Telegram channels configured. Skipping notification.")
@@ -179,52 +181,25 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         if not any(c.get('channel_id') == TELEGRAM_CHANNEL_ID for c in channels):
             channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
 
-    if not WEBSITE_URL:
-        print("FATAL: WEBSITE_URL environment variable is not set. Cannot send notification.")
-        return
-
     try:
-        website_link = f"{WEBSITE_URL}/movie/{content_id}"
+        # আপনার দেওয়া নির্দিষ্ট ফরম্যাটের মেসেজ
+        caption = """🔥 𝙈𝙤𝙫𝙞𝙚𝙕𝙤𝙣𝙚BD 🔥
+━━━━━━━━━━━━━━━━━
 
-        title_with_year = movie_data.get('title', 'N/A')
-        if movie_data.get('release_date'):
-            year = movie_data['release_date'].split('-')[0]
-            title_with_year += f" ({year})"
+🎬 মুভিটি আপলোড করা হয়েছে!
 
-        if series_update_info:
-            title_with_year += f" {series_update_info}"
+📥 Download / Watch Now:
+👉 https://moviezonebd.vercel.app/
+(লিংক কপি করে Chrome Browser দিয়ে ওপেন করুন ✅)
 
-        available_qualities = [link.get('quality') for link in movie_data.get('links', []) if link.get('quality')]
-        if not available_qualities: available_qualities.append("WEB-DL")
+🔞 18+ Exclusive Site:
+👉 https://cinezonebdhd.blogspot.com/
 
-        quality_str = ", ".join(sorted(list(set(available_qualities))))
-        language_str = movie_data.get('language', 'N/A')
-        genres_str = ", ".join(movie_data.get('genres', [])) or "N/A"
-        clean_url = WEBSITE_URL.replace('https://', '').replace('www.', '')
+━━━━━━━━━━━━━━━━━
 
-        caption_header = f"🔄 **UPDATED : {title_with_year}**\n" if notification_type == 'update' else f"🔥 **NEW ADDED : {title_with_year}**\n"
-
-        caption = caption_header
-        if language_str and not any(char.isdigit() for char in language_str):
-             caption += f"**{language_str.upper()}**\n"
-
-        caption += f"\n🎞️ Quality: **{quality_str}**"
-        caption += f"\n🌐 Language: **{language_str}**"
-        caption += f"\n🎭 Genres: **{genres_str}**"
-        caption += f"\n\n🔗 Visit : **{clean_url}**"
-        caption += f"\n⚠️ **অবশ্যই লিংকগুলো ক্রোম ব্রাউজারে ওপেন করবেন!!**"
-
-        # Inline Keyboard বাটন তৈরি করা হচ্ছে
-        inline_buttons = [
-            [{"text": "✅ ডাউনলোড করুন ✅", "url": website_link}]
-        ]
-        
-        if tutorial_video_url:
-            inline_buttons.append(
-                [{"text": "🎬 কিভাবে ডাউনলোড করবেন?", "url": tutorial_video_url}]
-            )
-
-        inline_keyboard = {"inline_keyboard": inline_buttons}
+💬 সাহায্য লাগলে বা কিছু জানার থাকলে
+নির্দ্বিধায় যোগাযোগ করুন 👇
+👨‍💻 Admin: @CineZoneBDBot"""
 
         sent_count = 0
         for config in channels:
@@ -232,7 +207,12 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             if not bot_token or not channel_id: continue
 
             api_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            payload = {'chat_id': channel_id, 'photo': movie_data.get('poster', PLACEHOLDER_POSTER), 'caption': caption, 'parse_mode': 'Markdown', 'reply_markup': json.dumps(inline_keyboard)}
+            # এখানে payload থেকে inline keyboard (reply_markup) এবং parse_mode বাদ দেওয়া হয়েছে
+            payload = {
+                'chat_id': channel_id,
+                'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
+                'caption': caption
+            }
 
             try:
                 response = requests.post(api_url, data=payload, timeout=15)
