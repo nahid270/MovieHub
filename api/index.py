@@ -23,7 +23,6 @@ WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com")
 # নতুন: সুরক্ষিত অ্যাডমিন ইউআরএল
 ADMIN_URL = os.environ.get("ADMIN_URL", "/admin")
 
-
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 
@@ -166,39 +165,83 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- Telegram Notification Function ---
+# --- [FINAL & ADVANCED] Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
+    # ডাটাবেস থেকে সব কনফিগারেশন একসাথে আনা হচ্ছে
     tele_configs = settings.find_one({"_id": "telegram_config"}) or {}
+    site_config = settings.find_one({"_id": "site_config"}) or {}
     channels = tele_configs.get('channels', [])
 
     if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
         print("INFO: No Telegram channels configured. Skipping notification.")
         return
-
+        
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
         if not any(c.get('channel_id') == TELEGRAM_CHANNEL_ID for c in channels):
             channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
 
+    if not WEBSITE_URL or "your-website-url.com" in WEBSITE_URL:
+        print("FATAL: WEBSITE_URL environment variable is not set correctly.")
+        return
+
     try:
-        # Static caption as requested
-        caption = """🔥 𝙈𝙤𝙫𝙞𝙚𝙕𝙤𝙣𝙚BD 🔥
-━━━━━━━━━━━━━━━━━
+        # --- নতুন এবং সুন্দর ক্যাপশন তৈরি ---
+        caption_parts = []
+        caption_parts.append(f"🔥 **New Content Added on {WEBSITE_NAME}!** 🔥")
+        caption_parts.append("━━━━━━━━━━━━━━━━━")
 
-🎬 মুভিটি আপলোড করা হয়েছে!
+        language = movie_data.get('language')
+        if language:
+            caption_parts.append(f"🔊 **Language:** `{language}`")
 
-📥 Download / Watch Now:
-👉 https://moviezonebd.vercel.app/
-(লিংক কপি করে Chrome Browser দিয়ে ওপেন করুন ✅)
+        quality_str = "High Quality"
+        if movie_data.get('type') == 'movie' and movie_data.get('links'):
+            qualities = sorted([link.get('quality') for link in movie_data['links'] if link.get('quality')])
+            if qualities:
+                quality_str = " | ".join(qualities)
+        elif movie_data.get('type') == 'series':
+            quality_str = "All Episodes"
+        
+        caption_parts.append(f"💿 **Quality:** `{quality_str}`")
+        caption_parts.append("━━━━━━━━━━━━━━━━━")
+        caption_parts.append("👇 **Click Below to Watch or Download** 👇")
 
-🔞 18+ Exclusive Site:
-👉 https://cinezonebdhd.blogspot.com/
+        final_caption = "\n".join(caption_parts)
+        
+        # --- ডাইনামিক ইনলাইন বাটন তৈরি ---
+        inline_keyboard = []
+        
+        # 1. Visit Website বাটন
+        encoded_id = base64.urlsafe_b64encode(str(content_id).encode()).decode()
+        visit_url = url_for('get_links_encoded', encoded_id=encoded_id, _external=True)
+        inline_keyboard.append([
+            {'text': '✅ Download / Watch Now', 'url': visit_url}
+        ])
 
-━━━━━━━━━━━━━━━━━
+        # 2. How to Download বাটন (যদি লিংক সেট করা থাকে)
+        tutorial_url = site_config.get('tutorial_video_url')
+        if tutorial_url:
+            inline_keyboard.append([
+                {'text': '🤔 How to Download?', 'url': tutorial_url}
+            ])
 
-💬 সাহায্য লাগলে বা কিছু জানার থাকলে
-নির্দ্বিধায় যোগাযোগ করুন 👇
-👨‍💻 Admin: @CineZoneBDBot"""
+        # 3. Adult Site বাটন (যদি লিংক সেট করা থাকে)
+        adult_url = site_config.get('adult_site_url')
+        if adult_url:
+            inline_keyboard.append([
+                {'text': '🔞 18+ Exclusive Site', 'url': adult_url}
+            ])
+            
+        # 4. Promotional Site বাটন (যদি লিংক সেট করা থাকে)
+        promo_url = site_config.get('promo_site_url')
+        if promo_url:
+             inline_keyboard.append([
+                {'text': '❤️ Join Backup Channel', 'url': promo_url}
+            ])
 
+        reply_markup = json.dumps({'inline_keyboard': inline_keyboard})
+
+        # --- নোটিফিকেশন পাঠানো ---
         sent_count = 0
         for config in channels:
             bot_token, channel_id = config.get('token'), config.get('channel_id')
@@ -208,14 +251,16 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             payload = {
                 'chat_id': channel_id,
                 'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
-                'caption': caption
+                'caption': final_caption,
+                'parse_mode': 'Markdown',
+                'reply_markup': reply_markup
             }
 
             try:
                 response = requests.post(api_url, data=payload, timeout=15)
                 response.raise_for_status()
                 if response.json().get('ok'):
-                    print(f"SUCCESS: Telegram notification sent to channel '{channel_id}'.")
+                    print(f"SUCCESS: Advanced promotional notification sent to '{channel_id}'.")
                     sent_count += 1
                 else:
                     print(f"WARNING: Telegram API error for channel '{channel_id}': {response.json().get('description')}")
@@ -224,8 +269,10 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
 
         if sent_count == 0:
             print("WARNING: Notification attempt failed for all configured channels.")
+            
     except Exception as e:
         print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
+
 
 # --- Custom Jinja Filters ---
 def time_ago(obj_id):
@@ -1219,7 +1266,6 @@ detail_html = """
             </div>
             
             {% if movie.type == 'movie' and (movie.links or movie.manual_links) %}
-                {# নতুন: এনকোডেড URL ব্যবহার করা হচ্ছে #}
                 <div class="link-group">
                     <a href="{{ url_for('get_links_encoded', encoded_id=movie._id|string|b64encode) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
                         <span><i class="fas fa-bolt"></i> Get Links</span>
@@ -1232,7 +1278,6 @@ detail_html = """
                 {% for season_num in all_seasons %}
                     <div class="episode-list" style="margin-bottom: 20px;">
                         <h3>Season {{ season_num }}</h3>
-                        {# নতুন: এনকোডেড URL ব্যবহার করা হচ্ছে #}
                         <a href="{{ url_for('get_links_encoded', encoded_id=(movie._id|string ~ ':' ~ season_num)|b64encode) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
                             <span><i class="fas fa-list-ul"></i> Get Season {{ season_num }} Links</span>
                         </a>
@@ -1567,9 +1612,10 @@ admin_html = """
     <div class="management-content-section">
         <div class="manage-content-header">
             <h2><i class="fas fa-tasks"></i> Manage Content</h2>
-            <div class="search-form">
-                <input type="search" id="admin-live-search" placeholder="Type to search content live..." autocomplete="off">
-            </div>
+            <form method="GET" action="{{ admin_url }}" class="search-form">
+                <input type="search" name="q" placeholder="Search content..." value="{{ request.args.get('q', '') }}">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
+            </form>
         </div>
         <form method="post" id="bulk-action-form">
             <input type="hidden" name="form_action" value="bulk_delete">
@@ -1644,6 +1690,27 @@ admin_html = """
                 <label for="headlines_text">Headlines (One per line):</label>
                 <textarea name="headlines_text" id="headlines_text" rows="5" placeholder="Enter each headline on a new line.&#10;Example: New Bangla movie added!&#10;Server maintenance on Sunday.">{{ headlines_text or '' }}</textarea>
                 <small>Each line you enter here will be shown as a separate scrolling headline on the homepage.</small>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Tutorial Link</legend>
+            <div class="form-group">
+                <label for="tutorial_video_url">"How to Download" Tutorial Video URL:</label>
+                <input type="url" name="tutorial_video_url" id="tutorial_video_url" value="{{ site_config.tutorial_video_url or '' }}" placeholder="https://t.me/your_channel/video_id">
+                <small>This link will be used in the 'How to Download?' button in Telegram notifications.</small>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Promotional Website Links</legend>
+            <div class="form-group">
+                <label for="adult_site_url">Adult/18+ Website URL:</label>
+                <input type="url" name="adult_site_url" id="adult_site_url" value="{{ site_config.adult_site_url or '' }}" placeholder="https://your-adult-site.com">
+                <small>This will be used for the '18+ Exclusive Site' button in Telegram.</small>
+            </div>
+            <div class="form-group">
+                <label for="promo_site_url">Other Promotional Site URL:</label>
+                <input type="url" name="promo_site_url" id="promo_site_url" value="{{ site_config.promo_site_url or '' }}" placeholder="https://your-other-project.com">
+                <small>This will be used for the 'Our New Project' or 'Backup Channel' button in Telegram.</small>
             </div>
         </fieldset>
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Site Settings</button>
@@ -1766,38 +1833,7 @@ admin_html = """
     function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
     async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('{{ admin_url }}/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
     async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`{{ admin_url }}/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
-    let debounceTimer;
-    const searchInput = document.getElementById('admin-live-search');
-    const tableBody = document.getElementById('content-table-body');
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            const query = searchInput.value.trim();
-            tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-            fetch(`{{ admin_url }}/api/live_search?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    tableBody.innerHTML = '';
-                    if (data.length > 0) {
-                        data.forEach(movie => {
-                            const row = `
-                                <tr>
-                                    <td><input type="checkbox" name="selected_ids" value="${movie._id}" class="row-checkbox"></td>
-                                    <td>${movie.title}</td>
-                                    <td>${movie.type.charAt(0).toUpperCase() + movie.type.slice(1)}</td>
-                                    <td class="action-buttons">
-                                        <a href="/edit_movie/${movie._id}" class="btn btn-edit">Edit</a>
-                                        <a href="/delete_movie/${movie._id}" onclick="return confirm('Are you sure?')" class="btn btn-danger">Delete</a>
-                                    </td>
-                                </tr>
-                            `;
-                            tableBody.innerHTML += row;
-                        });
-                    } else { tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No content found.</td></tr>'; }
-                })
-                .catch(error => { console.error('Error fetching search results:', error); tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Error loading results.</td></tr>'; });
-        }, 400);
-    });
+    
     document.addEventListener('DOMContentLoaded', function() { 
         toggleFields(); 
         const selectAll = document.getElementById('select-all'); 
@@ -2473,7 +2509,17 @@ def admin_panel():
             headlines_text = request.form.get("headlines_text", "")
             headlines_list = [line.strip() for line in headlines_text.splitlines() if line.strip()]
             logo_url = request.form.get("logo_url", "").strip()
-            settings.update_one({"_id": "site_config"}, {"$set": {"headlines": headlines_list, "logo_url": logo_url}}, upsert=True)
+            tutorial_video_url = request.form.get("tutorial_video_url", "").strip()
+            adult_site_url = request.form.get("adult_site_url", "").strip()
+            promo_site_url = request.form.get("promo_site_url", "").strip()
+            settings.update_one(
+                {"_id": "site_config"},
+                {"$set": {
+                    "headlines": headlines_list, "logo_url": logo_url,
+                    "tutorial_video_url": tutorial_video_url, "adult_site_url": adult_site_url,
+                    "promo_site_url": promo_site_url
+                }},
+                upsert=True)
 
         elif form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
