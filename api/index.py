@@ -10,6 +10,7 @@ from urllib.parse import unquote, quote
 from datetime import datetime, timedelta
 import math
 import re
+import base64
 
 # --- Environment Variables ---
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://mewayo8672:mewayo8672@cluster0.ozhvczp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -18,9 +19,11 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "Nahid421")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Nahid421")
 WEBSITE_NAME = os.environ.get("WEBSITE_NAME", "CineZoneBD")
 DEVELOPER_TELEGRAM_ID = os.environ.get("DEVELOPER_TELEGRAM_ID", "CineZoneBDBot")
-WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") # [গুরুত্বপূর্ণ] আপনার ওয়েবসাইটের সঠিক URL এখানে দিন
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://your-website-url.com") 
+# নতুন: সুরক্ষিত অ্যাডমিন ইউআরএল
+ADMIN_URL = os.environ.get("ADMIN_URL", "/admin")
 
-# পুরনো টেলিগ্রাম ভ্যারিয়েবলগুলো এখন শুধু একটি সেটিং হিসেবে ব্যবহৃত হবে না, DB তে সেভ হবে।
+
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 
@@ -53,7 +56,7 @@ COMMUNITY_LINKS = [
 # --- App Initialization ---
 PLACEHOLDER_POSTER = "https://via.placeholder.com/400x600.png?text=Poster+Not+Found"
 ITEMS_PER_PAGE = 20
-ADMIN_ITEMS_PER_PAGE = 30 # নতুন: অ্যাডমিন প্যানেলের জন্য প্রতি পৃষ্ঠায় আইটেম সংখ্যা
+ADMIN_ITEMS_PER_PAGE = 30 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_super_secret_key_for_flash_messages")
 
@@ -87,12 +90,10 @@ try:
 
     if categories_collection.count_documents({}) == 0:
         default_categories = ["Bangla", "Hindi", "English", "18+ Adult", "Korean", "Dual Audio", "Bangla Dubbed", "Hindi Dubbed", "Indonesian", "Horror", "Action", "Thriller", "Anime", "Romance", "Trending"]
-        # নতুন: ডিফল্ট ক্যাটাগরিতে order ফিল্ড যোগ করা হচ্ছে
         categories_to_insert = [{"name": cat, "order": i} for i, cat in enumerate(default_categories)]
         categories_collection.insert_many(categories_to_insert)
         print("SUCCESS: Initialized default categories in the database with order.")
     
-    # One-time migration for old categories without 'order' field
     if categories_collection.count_documents({"order": {"$exists": False}}) > 0:
         print("INFO: Migrating old categories to include 'order' field...")
         cats_to_update = list(categories_collection.find({"order": {"$exists": False}}))
@@ -121,7 +122,7 @@ try:
         movies.create_index("tmdb_id")
         movies.create_index("ott_platform")
         categories_collection.create_index("name", unique=True)
-        categories_collection.create_index("order") # নতুন: order ফিল্ডের জন্য ইনডেক্স
+        categories_collection.create_index("order") 
         ott_collection.create_index("name", unique=True)
         requests_collection.create_index("status")
         print("SUCCESS: MongoDB indexes checked/created.")
@@ -165,11 +166,8 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- [MODIFIED] Telegram Notification Function ---
+# --- Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
-    # This function now ignores content_id, notification_type, and series_update_info
-    # as the caption is static as per your request.
-    
     tele_configs = settings.find_one({"_id": "telegram_config"}) or {}
     channels = tele_configs.get('channels', [])
 
@@ -182,7 +180,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             channels.append({'token': TELEGRAM_BOT_TOKEN, 'channel_id': TELEGRAM_CHANNEL_ID})
 
     try:
-        # আপনার দেওয়া নির্দিষ্ট ফরম্যাটের মেসেজ
+        # Static caption as requested
         caption = """🔥 𝙈𝙤𝙫𝙞𝙚𝙕𝙤𝙣𝙚BD 🔥
 ━━━━━━━━━━━━━━━━━
 
@@ -207,7 +205,6 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
             if not bot_token or not channel_id: continue
 
             api_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            # এখানে payload থেকে inline keyboard (reply_markup) এবং parse_mode বাদ দেওয়া হয়েছে
             payload = {
                 'chat_id': channel_id,
                 'photo': movie_data.get('poster', PLACEHOLDER_POSTER),
@@ -230,8 +227,7 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
     except Exception as e:
         print(f"ERROR: Unexpected error in send_telegram_notification: {e}")
 
-
-# --- Custom Jinja Filter for Relative Time ---
+# --- Custom Jinja Filters ---
 def time_ago(obj_id):
     if not isinstance(obj_id, ObjectId): return ""
     post_time = obj_id.generation_time.replace(tzinfo=None)
@@ -250,7 +246,12 @@ def time_ago(obj_id):
         days = int(seconds / 86400)
         return f"{days} day{'s' if days > 1 else ''} ago"
 
+# নতুন: Base64 এনকোডিং এর জন্য Jinja ফিল্টার
+def b64encode_filter(s):
+    return base64.urlsafe_b64encode(s.encode()).decode()
+
 app.jinja_env.filters['time_ago'] = time_ago
+app.jinja_env.filters['b64encode'] = b64encode_filter
 
 # --- Context Processor ---
 @app.context_processor
@@ -259,7 +260,6 @@ def inject_globals():
     design_settings = settings.find_one({"_id": "design_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     
-    # নতুন: order অনুযায়ী ক্যাটাগরি সাজানো হচ্ছে
     all_categories = [cat['name'] for cat in categories_collection.find().sort("order", 1)]
     all_ott_platforms = list(ott_collection.find().sort("name", 1))
     
@@ -277,7 +277,8 @@ def inject_globals():
         all_ott_platforms=all_ott_platforms,
         developer_telegram_id=DEVELOPER_TELEGRAM_ID,
         headlines=site_config.get('headlines', []),
-        community_links=COMMUNITY_LINKS
+        community_links=COMMUNITY_LINKS,
+        admin_url=ADMIN_URL # নতুন: অ্যাডমিন URL টেমপ্লেটে পাঠানোর জন্য
     )
 
 # =========================================================================================
@@ -1125,7 +1126,6 @@ detail_html = """
       border-radius: 8px; text-align: center; font-size: 0.85rem; color: #ccc;
   }
   
-  /* === নতুন স্ক্রিনশট স্টাইল শুরু === */
   @keyframes rgb-glow-border {
       0%   { border-color: #ff00de; box-shadow: 0 0 15px #ff00de; }
       25%  { border-color: #00ffff; box-shadow: 0 0 15px #00ffff; }
@@ -1136,7 +1136,7 @@ detail_html = """
 
   .screenshot-grid {
       display: grid;
-      grid-template-columns: 1fr; /* মোবাইল ডিভাইসের জন্য ডিফল্ট এক কলাম */
+      grid-template-columns: 1fr;
       gap: 25px;
   }
 
@@ -1145,25 +1145,23 @@ detail_html = """
       border-radius: 10px;
       overflow: hidden;
       animation: rgb-glow-border 4s linear infinite;
-      background-color: #000; /* যদি ছবি লোড না হয়, একটি কালো ব্যাকগ্রাউন্ড দেখাবে */
+      background-color: #000;
       transition: transform 0.3s ease;
   }
   
   .screenshot-item:hover {
-      transform: scale(1.03); /* হোভারে হালকা জুম ইফেক্ট */
+      transform: scale(1.03);
   }
 
   .screenshot-image {
       width: 100%;
       height: auto;
       display: block;
-      border-radius: 6px; /* ভেতরের ছবির জন্য সামান্য ছোট ব্যাসার্ধ */
+      border-radius: 6px;
   }
-  /* === নতুন স্ক্রিনশট স্টাইল শেষ === */
 
   @media (min-width: 768px) {
       .movie-carousel .swiper-slide { width: 180px; }
-      /* বড় স্ক্রিনের জন্য স্ক্রিনশট গ্রিড লেআউট */
       .screenshot-grid {
           grid-template-columns: repeat(2, 1fr);
       }
@@ -1221,8 +1219,9 @@ detail_html = """
             </div>
             
             {% if movie.type == 'movie' and (movie.links or movie.manual_links) %}
+                {# নতুন: এনকোডেড URL ব্যবহার করা হচ্ছে #}
                 <div class="link-group">
-                    <a href="{{ url_for('first_wait_step', movie_id=movie._id) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
+                    <a href="{{ url_for('get_links_encoded', encoded_id=movie._id|string|b64encode) }}" class="action-btn" style="justify-content: center; font-size: 1.2rem; padding: 18px;">
                         <span><i class="fas fa-bolt"></i> Get Links</span>
                     </a>
                 </div>
@@ -1233,7 +1232,8 @@ detail_html = """
                 {% for season_num in all_seasons %}
                     <div class="episode-list" style="margin-bottom: 20px;">
                         <h3>Season {{ season_num }}</h3>
-                        <a href="{{ url_for('first_wait_step', movie_id=movie._id, season=season_num) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
+                        {# নতুন: এনকোডেড URL ব্যবহার করা হচ্ছে #}
+                        <a href="{{ url_for('get_links_encoded', encoded_id=(movie._id|string ~ ':' ~ season_num)|b64encode) }}" class="action-btn" style="justify-content: center; font-size: 1.1rem; padding: 16px;">
                             <span><i class="fas fa-list-ul"></i> Get Season {{ season_num }} Links</span>
                         </a>
                     </div>
@@ -1249,7 +1249,6 @@ detail_html = """
     {% if movie.screenshots %}
     <section class="category-section">
         <h2 class="category-title">Screenshots</h2>
-        <!-- নতুন স্ক্রিনশট গ্রিড -->
         <div class="screenshot-grid">
             {% for ss in movie.screenshots %}
             <div class="screenshot-item">
@@ -1293,7 +1292,6 @@ detail_html = """
             });
         });
         new Swiper('.movie-carousel', { slidesPerView: 3, spaceBetween: 15, breakpoints: { 640: { slidesPerView: 4 }, 768: { slidesPerView: 5 }, 1024: { slidesPerView: 6 } } });
-        // মুছে ফেলা হয়েছে: Swiper gallery-thumbs এর কোডটি এখান থেকে সরানো হয়েছে কারণ আমরা আর স্লাইডার ব্যবহার করছি না।
     });
 </script>
 {{ ad_settings.ad_footer | safe }}
@@ -1325,8 +1323,8 @@ wait_page_html = """
 <body>
     {{ ad_settings.ad_body_top | safe }}
     <div class="wait-container">
-        <h1>Step 1: Preparing Link</h1>
-        <p>Your link will be ready in a moment. Please wait.</p>
+        <h1>Preparing Your Link</h1>
+        <p>Your content will be ready in a moment. Please wait.</p>
         <div id="timer-container" class="timer">Please wait <span id="countdown">10</span> seconds...</div>
         <a id="get-link-btn" class="get-link-btn" href="{{ target_url | safe }}">Go to Links Page</a>
         {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
@@ -1445,7 +1443,7 @@ admin_html = """
     <meta name="robots" content="noindex, nofollow">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script> <!-- নতুন: SortableJS লাইব্রেরি -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <style>
         :root { --netflix-red: #E50914; --netflix-black: #141414; --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5; }
         body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); margin: 0; padding: 20px; }
@@ -1503,7 +1501,6 @@ admin_html = """
         .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; }
         .pagination a, .pagination span { padding: 8px 15px; border-radius: 5px; background-color: var(--light-gray); color: var(--text-light); text-decoration: none; }
         .pagination .current { background-color: var(--netflix-red); font-weight: bold; }
-        /* নতুন: ক্যাটাগরি সাজানোর জন্য স্টাইল */
         #sortable-categories .management-item { cursor: grab; }
         #sortable-categories .management-item:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background: #444; }
@@ -1596,12 +1593,11 @@ admin_html = """
             </table></div>
             <button type="submit" class="btn btn-danger" style="margin-top: 15px;" onclick="return confirm('Are you sure you want to delete all selected items?')"><i class="fas fa-trash-alt"></i> Delete Selected</button>
         </form>
-        <!-- নতুন: পেজিনেশন কন্ট্রোল -->
         {% if pagination and pagination.total_pages > 1 %}
         <div class="pagination">
-            {% if pagination.has_prev %}<a href="{{ url_for('admin', page=pagination.prev_num) }}">&laquo; Prev</a>{% endif %}
+            <a href="{{ url_for('admin_panel', page=pagination.prev_num) }}{% if request.args.get('q') %}&q={{ request.args.get('q') }}{% endif %}" {% if not pagination.has_prev %}style="pointer-events: none; color: #555;"{% endif %}>&laquo; Prev</a>
             <span class="current">Page {{ pagination.page }} of {{ pagination.total_pages }}</span>
-            {% if pagination.has_next %}<a href="{{ url_for('admin', page=pagination.next_num) }}">Next &raquo;</a>{% endif %}
+            <a href="{{ url_for('admin_panel', page=pagination.next_num) }}{% if request.args.get('q') %}&q={{ request.args.get('q') }}{% endif %}" {% if not pagination.has_next %}style="pointer-events: none; color: #555;"{% endif %}>Next &raquo;</a>
         </div>
         {% endif %}
     </div>
@@ -1658,19 +1654,11 @@ admin_html = """
     <div class="management-section">
         <form method="post" style="flex: 2; min-width: 300px; padding: 15px;">
             <input type="hidden" name="form_action" value="update_telegram_settings">
-            <fieldset><legend>General Settings</legend>
-                <div class="form-group">
-                    <label>"How to Download" Tutorial Video URL:</label>
-                    <input type="url" name="tutorial_video_url" value="{{ telegram_settings.tutorial_video_url or '' }}" placeholder="https://t.me/your_channel/video_id">
-                    <small>This link will be added as a button to every notification.</small>
-                </div>
-            </fieldset>
             <fieldset><legend>Add New Channel</legend>
                 <div class="form-group"><label>Bot Token:</label><input type="text" name="bot_token"></div>
                 <div class="form-group"><label>Channel ID (e.g., @mychannel or -100xxxxxxxxxx):</label><input type="text" name="channel_id"></div>
                 <button type="submit" name="submit_action" value="add_channel" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
             </fieldset>
-            <button type="submit" name="submit_action" value="save_settings" class="btn btn-success" style="margin-top: 15px;"><i class="fas fa-save"></i> Save Settings</button>
         </form>
         <div class="management-list" style="flex: 1; min-width: 300px;">
             <h3>Configured Channels</h3>
@@ -1776,8 +1764,8 @@ admin_html = """
     function addManualLinkField() { const container = document.getElementById('manual_links_container'); const newItem = document.createElement('div'); newItem.className = 'dynamic-item'; newItem.innerHTML = `<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger">X</button><div class="link-pair"><div class="form-group"><label>Button Name</label><input type="text" name="manual_link_name[]" placeholder="e.g., 480p G-Drive" required></div><div class="form-group"><label>Link URL</label><input type="url" name="manual_link_url[]" placeholder="https://..." required></div></div>`; container.appendChild(newItem); }
     function openModal() { document.getElementById('search-modal').style.display = 'flex'; }
     function closeModal() { document.getElementById('search-modal').style.display = 'none'; }
-    async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('/admin/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
-    async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`/admin/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
+    async function searchTmdb() { const query = document.getElementById('tmdb_search_query').value.trim(); if (!query) return; const searchBtn = document.getElementById('tmdb_search_btn'); searchBtn.disabled = true; searchBtn.innerHTML = 'Searching...'; openModal(); try { const response = await fetch('{{ admin_url }}/api/search?query=' + encodeURIComponent(query)); const results = await response.json(); const container = document.getElementById('search-results'); container.innerHTML = ''; if(results.length > 0) { results.forEach(item => { const resultDiv = document.createElement('div'); resultDiv.className = 'result-item'; resultDiv.onclick = () => selectResult(item.id, item.media_type); resultDiv.innerHTML = `<img src="${item.poster}" alt="${item.title}"><p><strong>${item.title}</strong> (${item.year})</p>`; container.appendChild(resultDiv); }); } else { container.innerHTML = '<p>No results found.</p>'; } } catch (e) { console.error(e); } finally { searchBtn.disabled = false; searchBtn.innerHTML = 'Search'; } }
+    async function selectResult(tmdbId, mediaType) { closeModal(); try { const response = await fetch(`{{ admin_url }}/api/details?id=${tmdbId}&type=${mediaType}`); const data = await response.json(); document.getElementById('tmdb_id').value = data.tmdb_id || ''; document.getElementById('title').value = data.title || ''; document.getElementById('overview').value = data.overview || ''; document.getElementById('poster').value = data.poster || ''; document.getElementById('backdrop').value = data.backdrop || ''; document.getElementById('genres').value = data.genres ? data.genres.join(', ') : ''; document.getElementById('content_type').value = data.type === 'series' ? 'series' : 'movie'; toggleFields(); } catch (e) { console.error(e); } }
     let debounceTimer;
     const searchInput = document.getElementById('admin-live-search');
     const tableBody = document.getElementById('content-table-body');
@@ -1786,7 +1774,7 @@ admin_html = """
         debounceTimer = setTimeout(() => {
             const query = searchInput.value.trim();
             tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-            fetch(`/admin/api/live_search?q=${encodeURIComponent(query)}`)
+            fetch(`{{ admin_url }}/api/live_search?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
                     tableBody.innerHTML = '';
@@ -1815,7 +1803,6 @@ admin_html = """
         const selectAll = document.getElementById('select-all'); 
         if(selectAll) { selectAll.addEventListener('change', e => document.querySelectorAll('.row-checkbox').forEach(c => c.checked = e.target.checked)); }
         
-        // নতুন: ক্যাটাগরি সাজানোর জন্য SortableJS চালু করা
         const sortableList = document.getElementById('sortable-categories');
         if (sortableList) {
             const sortable = new Sortable(sortableList, {
@@ -1825,7 +1812,7 @@ admin_html = """
 
             const saveOrderForm = document.getElementById('save-order-form');
             saveOrderForm.addEventListener('submit', function(e) {
-                const order = sortable.toArray(); // get the data-id attributes in the new order
+                const order = sortable.toArray();
                 document.getElementById('category_order_input').value = order.join(',');
             });
         }
@@ -1869,7 +1856,7 @@ edit_html = """
 </head>
 <body>
 <div class="admin-container">
-  <a href="{{ url_for('admin') }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Admin Panel</a>
+  <a href="{{ admin_url }}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Admin Panel</a>
   <div class="page-header">
     <h2>Edit: {{ movie.title }}</h2>
     {% if movie.tmdb_id %}
@@ -1963,7 +1950,7 @@ edit_html = """
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
         try {
-            const response = await fetch(`/admin/api/resync_tmdb?id=${tmdbId}&type=${mediaType}`);
+            const response = await fetch(`{{ admin_url }}/api/resync_tmdb?id=${tmdbId}&type=${mediaType}`);
             if (!response.ok) throw new Error('Failed to fetch data');
             const data = await response.json();
             document.getElementById('title').value = data.title || '';
@@ -2152,6 +2139,7 @@ generate_links_html = """
 
         .ad-container { margin: 25px auto 0; width: 100%; max-width: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 50px; }
         .ad-container > * { max-width: 100% !important; }
+        .disclaimer { font-size: 0.8rem; color: var(--text-dark); margin-top: 20px; line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -2213,6 +2201,7 @@ generate_links_html = """
                     {% endif %}
                 {% endfor %}
             {% endif %}
+            <p class="disclaimer"><strong>Disclaimer:</strong> This site does not host any files. All links are provided by non-affiliated third parties. We are not responsible for the content on external sites.</p>
         </div>
         
         {% if ad_settings.ad_wait_page %}<div class="ad-container">{{ ad_settings.ad_wait_page | safe }}</div>{% endif %}
@@ -2293,7 +2282,6 @@ def home():
 
     slider_content = list(movies.find({}).sort('updated_at', -1).limit(10))
     latest_content = list(movies.find({}).sort('updated_at', -1).limit(10))
-    # নতুন: order অনুযায়ী ক্যাটাগরি সাজানো হচ্ছে
     home_categories = [cat['name'] for cat in categories_collection.find().sort("order", 1)]
     categorized_content = {cat: list(movies.find({"categories": cat}).sort('updated_at', -1).limit(10)) for cat in home_categories}
     categorized_content = {k: v for k, v in categorized_content.items() if v}
@@ -2356,31 +2344,32 @@ def request_content():
         return redirect(url_for('request_content'))
     return render_template_string(request_html)
 
-# --- Two-Step Link Generation Routes ---
-
-@app.route('/wait-step-1/<movie_id>')
-def first_wait_step(movie_id):
-    season_num = request.args.get('season')
-    if season_num:
-        target_url = url_for('generate_links_page', movie_id=movie_id, season=season_num)
-    else:
-        target_url = url_for('generate_links_page', movie_id=movie_id)
+# --- নতুন: এনকোডেড আইডি দিয়ে সুরক্ষিত লিংক জেনারেশন ---
+@app.route('/get/<encoded_id>')
+def get_links_encoded(encoded_id):
+    target_url = url_for('generate_links_page', encoded_id=encoded_id)
     return render_template_string(wait_page_html, target_url=target_url)
 
-@app.route('/generate-links/<movie_id>')
-def generate_links_page(movie_id):
+@app.route('/links/<encoded_id>')
+def generate_links_page(encoded_id):
     try:
-        movie = movies.find_one({"_id": ObjectId(movie_id)})
+        decoded_str = base64.urlsafe_b64decode(encoded_id).decode()
+        
+        movie_id_str, season_num = None, None
+        if ':' in decoded_str:
+            movie_id_str, season_num_str = decoded_str.split(':')
+            season_num = int(season_num_str)
+        else:
+            movie_id_str = decoded_str
+
+        movie = movies.find_one({"_id": ObjectId(movie_id_str)})
         if not movie: return "Content not found.", 404
 
-        season_num_str = request.args.get('season')
-        episodes_for_season, season_num = [], None
-
+        episodes_for_season = []
         has_movie_links = movie.get('links') or movie.get('manual_links')
         
         if movie.get('type') == 'series':
-            if not season_num_str: return "Season number is required for series.", 400
-            season_num = int(season_num_str)
+            if not season_num: return "Season number is required for series.", 400
             if 'episodes' in movie:
                 episodes_for_season = [ep for ep in movie['episodes'] if ep.get('season') == season_num]
             has_season_pack = any(p.get('season_number') == season_num for p in movie.get('season_packs', []))
@@ -2438,7 +2427,7 @@ def dmca():
         <li>A statement that you have a good faith belief that use of the material in the manner complained of is not authorized by the copyright owner, its agent, or the law.</li>
         <li>A statement that the information in the notification is accurate, and, under penalty of perjury, that you are authorized to act on behalf of the copyright owner.</li>
     </ul>
-    <p>Please send your takedown notice to our designated agent via email at: <strong>contact.cinezonebd@proton.me</strong> (Please replace with your actual contact email).</p>
+    <p>Please send your takedown notice to our designated agent via email at: <strong>contact.cinezonebd@proton.me</strong></p>
     <p>We will act upon all valid and complete notices within 48-72 business hours.</p>
     """
     return render_template_string(legal_page_template_html, title=title, content=content)
@@ -2468,13 +2457,13 @@ def terms_of_service():
     return render_template_string(legal_page_template_html, title=title, content=content)
 
 # --- Admin Panel Routes ---
-@app.route('/admin', methods=["GET", "POST"])
+@app.route(ADMIN_URL, methods=["GET", "POST"])
 @requires_auth
-def admin():
+def admin_panel():
     if request.method == "POST":
         form_action = request.form.get("form_action")
         
-        if form_action == "save_category_order": # নতুন: ক্যাটাগরি অর্ডার সেভ করার জন্য
+        if form_action == "save_category_order":
             category_ids_ordered = request.form.get("category_order", "").split(',')
             for index, cat_id in enumerate(category_ids_ordered):
                 if cat_id:
@@ -2484,56 +2473,40 @@ def admin():
             headlines_text = request.form.get("headlines_text", "")
             headlines_list = [line.strip() for line in headlines_text.splitlines() if line.strip()]
             logo_url = request.form.get("logo_url", "").strip()
-            
-            settings.update_one(
-                {"_id": "site_config"},
-                {"$set": {
-                    "headlines": headlines_list,
-                    "logo_url": logo_url
-                }},
-                upsert=True
-            )
+            settings.update_one({"_id": "site_config"}, {"$set": {"headlines": headlines_list, "logo_url": logo_url}}, upsert=True)
+
         elif form_action == "update_ads":
             ad_settings_data = {"ad_header": request.form.get("ad_header"), "ad_body_top": request.form.get("ad_body_top"), "ad_footer": request.form.get("ad_footer"), "ad_list_page": request.form.get("ad_list_page"), "ad_detail_page": request.form.get("ad_detail_page"), "ad_wait_page": request.form.get("ad_wait_page")}
             settings.update_one({"_id": "ad_config"}, {"$set": ad_settings_data}, upsert=True)
+
         elif form_action == "update_design_settings":
             design_settings_data = { "language_tag_css": request.form.get("language_tag_css").strip(), "new_badge_css": request.form.get("new_badge_css").strip(), "new_badge_text": request.form.get("new_badge_text").strip() }
             settings.update_one({"_id": "design_config"}, {"$set": design_settings_data}, upsert=True)
+
         elif form_action == "update_telegram_settings":
             submit_action = request.form.get("submit_action")
-            tutorial_url = request.form.get("tutorial_video_url", "").strip()
-            settings.update_one(
-                {"_id": "telegram_config"},
-                {"$set": {"tutorial_video_url": tutorial_url}},
-                upsert=True
-            )
             if submit_action == "add_channel":
                 bot_token = request.form.get("bot_token", "").strip()
                 channel_id = request.form.get("channel_id", "").strip()
                 if bot_token and channel_id:
-                    settings.update_one(
-                        {"_id": "telegram_config"},
-                        {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}},
-                        upsert=True
-                    )
+                    settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}}, upsert=True)
+        
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
             if category_name:
-                # নতুন: নতুন ক্যাটাগরির জন্য order নম্বর ঠিক করা
                 max_order_doc = categories_collection.find_one(sort=[("order", -1)])
                 new_order = (max_order_doc['order'] + 1) if max_order_doc and 'order' in max_order_doc else 0
-                categories_collection.update_one(
-                    {"name": category_name}, 
-                    {"$setOnInsert": {"name": category_name, "order": new_order}}, 
-                    upsert=True
-                )
+                categories_collection.update_one({"name": category_name}, {"$setOnInsert": {"name": category_name, "order": new_order}}, upsert=True)
+
         elif form_action == "add_platform":
             platform_name, logo_url = request.form.get("platform_name", "").strip(), request.form.get("platform_logo_url", "").strip()
             if platform_name and logo_url:
                 ott_collection.update_one({"name": platform_name}, {"$set": {"name": platform_name, "logo_url": logo_url}}, upsert=True)
+
         elif form_action == "bulk_delete":
             ids_to_delete = request.form.getlist("selected_ids")
             if ids_to_delete: movies.delete_many({"_id": {"$in": [ObjectId(id_str) for id_str in ids_to_delete]}})
+
         elif form_action == "add_content":
             content_type = request.form.get("content_type", "movie")
             movie_data = {
@@ -2563,29 +2536,34 @@ def admin():
             if result.inserted_id:
                 series_info = format_series_info(movie_data.get('episodes', []), movie_data.get('season_packs', [])) if movie_data['type'] == 'series' else None
                 send_telegram_notification(movie_data, result.inserted_id, series_update_info=series_info)
-        return redirect(url_for('admin'))
+        return redirect(url_for('admin_panel'))
     
-    # নতুন: অ্যাডমিন প্যানেলের কন্টেন্ট লিস্টের জন্য পেজিনেশন
     page = request.args.get('page', 1, type=int)
+    search_query = request.args.get('q', '').strip()
+    
+    query_filter = {}
+    if search_query:
+        query_filter = {"title": {"$regex": search_query, "$options": "i"}}
+        
+    total_content = movies.count_documents(query_filter)
     skip = (page - 1) * ADMIN_ITEMS_PER_PAGE
-    total_content = movies.count_documents({})
-    content_list = list(movies.find({}).sort('updated_at', -1).skip(skip).limit(ADMIN_ITEMS_PER_PAGE))
+    content_list = list(movies.find(query_filter).sort('updated_at', -1).skip(skip).limit(ADMIN_ITEMS_PER_PAGE))
     pagination = Pagination(page, ADMIN_ITEMS_PER_PAGE, total_content)
 
-    stats = {"total_content": total_content, "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
+    stats = {"total_content": movies.count_documents({}), "total_movies": movies.count_documents({"type": "movie"}), "total_series": movies.count_documents({"type": "series"}), "pending_requests": requests_collection.count_documents({"status": "Pending"})}
     tele_config_data = settings.find_one({"_id": "telegram_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     headlines_text = '\n'.join(site_config.get('headlines', []))
     
     return render_template_string(
         admin_html,
-        content_list=content_list, # পেজিনেটেড লিস্ট পাঠানো হচ্ছে
-        pagination=pagination, # পেজিনেশন অবজেক্ট পাঠানো হচ্ছে
+        content_list=content_list, 
+        pagination=pagination, 
         stats=stats,
         requests_list=list(requests_collection.find().sort("created_at", -1)),
         ad_settings=settings.find_one({"_id": "ad_config"}) or {},
         design_settings=settings.find_one({"_id": "design_config"}) or default_design_settings,
-        categories_list=list(categories_collection.find().sort("order", 1)), # order অনুযায়ী সাজানো
+        categories_list=list(categories_collection.find().sort("order", 1)),
         ott_list=list(ott_collection.find().sort("name", 1)),
         telegram_channels=tele_config_data.get('channels', []),
         telegram_settings=tele_config_data,
@@ -2593,40 +2571,40 @@ def admin():
         headlines_text=headlines_text
     )
 
-@app.route('/admin/telegram/delete/<channel_id>')
+@app.route(ADMIN_URL + '/telegram/delete/<channel_id>')
 @requires_auth
 def delete_telegram_channel(channel_id):
     settings.update_one({"_id": "telegram_config"}, {"$pull": {"channels": {"channel_id": unquote(channel_id)}}})
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
-@app.route('/admin/category/delete/<cat_id>')
+@app.route(ADMIN_URL + '/category/delete/<cat_id>')
 @requires_auth
 def delete_category(cat_id):
     try: categories_collection.delete_one({"_id": ObjectId(cat_id)})
     except: pass
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
-@app.route('/admin/platform/delete/<platform_id>')
+@app.route(ADMIN_URL + '/platform/delete/<platform_id>')
 @requires_auth
 def delete_platform(platform_id):
     try: ott_collection.delete_one({"_id": ObjectId(platform_id)})
     except: pass
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
-@app.route('/admin/request/update/<req_id>/<status>')
+@app.route(ADMIN_URL + '/request/update/<req_id>/<status>')
 @requires_auth
 def update_request_status(req_id, status):
     if status in ['Fulfilled', 'Rejected', 'Pending']:
         try: requests_collection.update_one({"_id": ObjectId(req_id)}, {"$set": {"status": status}})
         except: pass
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
-@app.route('/admin/request/delete/<req_id>')
+@app.route(ADMIN_URL + '/request/delete/<req_id>')
 @requires_auth
 def delete_request(req_id):
     try: requests_collection.delete_one({"_id": ObjectId(req_id)})
     except: pass
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
@@ -2682,7 +2660,7 @@ def edit_movie(movie_id):
             updated_movie = movies.find_one({"_id": obj_id})
             send_telegram_notification(updated_movie, obj_id, notification_type='update', series_update_info=series_update_info_str)
         
-        return redirect(url_for('admin'))
+        return redirect(url_for('admin_panel'))
     
     return render_template_string(edit_html, movie=movie_obj, categories_list=list(categories_collection.find().sort("name", 1)), ott_list=list(ott_collection.find().sort("name", 1)))
 
@@ -2691,10 +2669,10 @@ def edit_movie(movie_id):
 def delete_movie(movie_id):
     try: movies.delete_one({"_id": ObjectId(movie_id)})
     except: return "Invalid ID", 400
-    return redirect(url_for('admin'))
+    return redirect(url_for('admin_panel'))
 
 # --- Admin Panel API Routes ---
-@app.route('/admin/api/live_search')
+@app.route(ADMIN_URL + '/api/live_search')
 @requires_auth
 def admin_api_live_search():
     query = request.args.get('q', '').strip()
@@ -2705,7 +2683,7 @@ def admin_api_live_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/admin/api/search')
+@app.route(ADMIN_URL + '/api/search')
 @requires_auth
 def api_search_tmdb():
     query = request.args.get('query', '').strip()
@@ -2739,7 +2717,7 @@ def api_search_tmdb():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/admin/api/details')
+@app.route(ADMIN_URL + '/api/details')
 @requires_auth
 def api_get_details():
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
@@ -2747,7 +2725,7 @@ def api_get_details():
     details = get_tmdb_details(tmdb_id, "series" if media_type == "tv" else "movie")
     return jsonify(details) if details else (jsonify({"error": "Details not found"}), 404)
 
-@app.route('/admin/api/resync_tmdb')
+@app.route(ADMIN_URL + '/api/resync_tmdb')
 @requires_auth
 def api_resync_tmdb():
     tmdb_id, media_type = request.args.get('id'), request.args.get('type')
