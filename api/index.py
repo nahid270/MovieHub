@@ -165,12 +165,13 @@ def format_series_info(episodes, season_packs):
     return " & ".join(info_parts)
 
 
-# --- [FINAL & ADVANCED] Telegram Notification Function ---
+# --- [UPDATED & FINAL] Telegram Notification Function ---
 def send_telegram_notification(movie_data, content_id, notification_type='new', series_update_info=None):
     # ডাটাবেস থেকে সব কনফিগারেশন একসাথে আনা হচ্ছে
     tele_configs = settings.find_one({"_id": "telegram_config"}) or {}
     site_config = settings.find_one({"_id": "site_config"}) or {}
     channels = tele_configs.get('channels', [])
+    button_texts = tele_configs.get('button_texts', {}) # নতুন: বাটন টেক্সট আনা হচ্ছে
 
     if not channels and (not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID):
         print("INFO: No Telegram channels configured. Skipping notification.")
@@ -211,32 +212,36 @@ def send_telegram_notification(movie_data, content_id, notification_type='new', 
         # --- ডাইনামিক ইনলাইন বাটন তৈরি ---
         inline_keyboard = []
         
-        # 1. Visit Website বাটন
-        encoded_id = base64.urlsafe_b64encode(str(content_id).encode()).decode()
-        visit_url = url_for('get_links_encoded', encoded_id=encoded_id, _external=True)
+        # 1. Visit Website বাটন (এখন হোমপেজে যাবে)
+        visit_url = url_for('home', _external=True) # পরিবর্তিত: এখন হোমপেজের লিংক ব্যবহার হবে
+        
+        main_button_text = button_texts.get('main_button_text') or '✅ Visit Website to Watch ✅'
         inline_keyboard.append([
-            {'text': '✅ Download / Watch Now', 'url': visit_url}
+            {'text': main_button_text, 'url': visit_url}
         ])
 
         # 2. How to Download বাটন (যদি লিংক সেট করা থাকে)
         tutorial_url = site_config.get('tutorial_video_url')
         if tutorial_url:
+            tutorial_button_text = button_texts.get('tutorial_button_text') or '🤔 How to Download?'
             inline_keyboard.append([
-                {'text': '🤔 How to Download?', 'url': tutorial_url}
+                {'text': tutorial_button_text, 'url': tutorial_url}
             ])
 
         # 3. Adult Site বাটন (যদি লিংক সেট করা থাকে)
         adult_url = site_config.get('adult_site_url')
         if adult_url:
+            adult_button_text = button_texts.get('adult_button_text') or '🔞 18+ Exclusive Site'
             inline_keyboard.append([
-                {'text': '🔞 18+ Exclusive Site', 'url': adult_url}
+                {'text': adult_button_text, 'url': adult_url}
             ])
             
         # 4. Promotional Site বাটন (যদি লিংক সেট করা থাকে)
         promo_url = site_config.get('promo_site_url')
         if promo_url:
-             inline_keyboard.append([
-                {'text': '❤️ Join Backup Channel', 'url': promo_url}
+            promo_button_text = button_texts.get('promo_button_text') or '❤️ Join Backup Channel'
+            inline_keyboard.append([
+                {'text': promo_button_text, 'url': promo_url}
             ])
 
         reply_markup = json.dumps({'inline_keyboard': inline_keyboard})
@@ -1721,6 +1726,32 @@ admin_html = """
     <div class="management-section">
         <form method="post" style="flex: 2; min-width: 300px; padding: 15px;">
             <input type="hidden" name="form_action" value="update_telegram_settings">
+            
+            <!-- নতুন: বাটন টেক্সট কাস্টমাইজেশন ফর্ম -->
+            <fieldset><legend>Customize Notification Buttons</legend>
+                <div class="form-group">
+                    <label>Main Button Text (Visit Site):</label>
+                    <input type="text" name="main_button_text" value="{{ telegram_settings.button_texts.main_button_text or '' }}" placeholder="Default: ✅ Visit Website to Watch ✅">
+                    <small>এই বাটনটি ব্যবহারকারীকে ওয়েবসাইটের হোমপেজে নিয়ে যাবে।</small>
+                </div>
+                <div class="form-group">
+                    <label>Tutorial Button Text:</label>
+                    <input type="text" name="tutorial_button_text" value="{{ telegram_settings.button_texts.tutorial_button_text or '' }}" placeholder="Default: 🤔 How to Download?">
+                    <small>এই বাটনের লিংক "General Site Settings" থেকে সেট করতে হবে।</small>
+                </div>
+                <div class="form-group">
+                    <label>Adult Site Button Text:</label>
+                    <input type="text" name="adult_button_text" value="{{ telegram_settings.button_texts.adult_button_text or '' }}" placeholder="Default: 🔞 18+ Exclusive Site">
+                    <small>এই বাটনের লিংক "General Site Settings" থেকে সেট করতে হবে।</small>
+                </div>
+                <div class="form-group">
+                    <label>Promotional Button Text:</label>
+                    <input type="text" name="promo_button_text" value="{{ telegram_settings.button_texts.promo_button_text or '' }}" placeholder="Default: ❤️ Join Backup Channel">
+                    <small>এই বাটনের লিংক "General Site Settings" থেকে সেট করতে হবে।</small>
+                </div>
+                <button type="submit" name="submit_action" value="save_settings" class="btn btn-primary"><i class="fas fa-save"></i> Save Button Texts</button>
+            </fieldset>
+            
             <fieldset><legend>Add New Channel</legend>
                 <div class="form-group"><label>Bot Token:</label><input type="text" name="bot_token"></div>
                 <div class="form-group"><label>Channel ID (e.g., @mychannel or -100xxxxxxxxxx):</label><input type="text" name="channel_id"></div>
@@ -2535,7 +2566,23 @@ def admin_panel():
                 bot_token = request.form.get("bot_token", "").strip()
                 channel_id = request.form.get("channel_id", "").strip()
                 if bot_token and channel_id:
-                    settings.update_one({"_id": "telegram_config"}, {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}}, upsert=True)
+                    settings.update_one(
+                        {"_id": "telegram_config"},
+                        {"$push": {"channels": {"token": bot_token, "channel_id": channel_id}}},
+                        upsert=True
+                    )
+            elif submit_action == "save_settings":
+                button_texts = {
+                    "main_button_text": request.form.get("main_button_text", "").strip(),
+                    "tutorial_button_text": request.form.get("tutorial_button_text", "").strip(),
+                    "adult_button_text": request.form.get("adult_button_text", "").strip(),
+                    "promo_button_text": request.form.get("promo_button_text", "").strip()
+                }
+                settings.update_one(
+                    {"_id": "telegram_config"},
+                    {"$set": {"button_texts": button_texts}},
+                    upsert=True
+                )
         
         elif form_action == "add_category":
             category_name = request.form.get("category_name", "").strip()
